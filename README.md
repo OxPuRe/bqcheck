@@ -125,12 +125,6 @@ Run all quality checks:
 uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv run pytest --cov
 ```
 
-## Issues & Support
-
-**Note:** Issues are tracked in the [bqaudit-server](https://github.com/OxPuRe/bqaudit-server/issues) repository.
-
-Please submit all bug reports, feature requests, and questions there.
-
 ## Related Repositories
 
 - [bqaudit-server](https://github.com/OxPuRe/bqaudit-server) (Private) - Server API
