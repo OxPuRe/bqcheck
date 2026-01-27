@@ -5,14 +5,15 @@ Provides commands: validate, scan, license (activate, status, revoke).
 """
 
 import sys
+
 import typer
-from typing_extensions import Annotated
 from rich.console import Console
+from typing_extensions import Annotated
 
 from bqaudit.scanner import (
-    authenticate_bigquery,
     AuthenticationError,
     ProjectNotFoundError,
+    authenticate_bigquery,
 )
 
 app = typer.Typer(
@@ -33,7 +34,7 @@ def validate(
 
     try:
         # Authenticate and verify project access
-        client = authenticate_bigquery(project)
+        _client = authenticate_bigquery(project)
 
         console.print("[green]✓ Authentication successful[/green]")
         console.print(f"[green]✓ BigQuery project '{project}' is accessible[/green]")

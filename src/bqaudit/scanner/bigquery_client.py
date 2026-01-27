@@ -1,8 +1,8 @@
 """BigQuery client authentication and initialization."""
 
+from google.api_core.exceptions import NotFound
 from google.auth import default
 from google.auth.exceptions import DefaultCredentialsError
-from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 

@@ -1,14 +1,15 @@
 """Unit tests for BigQuery client authentication."""
 
-import pytest
 from unittest.mock import Mock, patch
-from google.auth.exceptions import DefaultCredentialsError
+
+import pytest
 from google.api_core.exceptions import NotFound
+from google.auth.exceptions import DefaultCredentialsError
 
 from bqaudit.scanner.bigquery_client import (
-    authenticate_bigquery,
     AuthenticationError,
     ProjectNotFoundError,
+    authenticate_bigquery,
 )
 
 

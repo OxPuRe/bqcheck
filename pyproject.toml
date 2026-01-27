@@ -84,7 +84,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 0  # Temporarily 0 due to placeholder tests; will increase to 80 when real tests are written
+fail_under = 80  # Coverage threshold for quality assurance
 precision = 2
 show_missing = true
 skip_covered = false
@@ -98,7 +98,7 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.8"  # Match minimum supported version for backward compatibility
+python_version = "3.9"  # Match minimum supported version for backward compatibility
 strict = true
 disallow_untyped_defs = true
 warn_return_any = true
