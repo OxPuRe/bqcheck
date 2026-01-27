@@ -4,20 +4,49 @@ CLI entrypoint for bqaudit.
 Provides commands: validate, scan, license (activate, status, revoke).
 """
 
+import sys
 import typer
 from typing_extensions import Annotated
+from rich.console import Console
+
+from bqaudit.scanner import (
+    authenticate_bigquery,
+    AuthenticationError,
+    ProjectNotFoundError,
+)
 
 app = typer.Typer(
     name="bqaudit", help="BigQuery cost optimization audit tool", no_args_is_help=True
 )
 
+console = Console()
+
 
 @app.command()
 def validate(
-    project_id: Annotated[str, typer.Argument(help="GCP project ID to validate")],
+    project: Annotated[
+        str, typer.Option("--project", help="GCP project ID to audit")
+    ],
 ) -> None:
     """Validate BigQuery access without consuming tokens."""
-    typer.echo("Validate command - placeholder")
+    console.print(f"[blue]Validating access to project:[/blue] {project}")
+
+    try:
+        # Authenticate and verify project access
+        client = authenticate_bigquery(project)
+
+        console.print("[green]✓ Authentication successful[/green]")
+        console.print(f"[green]✓ BigQuery project '{project}' is accessible[/green]")
+
+    except AuthenticationError as e:
+        console.print(f"[red]✗ Authentication failed:[/red] {e.message}")
+        console.print(f"[yellow]→ Action:[/yellow] {e.action}")
+        sys.exit(3)
+
+    except ProjectNotFoundError as e:
+        console.print(f"[red]✗ Project error:[/red] {e.message}")
+        console.print(f"[yellow]→ Action:[/yellow] {e.action}")
+        sys.exit(4)
 
 
 @app.command()
