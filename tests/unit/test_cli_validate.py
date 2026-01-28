@@ -574,3 +574,65 @@ def test_validate_error_guidance_permissions():
         assert "roles/bigquery.metadataViewer" in result.stdout
         assert "YOUR_EMAIL" in result.stdout
         assert result.exit_code == 4
+
+
+# ============================================================================
+# ERROR HANDLER HELPER TESTS
+# ============================================================================
+
+
+def test_handle_validation_error_auth_exit_code():
+    """Test _handle_validation_error uses correct exit code for auth errors."""
+    with patch("bqaudit.cli.authenticate_bigquery") as mock_auth:
+        from bqaudit.scanner import AuthenticationError
+
+        mock_auth.side_effect = AuthenticationError("Auth failed")
+        result = runner.invoke(app, ["validate", "--project", "test-project"])
+
+        # Verify exit code 3 for authentication errors
+        assert result.exit_code == 3
+        assert "Validation Failed" in result.stdout
+
+
+def test_handle_validation_error_bigquery_exit_code():
+    """Test _handle_validation_error uses exit code 4 for BigQuery errors."""
+    client = Mock()
+    client.query.side_effect = Forbidden("BigQuery API has not been used")
+
+    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+        result = runner.invoke(app, ["validate", "--project", "test-project"])
+
+        # Verify exit code 4 for BigQuery API errors
+        assert result.exit_code == 4
+        assert "Validation Failed" in result.stdout
+
+
+def test_handle_validation_error_displays_panel():
+    """Test _handle_validation_error displays Rich Panel with error message."""
+    with patch("bqaudit.cli.authenticate_bigquery") as mock_auth:
+        from bqaudit.scanner import AuthenticationError
+
+        mock_auth.side_effect = AuthenticationError("Auth failed")
+        result = runner.invoke(app, ["validate", "--project", "test-project"])
+
+        # Verify Panel formatting is present
+        assert "Validation Failed" in result.stdout
+        # Verify error guidance is displayed
+        assert "gcloud auth" in result.stdout or "GOOGLE_APPLICATION" in result.stdout
+
+
+def test_handle_validation_error_includes_project_context():
+    """Test _handle_validation_error includes project ID in error messages."""
+    client = Mock()
+    client.query.side_effect = Forbidden(
+        "BigQuery API has not been used in project my-test-project"
+    )
+
+    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+        result = runner.invoke(
+            app, ["validate", "--project", "my-test-project"]
+        )
+
+        # Verify project ID appears in error guidance
+        assert "my-test-project" in result.stdout
+        assert result.exit_code == 4

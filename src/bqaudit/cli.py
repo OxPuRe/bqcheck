@@ -210,7 +210,10 @@ def validate(
     # Step 5.5: Verbose Mode - Metadata Preview and Anonymization Display
     if verbose:
         try:
-            logger.debug(f"Extracting sample metadata for preview from project: {project}")
+            logger.debug(
+                f"Extracting sample metadata for preview from "
+                f"project: {project}"
+            )
             console.print("\n[blue]ℹ Extracting sample metadata for preview...[/blue]")
 
             # Extract sample tables (first 3)
@@ -241,13 +244,24 @@ def validate(
                 console.print("\n[bold]Table Name Anonymization:[/bold]")
                 for table in sample_tables:
                     # Defensive: skip rows with None values
-                    if not (table.table_catalog and table.table_schema and table.table_name):
+                    if not (
+                        table.table_catalog
+                        and table.table_schema
+                        and table.table_name
+                    ):
                         continue
-                    original = f"{table.table_catalog}.{table.table_schema}.{table.table_name}"
+                    original = (
+                        f"{table.table_catalog}."
+                        f"{table.table_schema}."
+                        f"{table.table_name}"
+                    )
                     anonymized = anonymize_table_name(table.table_name, salt)
                     # Truncate hash for display
                     anonymized_short = anonymized[:16] + "..."
-                    console.print(f"  Table: [yellow]{original}[/yellow] → [green]{anonymized_short}[/green]")
+                    console.print(
+                        f"  Table: [yellow]{original}[/yellow] → "
+                        f"[green]{anonymized_short}[/green]"
+                    )
 
             # Display query anonymization preview
             if sample_queries:
@@ -279,16 +293,21 @@ def validate(
                         "table_name": anonymize_table_name(t.table_name, salt),
                         "table_catalog": t.table_catalog,
                         "table_schema": t.table_schema,
-                        "size_bytes": (i + 1) * 5000000,  # Varied: 5MB, 10MB, 15MB
-                        "row_count": (i + 1) * 10000,  # Varied: 10k, 20k, 30k rows
+                        # Varied: 5MB, 10MB, 15MB
+                        "size_bytes": (i + 1) * 5000000,
+                        # Varied: 10k, 20k, 30k rows
+                        "row_count": (i + 1) * 10000,
                     }
                     for i, t in enumerate(sample_tables)
                     if t.table_catalog and t.table_schema and t.table_name
                 ],
                 "queries": [
                     {
-                        "query": anonymize_query_pattern(q.query if q.query else "", salt),
-                        "bytes_processed": (i + 1) * 2500000,  # Varied: 2.5MB, 5MB, 7.5MB
+                        "query": anonymize_query_pattern(
+                            q.query if q.query else "", salt
+                        ),
+                        # Varied: 2.5MB, 5MB, 7.5MB
+                        "bytes_processed": (i + 1) * 2500000,
                     }
                     for i, q in enumerate(sample_queries)
                     if q.query
@@ -297,7 +316,10 @@ def validate(
             payload_json = json.dumps(payload_sample)
             payload_size_kb = len(payload_json) / 1024
 
-            console.print(f"\n[bold]Estimated Payload Size:[/bold] [cyan]{payload_size_kb:.2f} KB[/cyan]")
+            console.print(
+                f"\n[bold]Estimated Payload Size:[/bold] "
+                f"[cyan]{payload_size_kb:.2f} KB[/cyan]"
+            )
 
             # Display privacy guarantees
             console.print("\n")
