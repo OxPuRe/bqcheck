@@ -1,7 +1,7 @@
 """HTTP client for bqaudit server API communication."""
 
 import os
-from typing import Any, Dict, TypedDict
+from typing import Any, Dict, TypedDict, cast
 
 import httpx
 
@@ -50,7 +50,7 @@ def check_server_health() -> Dict[str, Any]:
         with httpx.Client(timeout=5.0) as client:
             response = client.get(health_url)
             response.raise_for_status()
-            return response.json()
+            return cast(Dict[str, Any], response.json())
     except httpx.ConnectError as e:
         raise httpx.ConnectError(f"Cannot reach bqaudit server: {e}")
     except httpx.TimeoutException:
