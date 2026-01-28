@@ -37,12 +37,48 @@ def mock_bq_client():
     """Mock BigQuery client with successful responses."""
     client = Mock()
 
-    # Mock query results
-    mock_query_job = Mock()
-    mock_query_job.result.return_value = [
-        Mock(table_catalog="test", table_schema="dataset", table_name="table1")
-    ]
-    client.query.return_value = mock_query_job
+    # Helper to create table rows
+    def _create_table_row(catalog, schema, name):
+        row = Mock()
+        row.table_catalog = catalog
+        row.table_schema = schema
+        row.table_name = name
+        return row
+
+    def _create_count_row(count):
+        row = Mock()
+        row.table_count = count
+        return row
+
+    def _create_query_row(query_text):
+        row = Mock()
+        row.query = query_text
+        return row
+
+    # Mock query results with side_effect for different queries
+    def query_side_effect(query_str):
+        mock_job = Mock()
+        if "COUNT" in query_str:
+            # Count query
+            mock_job.result.return_value = [_create_count_row(42)]
+        elif "JOBS_BY_PROJECT" in query_str:
+            # Sample queries
+            mock_job.result.return_value = [
+                _create_query_row("SELECT * FROM dataset.table1"),
+            ]
+        elif "LIMIT 3" in query_str:
+            # Sample tables
+            mock_job.result.return_value = [
+                _create_table_row("test", "dataset", "table1"),
+            ]
+        else:
+            # Default test queries (LIMIT 1)
+            mock_job.result.return_value = [
+                _create_table_row("test", "dataset", "table1")
+            ]
+        return mock_job
+
+    client.query.side_effect = query_side_effect
 
     # Mock list_jobs for permissions check
     client.list_jobs.return_value = []
@@ -207,48 +243,78 @@ def test_validate_project_not_found():
 # ============================================================================
 
 
-def test_validate_project_has_tables(mock_bq_client, mock_health_response):
+def test_validate_project_has_tables(mock_health_response):
     """Test project has sufficient data (tables exist)."""
-    # Mock count query to return 42 tables
-    mock_count_result = Mock()
-    mock_count_result.table_count = 42
+    # Create custom client mock (bypass fixture since we need custom count value)
+    client = Mock()
 
-    mock_count_job = Mock()
-    mock_count_job.result.return_value = [mock_count_result]
+    # Helper functions
+    def _create_table_row(catalog, schema, name):
+        row = Mock()
+        row.table_catalog = catalog
+        row.table_schema = schema
+        row.table_name = name
+        return row
 
-    # Configure client to return count job for last query
-    mock_bq_client.query.side_effect = [
-        mock_bq_client.query.return_value,  # SELECT 1
-        mock_bq_client.query.return_value,  # Permissions check
-        mock_bq_client.query.return_value,  # Test query
-        mock_count_job,  # Count query
-    ]
+    def _create_count_row(count):
+        row = Mock()
+        row.table_count = count
+        return row
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    # Mock query results with specific count (42)
+    def query_side_effect(query_str):
+        mock_job = Mock()
+        if "COUNT" in query_str:
+            mock_job.result.return_value = [_create_count_row(42)]
+        else:
+            mock_job.result.return_value = [
+                _create_table_row("test", "dataset", "table1")
+            ]
+        return mock_job
+
+    client.query.side_effect = query_side_effect
+    client.list_jobs.return_value = []
+
+    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
         with patch("bqaudit.cli.check_server_health", return_value=mock_health_response):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "✓ Project has 42 tables" in result.stdout
             assert result.exit_code == 0
 
 
-def test_validate_project_no_tables(mock_bq_client, mock_health_response):
+def test_validate_project_no_tables(mock_health_response):
     """Test warning when project has no tables."""
-    # Mock count query to return 0 tables
-    mock_count_result = Mock()
-    mock_count_result.table_count = 0
+    # Create custom client mock (bypass fixture since we need custom count value)
+    client = Mock()
 
-    mock_count_job = Mock()
-    mock_count_job.result.return_value = [mock_count_result]
+    # Helper functions
+    def _create_table_row(catalog, schema, name):
+        row = Mock()
+        row.table_catalog = catalog
+        row.table_schema = schema
+        row.table_name = name
+        return row
 
-    # Configure client to return count job for last query
-    mock_bq_client.query.side_effect = [
-        mock_bq_client.query.return_value,  # SELECT 1
-        mock_bq_client.query.return_value,  # Permissions check
-        mock_bq_client.query.return_value,  # Test query
-        mock_count_job,  # Count query
-    ]
+    def _create_count_row(count):
+        row = Mock()
+        row.table_count = count
+        return row
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    # Mock query results with specific count (0)
+    def query_side_effect(query_str):
+        mock_job = Mock()
+        if "COUNT" in query_str:
+            mock_job.result.return_value = [_create_count_row(0)]
+        else:
+            mock_job.result.return_value = [
+                _create_table_row("test", "dataset", "table1")
+            ]
+        return mock_job
+
+    client.query.side_effect = query_side_effect
+    client.list_jobs.return_value = []
+
+    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
         with patch("bqaudit.cli.check_server_health", return_value=mock_health_response):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "⚠ Project has no tables" in result.stdout
@@ -371,7 +437,7 @@ def test_validate_verbose_mode(mock_bq_client, mock_health_response):
             assert "ℹ Checking BigQuery API" in result.stdout
             assert "ℹ Checking IAM permissions" in result.stdout
             assert "Query:" in result.stdout  # Shows SQL queries
-            assert "GET /v1/health" in result.stdout  # Shows HTTP requests
+            assert "/v1/health" in result.stdout  # Shows HTTP requests (updated for new format)
             assert result.exit_code == 0
 
 

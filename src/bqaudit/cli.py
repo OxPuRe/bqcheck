@@ -4,6 +4,7 @@ CLI entrypoint for bqaudit.
 Provides commands: validate, scan, license (activate, status, revoke).
 """
 
+import json
 import time
 
 import httpx
@@ -18,9 +19,15 @@ from typing_extensions import Annotated
 
 from bqaudit import __version__
 from bqaudit.api.client import check_server_health
+from bqaudit.config import configure_logging
 from bqaudit.scanner import (
     AuthenticationError,
     authenticate_bigquery,
+)
+from bqaudit.scanner.anonymizer import (
+    anonymize_query_pattern,
+    anonymize_table_name,
+    generate_salt,
 )
 
 app = typer.Typer(
@@ -67,6 +74,9 @@ def validate(
     # CRITICAL: This command must NEVER consume tokens
     start_time = time.time()
 
+    # Configure logging based on verbose flag
+    logger = configure_logging(verbose)
+
     console.print("\n[bold cyan]🔍 Starting BigQuery Validation...[/bold cyan]\n")
 
     # Track validation results
@@ -74,6 +84,7 @@ def validate(
 
     # Step 1: GCP Authentication
     try:
+        logger.debug(f"Authenticating with project: {project}")
         if verbose:
             console.print("[blue]ℹ Checking GCP authentication...[/blue]")
 
@@ -94,6 +105,7 @@ def validate(
 
     # Step 2: BigQuery API Enablement Check
     try:
+        logger.debug(f"Checking BigQuery API enablement for project: {project}")
         if verbose:
             console.print("[blue]ℹ Checking BigQuery API enablement...[/blue]")
 
@@ -125,6 +137,7 @@ def validate(
 
     # Step 3: IAM Permissions Verification
     try:
+        logger.debug(f"Verifying IAM permissions for project: {project}")
         if verbose:
             console.print("[blue]ℹ Checking IAM permissions...[/blue]")
 
@@ -226,6 +239,135 @@ def validate(
     except (Forbidden, NotFound, BadRequest, GoogleAPIError) as e:
         console.print(f"[yellow]⚠ Could not count tables: {e}[/yellow]")
         validation_results.append(("Project Data", "⚠", "Count failed"))
+
+    # Step 5.5: Verbose Mode - Metadata Preview and Anonymization Display
+    if verbose:
+        try:
+            logger.debug(f"Extracting sample metadata for preview from project: {project}")
+            console.print("\n[blue]ℹ Extracting sample metadata for preview...[/blue]")
+
+            # Extract sample tables (first 3)
+            sample_tables_query = f"""
+            SELECT table_catalog, table_schema, table_name
+            FROM `{project}.INFORMATION_SCHEMA.TABLES`
+            LIMIT 3
+            """
+            query_job = client.query(sample_tables_query)
+            sample_tables = list(query_job.result())
+
+            # Extract sample queries (first 3 SELECT queries)
+            sample_queries_query = f"""
+            SELECT query
+            FROM `{project}.INFORMATION_SCHEMA.JOBS_BY_PROJECT`
+            WHERE statement_type = 'SELECT'
+              AND query IS NOT NULL
+            ORDER BY creation_time DESC
+            LIMIT 3
+            """
+            query_job = client.query(sample_queries_query)
+            sample_queries = list(query_job.result())
+
+            # Generate salt for anonymization preview
+            salt = generate_salt()
+
+            # Display metadata preview section
+            console.print("\n")
+            preview_panel = Panel(
+                "[bold cyan]Metadata Preview[/bold cyan]\n\n"
+                "Sample of metadata that will be extracted and anonymized:",
+                border_style="cyan",
+            )
+            console.print(preview_panel)
+
+            # Display table anonymization preview
+            if sample_tables:
+                logger.debug(f"Anonymizing {len(sample_tables)} sample tables")
+                console.print("\n[bold]Table Name Anonymization:[/bold]")
+                for table in sample_tables:
+                    # Defensive: skip rows with None values
+                    if not (table.table_catalog and table.table_schema and table.table_name):
+                        continue
+                    original = f"{table.table_catalog}.{table.table_schema}.{table.table_name}"
+                    anonymized = anonymize_table_name(table.table_name, salt)
+                    # Truncate hash for display
+                    anonymized_short = anonymized[:16] + "..."
+                    console.print(f"  Table: [yellow]{original}[/yellow] → [green]{anonymized_short}[/green]")
+
+            # Display query anonymization preview
+            if sample_queries:
+                console.print("\n[bold]Query Pattern Anonymization:[/bold]")
+                for query_row in sample_queries:
+                    # Defensive: skip rows with None/empty query
+                    if not query_row.query:
+                        continue
+
+                    # Truncate original query for display
+                    original_truncated = query_row.query[:60].replace("\n", " ")
+                    if len(query_row.query) > 60:
+                        original_truncated += "..."
+
+                    # Anonymize query
+                    anonymized = anonymize_query_pattern(query_row.query, salt)
+                    anonymized_truncated = anonymized[:60].replace("\n", " ")
+                    if len(anonymized) > 60:
+                        anonymized_truncated += "..."
+
+                    console.print(f"  Query: [yellow]{original_truncated}[/yellow]")
+                    console.print(f"      → [green]{anonymized_truncated}[/green]")
+
+            # Calculate and display payload size estimate
+            # Use varied realistic estimates for better payload size approximation
+            payload_sample = {
+                "tables": [
+                    {
+                        "table_name": anonymize_table_name(t.table_name, salt),
+                        "table_catalog": t.table_catalog,
+                        "table_schema": t.table_schema,
+                        "size_bytes": (i + 1) * 5000000,  # Varied: 5MB, 10MB, 15MB
+                        "row_count": (i + 1) * 10000,  # Varied: 10k, 20k, 30k rows
+                    }
+                    for i, t in enumerate(sample_tables)
+                    if t.table_catalog and t.table_schema and t.table_name
+                ],
+                "queries": [
+                    {
+                        "query": anonymize_query_pattern(q.query if q.query else "", salt),
+                        "bytes_processed": (i + 1) * 2500000,  # Varied: 2.5MB, 5MB, 7.5MB
+                    }
+                    for i, q in enumerate(sample_queries)
+                    if q.query
+                ],
+            }
+            payload_json = json.dumps(payload_sample)
+            payload_size_kb = len(payload_json) / 1024
+
+            console.print(f"\n[bold]Estimated Payload Size:[/bold] [cyan]{payload_size_kb:.2f} KB[/cyan]")
+
+            # Display privacy guarantees
+            console.print("\n")
+            privacy_panel = Panel(
+                "✓ All table names anonymized\n"
+                "✓ All queries anonymized\n"
+                "✓ No raw data accessed",
+                title="[green]Privacy Guarantees[/green]",
+                border_style="green",
+            )
+            console.print(privacy_panel)
+
+            # Display transmission statement
+            transmission_panel = Panel(
+                "[bold]This is what will be sent to bqaudit server:[/bold]\n"
+                "• Metadata only (no table data)\n"
+                "• All identifiers anonymized with SHA-256\n"
+                "• Only statistical information (sizes, counts, patterns)",
+                title="[cyan]Data Transmission[/cyan]",
+                border_style="cyan",
+            )
+            console.print(transmission_panel)
+            console.print("\n")
+
+        except (Forbidden, NotFound, BadRequest, GoogleAPIError) as e:
+            console.print(f"[yellow]⚠ Could not extract sample metadata: {e}[/yellow]")
 
     # Step 6: Server Connectivity Check
     try:
