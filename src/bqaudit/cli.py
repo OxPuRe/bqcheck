@@ -148,9 +148,7 @@ def validate(
         _ = list(client.list_jobs(project=project, max_results=1))
 
         console.print("[green]✓ Permissions verified (bigquery.metadataViewer)[/green]")
-        validation_results.append(
-            ("IAM Permissions", "✓", "bigquery.metadataViewer")
-        )
+        validation_results.append(("IAM Permissions", "✓", "bigquery.metadataViewer"))
 
     except Forbidden:
         console.print("[red]❌ Missing required permissions[/red]")
@@ -195,9 +193,7 @@ def validate(
                 "[yellow]⚠ Project has no tables - "
                 "audit will have limited value[/yellow]"
             )
-            validation_results.append(
-                ("Project Data", "⚠", "0 tables (limited value)")
-            )
+            validation_results.append(("Project Data", "⚠", "0 tables (limited value)"))
         else:
             table_count = results[0].table_count
             console.print(f"[green]✓ Project has {table_count} tables[/green]")
@@ -211,8 +207,7 @@ def validate(
     if verbose:
         try:
             logger.debug(
-                f"Extracting sample metadata for preview from "
-                f"project: {project}"
+                f"Extracting sample metadata for preview from project: {project}"
             )
             console.print("\n[blue]ℹ Extracting sample metadata for preview...[/blue]")
 
@@ -245,15 +240,11 @@ def validate(
                 for table in sample_tables:
                     # Defensive: skip rows with None values
                     if not (
-                        table.table_catalog
-                        and table.table_schema
-                        and table.table_name
+                        table.table_catalog and table.table_schema and table.table_name
                     ):
                         continue
                     original = (
-                        f"{table.table_catalog}."
-                        f"{table.table_schema}."
-                        f"{table.table_name}"
+                        f"{table.table_catalog}.{table.table_schema}.{table.table_name}"
                     )
                     anonymized = anonymize_table_name(table.table_name, salt)
                     # Truncate hash for display

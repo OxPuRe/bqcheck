@@ -21,14 +21,10 @@ class TableMetadata(BaseModel):
     table_type: str = Field(..., description="TABLE, VIEW, EXTERNAL, etc.")
 
     # Temporal metadata
-    creation_time: str = Field(
-        ..., description="Table creation timestamp (ISO format)"
-    )
+    creation_time: str = Field(..., description="Table creation timestamp (ISO format)")
 
     # Storage metadata
-    size_bytes: Optional[int] = Field(
-        None, description="Total storage size in bytes"
-    )
+    size_bytes: Optional[int] = Field(None, description="Total storage size in bytes")
     row_count: Optional[int] = Field(None, description="Total row count")
 
     # Partitioning metadata

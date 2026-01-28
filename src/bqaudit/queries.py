@@ -50,13 +50,9 @@ def get_tables_query(project_id: str, limit: int = 1) -> str:
     _validate_project_id(project_id)
 
     if not isinstance(limit, int) or limit < 1:
-        raise ValueError(
-            f"Invalid limit value: {limit}. Must be positive integer."
-        )
+        raise ValueError(f"Invalid limit value: {limit}. Must be positive integer.")
 
-    logger.debug(
-        f"Generating tables query for project={project_id}, limit={limit}"
-    )
+    logger.debug(f"Generating tables query for project={project_id}, limit={limit}")
     return f"""
         SELECT table_catalog, table_schema, table_name
         FROM `{project_id}.INFORMATION_SCHEMA.TABLES`
@@ -104,13 +100,10 @@ def get_sample_queries_query(project_id: str, limit: int = 3) -> str:
     _validate_project_id(project_id)
 
     if not isinstance(limit, int) or limit < 1:
-        raise ValueError(
-            f"Invalid limit value: {limit}. Must be positive integer."
-        )
+        raise ValueError(f"Invalid limit value: {limit}. Must be positive integer.")
 
     logger.debug(
-        f"Generating sample queries query for "
-        f"project={project_id}, limit={limit}"
+        f"Generating sample queries query for project={project_id}, limit={limit}"
     )
     return f"""
         SELECT query

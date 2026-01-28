@@ -45,8 +45,7 @@ def _validate_project_id(project_id: str) -> None:
 
 
 def extract_table_metadata(
-    client: bigquery.Client,
-    project_id: str
+    client: bigquery.Client, project_id: str
 ) -> List[TableMetadata]:
     """
     Extract complete table metadata from INFORMATION_SCHEMA.

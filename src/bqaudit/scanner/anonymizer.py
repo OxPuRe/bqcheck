@@ -91,9 +91,7 @@ def _validate_identifier(
         raise ValueError(f"{name} cannot be empty")
 
     if len(value) > max_length:
-        raise ValueError(
-            f"{name} too long: {len(value)} characters (max {max_length})"
-        )
+        raise ValueError(f"{name} too long: {len(value)} characters (max {max_length})")
 
 
 def generate_salt() -> str:
