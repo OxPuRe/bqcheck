@@ -1,17 +1,45 @@
 """BigQuery scanner module for metadata extraction."""
 
+from bqaudit.scanner.anonymizer import (
+    anonymize_access_patterns,
+    anonymize_dataset_name,
+    anonymize_metadata,
+    anonymize_project_id,
+    anonymize_query_list,
+    anonymize_query_pattern,
+    anonymize_table_list,
+    anonymize_table_name,
+    generate_salt,
+)
 from bqaudit.scanner.bigquery_client import (
     AuthenticationError,
     ProjectNotFoundError,
     authenticate_bigquery,
 )
-from bqaudit.scanner.metadata_extractor import extract_table_metadata
-from bqaudit.scanner.models import TableMetadata
+from bqaudit.scanner.metadata_extractor import (
+    extract_access_patterns,
+    extract_query_metadata,
+    extract_table_metadata,
+)
+from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 
 __all__ = [
     "authenticate_bigquery",
     "AuthenticationError",
     "ProjectNotFoundError",
     "TableMetadata",
+    "QueryMetadata",
+    "AccessPattern",
     "extract_table_metadata",
+    "extract_query_metadata",
+    "extract_access_patterns",
+    "generate_salt",
+    "anonymize_table_name",
+    "anonymize_dataset_name",
+    "anonymize_project_id",
+    "anonymize_query_pattern",
+    "anonymize_metadata",
+    "anonymize_table_list",
+    "anonymize_query_list",
+    "anonymize_access_patterns",
 ]

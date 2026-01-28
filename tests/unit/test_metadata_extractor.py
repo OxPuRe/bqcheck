@@ -7,9 +7,11 @@ from google.api_core.exceptions import GoogleAPIError
 
 from bqaudit.scanner.metadata_extractor import (
     _validate_project_id,
+    extract_access_patterns,
+    extract_query_metadata,
     extract_table_metadata,
 )
-from bqaudit.scanner.models import TableMetadata
+from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 
 
 @patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
@@ -397,3 +399,380 @@ def test_extract_table_metadata_invalid_project_id(mock_client):
     assert "Invalid project_id format" in str(exc_info.value)
     # Query should never be called due to validation failure
     mock_bq_client.query.assert_not_called()
+
+
+def test_query_metadata_pydantic_validation():
+    """Test that QueryMetadata Pydantic validation works correctly."""
+
+    # Valid query metadata
+    valid_data = {
+        "job_id": "project:location.job_abc123",
+        "query": "SELECT * FROM dataset.table WHERE date = '2024-01-01'",
+        "total_bytes_processed": 1073741824,  # 1 GB
+        "creation_time": "2024-01-20 10:30:00 UTC",
+        "user_email": "user@example.com",
+        "job_type": "QUERY",
+        "state": "DONE",
+    }
+
+    query = QueryMetadata(**valid_data)
+    assert query.job_id == "project:location.job_abc123"
+    assert query.total_bytes_processed == 1073741824
+    assert query.job_type == "QUERY"
+    assert query.state == "DONE"
+
+    # Test with None optional fields
+    minimal_data = {
+        "job_id": "project:location.job_xyz789",
+        "query": "SELECT COUNT(*) FROM dataset.table",
+        "total_bytes_processed": 0,  # Cached query
+        "creation_time": "2024-01-21 12:00:00 UTC",
+        "user_email": None,  # Service account or anonymous
+        "job_type": "QUERY",
+        "state": "DONE",
+    }
+
+    query_min = QueryMetadata(**minimal_data)
+    assert query_min.user_email is None
+    assert query_min.total_bytes_processed == 0
+
+    # Test that required fields are enforced
+    with pytest.raises(Exception):  # Pydantic validation error
+        # Missing required fields
+        QueryMetadata(job_id="test", query="SELECT 1")
+
+
+def test_access_pattern_pydantic_validation():
+    """Test that AccessPattern Pydantic validation works correctly."""
+
+    # Valid access pattern
+    valid_data = {
+        "table_catalog": "test-project",
+        "table_schema": "analytics",
+        "table_name": "events",
+        "last_modified_time": "2024-01-15 08:30:00 UTC",
+    }
+
+    pattern = AccessPattern(**valid_data)
+    assert pattern.table_catalog == "test-project"
+    assert pattern.table_schema == "analytics"
+    assert pattern.table_name == "events"
+    assert pattern.last_modified_time == "2024-01-15 08:30:00 UTC"
+
+    # Test that required fields are enforced
+    with pytest.raises(Exception):  # Pydantic validation error
+        # Missing required fields
+        AccessPattern(table_catalog="test", table_schema="test")
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_success(mock_client):
+    """Test successful extraction of query metadata with filtering."""
+
+    # Mock BigQuery query response with 5 sample queries
+    mock_row_1 = Mock()
+    mock_row_1.job_id = "my-project:us.job_abc123"
+    mock_row_1.query = "SELECT * FROM analytics.events WHERE date = '2024-01-20'"
+    mock_row_1.total_bytes_processed = 1073741824  # 1 GB
+    mock_row_1.creation_time = "2024-01-20 10:30:00 UTC"
+    mock_row_1.user_email = "user@example.com"
+    mock_row_1.job_type = "QUERY"
+    mock_row_1.state = "DONE"
+
+    mock_row_2 = Mock()
+    mock_row_2.job_id = "my-project:us.job_def456"
+    mock_row_2.query = "SELECT COUNT(*) FROM analytics.users"
+    mock_row_2.total_bytes_processed = 536870912  # 512 MB
+    mock_row_2.creation_time = "2024-01-19 14:00:00 UTC"
+    mock_row_2.user_email = None  # Service account
+    mock_row_2.job_type = "QUERY"
+    mock_row_2.state = "DONE"
+
+    mock_row_3 = Mock()
+    mock_row_3.job_id = "my-project:us.job_ghi789"
+    mock_row_3.query = "SELECT AVG(amount) FROM sales.transactions"
+    mock_row_3.total_bytes_processed = 268435456  # 256 MB
+    mock_row_3.creation_time = "2024-01-18 09:00:00 UTC"
+    mock_row_3.user_email = "analyst@example.com"
+    mock_row_3.job_type = "QUERY"
+    mock_row_3.state = "DONE"
+
+    # Mock query result
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = [mock_row_1, mock_row_2, mock_row_3]
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+
+    # Call function
+    queries = extract_query_metadata(mock_bq_client, "my-project", days=30)
+
+    # Verify
+    assert len(queries) == 3
+    assert isinstance(queries[0], QueryMetadata)
+
+    # Verify first query (most expensive)
+    assert queries[0].job_id == "my-project:us.job_abc123"
+    assert queries[0].total_bytes_processed == 1073741824
+    assert queries[0].job_type == "QUERY"
+    assert queries[0].state == "DONE"
+    assert queries[0].user_email == "user@example.com"
+
+    # Verify second query (no user_email)
+    assert queries[1].user_email is None
+
+    # Verify query was called
+    mock_bq_client.query.assert_called_once()
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_job_type_filter(mock_client):
+    """Test that extract_query_metadata filters to job_type='QUERY' only."""
+
+    # Mock response with mixed job types (should only return QUERY jobs)
+    mock_query_row = Mock()
+    mock_query_row.job_id = "my-project:us.job_query1"
+    mock_query_row.query = "SELECT * FROM dataset.table"
+    mock_query_row.total_bytes_processed = 1000000
+    mock_query_row.creation_time = "2024-01-20 10:00:00 UTC"
+    mock_query_row.user_email = "user@example.com"
+    mock_query_row.job_type = "QUERY"
+    mock_query_row.state = "DONE"
+
+    # These should be filtered out by SQL WHERE clause
+    # (we verify the SQL query excludes them, not that we filter in Python)
+
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = [mock_query_row]
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+
+    # Call function
+    queries = extract_query_metadata(mock_bq_client, "my-project")
+
+    # Verify SQL query contains job_type filter
+    call_args = mock_bq_client.query.call_args
+    query_sql = call_args[0][0]
+    assert "job_type = 'QUERY'" in query_sql or "job_type='QUERY'" in query_sql
+    assert "state = 'DONE'" in query_sql or "state='DONE'" in query_sql
+
+    # Verify only QUERY jobs returned
+    assert len(queries) == 1
+    assert queries[0].job_type == "QUERY"
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_days_parameter(mock_client):
+    """Test that days parameter affects SQL WHERE clause."""
+
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = []
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+
+    # Call with days=7
+    extract_query_metadata(mock_bq_client, "my-project", days=7)
+
+    call_args = mock_bq_client.query.call_args
+    query_sql = call_args[0][0]
+    assert "INTERVAL 7 DAY" in query_sql
+
+    # Call with days=90
+    mock_bq_client.reset_mock()
+    extract_query_metadata(mock_bq_client, "my-project", days=90)
+
+    call_args = mock_bq_client.query.call_args
+    query_sql = call_args[0][0]
+    assert "INTERVAL 90 DAY" in query_sql
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_limit_clause(mock_client):
+    """Test that max_queries parameter adds LIMIT clause."""
+
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = []
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+
+    # Call with default max_queries (10000)
+    extract_query_metadata(mock_bq_client, "my-project", max_queries=10000)
+
+    call_args = mock_bq_client.query.call_args
+    query_sql = call_args[0][0]
+    assert "LIMIT 10000" in query_sql or "LIMIT\n    10000" in query_sql
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_null_query_handling(mock_client):
+    """Test that NULL query field is filtered out."""
+
+    # Mock empty query result (queries with NULL query field should be filtered)
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = []
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+
+    # Call function
+    queries = extract_query_metadata(mock_bq_client, "my-project")
+
+    # Verify SQL includes NULL filter
+    call_args = mock_bq_client.query.call_args
+    query_sql = call_args[0][0]
+    assert "query IS NOT NULL" in query_sql
+
+    # Verify empty result (NULL queries filtered out)
+    assert queries == []
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_empty_project(mock_client):
+    """Test extraction from project with 0 queries."""
+
+    # Mock empty query result
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = []
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+
+    # Call function
+    queries = extract_query_metadata(mock_bq_client, "empty-project")
+
+    # Verify
+    assert queries == []
+    assert isinstance(queries, list)
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_invalid_project_id(mock_client):
+    """Test that extract_query_metadata validates project_id."""
+    mock_bq_client = Mock()
+
+    # Call function with invalid project_id
+    with pytest.raises(ValueError) as exc_info:
+        extract_query_metadata(mock_bq_client, "INVALID-PROJECT")
+
+    assert "Invalid project_id format" in str(exc_info.value)
+    # Query should never be called due to validation failure
+    mock_bq_client.query.assert_not_called()
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_api_error(mock_client):
+    """Test BigQuery API error handling for query extraction."""
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.side_effect = GoogleAPIError("API quota exceeded")
+
+    # Call function - should raise GoogleAPIError
+    with pytest.raises(GoogleAPIError) as exc_info:
+        extract_query_metadata(mock_bq_client, "my-project")
+
+    assert "Failed to extract query metadata" in str(exc_info.value)
+    assert "my-project" in str(exc_info.value)
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_access_patterns_success(mock_client):
+    """Test successful extraction of access patterns."""
+
+    # Mock BigQuery query response with 3 sample tables
+    mock_row_1 = Mock()
+    mock_row_1.table_catalog = "my-project"
+    mock_row_1.table_schema = "analytics"
+    mock_row_1.table_name = "old_events"
+    mock_row_1.last_modified_time = "2023-06-15 08:30:00 UTC"  # Very old
+
+    mock_row_2 = Mock()
+    mock_row_2.table_catalog = "my-project"
+    mock_row_2.table_schema = "analytics"
+    mock_row_2.table_name = "recent_users"
+    mock_row_2.last_modified_time = "2024-01-20 14:00:00 UTC"  # Recent
+
+    mock_row_3 = Mock()
+    mock_row_3.table_catalog = "my-project"
+    mock_row_3.table_schema = "warehouse"
+    mock_row_3.table_name = "products"
+    mock_row_3.last_modified_time = "2024-01-10 10:00:00 UTC"  # Older
+
+    # Mock query result
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = [mock_row_1, mock_row_2, mock_row_3]
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+
+    # Call function
+    patterns = extract_access_patterns(mock_bq_client, "my-project")
+
+    # Verify
+    assert len(patterns) == 3
+    assert isinstance(patterns[0], AccessPattern)
+
+    # Verify first table (oldest - unused)
+    assert patterns[0].table_name == "old_events"
+    assert patterns[0].last_modified_time == "2023-06-15 08:30:00 UTC"
+
+    # Verify query was called
+    mock_bq_client.query.assert_called_once()
+
+    # Verify ORDER BY clause for oldest-first sorting
+    call_args = mock_bq_client.query.call_args
+    query_sql = call_args[0][0]
+    assert "ORDER BY" in query_sql
+    assert "last_modified_time" in query_sql
+    # Verify ASC ordering (oldest first to identify unused tables)
+    assert "ASC" in query_sql or "last_modified_time\n" in query_sql
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_access_patterns_empty_project(mock_client):
+    """Test extraction from project with no access data."""
+
+    # Mock empty query result
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = []
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+
+    # Call function
+    patterns = extract_access_patterns(mock_bq_client, "empty-project")
+
+    # Verify
+    assert patterns == []
+    assert isinstance(patterns, list)
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_access_patterns_invalid_project_id(mock_client):
+    """Test that extract_access_patterns validates project_id."""
+    mock_bq_client = Mock()
+
+    # Call function with invalid project_id
+    with pytest.raises(ValueError) as exc_info:
+        extract_access_patterns(mock_bq_client, "INVALID-PROJECT")
+
+    assert "Invalid project_id format" in str(exc_info.value)
+    # Query should never be called due to validation failure
+    mock_bq_client.query.assert_not_called()
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_access_patterns_api_error(mock_client):
+    """Test BigQuery API error handling for access pattern extraction."""
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.side_effect = GoogleAPIError("API quota exceeded")
+
+    # Call function - should raise GoogleAPIError
+    with pytest.raises(GoogleAPIError) as exc_info:
+        extract_access_patterns(mock_bq_client, "my-project")
+
+    assert "Failed to extract access patterns" in str(exc_info.value)
+    assert "my-project" in str(exc_info.value)
