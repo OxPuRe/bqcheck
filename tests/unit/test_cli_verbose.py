@@ -7,7 +7,6 @@ estimation, and privacy guarantees in the validate command.
 
 from unittest.mock import Mock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from bqaudit.cli import app
@@ -43,9 +42,7 @@ class TestValidateVerboseFlag:
 
     @patch("bqaudit.cli.authenticate_bigquery")
     @patch("bqaudit.cli.check_server_health")
-    def test_validate_verbose_flag_shows_detailed_output(
-        self, mock_health, mock_auth
-    ):
+    def test_validate_verbose_flag_shows_detailed_output(self, mock_health, mock_auth):
         """Test --verbose flag shows detailed validation steps."""
         # Setup mocks
         mock_client = Mock()
@@ -125,9 +122,7 @@ class TestMetadataPreview:
 
     @patch("bqaudit.cli.authenticate_bigquery")
     @patch("bqaudit.cli.check_server_health")
-    def test_validate_verbose_shows_metadata_preview(
-        self, mock_health, mock_auth
-    ):
+    def test_validate_verbose_shows_metadata_preview(self, mock_health, mock_auth):
         """Test verbose mode displays sample metadata with anonymization."""
         # Setup mocks
         mock_client = Mock()
@@ -178,9 +173,7 @@ class TestAnonymizationPreview:
 
     @patch("bqaudit.cli.authenticate_bigquery")
     @patch("bqaudit.cli.check_server_health")
-    def test_validate_verbose_shows_table_anonymization(
-        self, mock_health, mock_auth
-    ):
+    def test_validate_verbose_shows_table_anonymization(self, mock_health, mock_auth):
         """Test verbose mode shows table name anonymization mapping."""
         # Setup mocks
         mock_client = Mock()
@@ -272,8 +265,9 @@ class TestPayloadSizeEstimation:
         assert "KB" in result.stdout
         # Verify it shows a numeric value (not just text)
         import re
+
         # Look for pattern like "X.XX KB" where X is a digit
-        kb_pattern = re.search(r'(\d+\.\d+)\s*KB', result.stdout)
+        kb_pattern = re.search(r"(\d+\.\d+)\s*KB", result.stdout)
         assert kb_pattern is not None, "Should display numeric KB value"
         # Verify the value is reasonable (should be > 0 and < 1000 for sample data)
         kb_value = float(kb_pattern.group(1))
@@ -285,9 +279,7 @@ class TestPrivacyGuarantees:
 
     @patch("bqaudit.cli.authenticate_bigquery")
     @patch("bqaudit.cli.check_server_health")
-    def test_validate_verbose_shows_privacy_guarantees(
-        self, mock_health, mock_auth
-    ):
+    def test_validate_verbose_shows_privacy_guarantees(self, mock_health, mock_auth):
         """Test verbose mode displays privacy guarantee messages."""
         # Setup mocks
         mock_client = Mock()

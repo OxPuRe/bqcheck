@@ -6,8 +6,6 @@ Tests logging configuration functionality including verbose mode.
 
 import logging
 
-import pytest
-
 from bqaudit.config import configure_logging
 
 
