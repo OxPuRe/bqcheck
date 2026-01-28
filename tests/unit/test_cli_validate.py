@@ -131,10 +131,7 @@ def test_validate_gcp_auth_failure_auth_error():
     from bqaudit.scanner import AuthenticationError
 
     with patch("bqaudit.cli.authenticate_bigquery") as mock_auth:
-        mock_auth.side_effect = AuthenticationError(
-            "Auth failed",
-            "Run gcloud auth"
-        )
+        mock_auth.side_effect = AuthenticationError("Auth failed")
         result = runner.invoke(app, ["validate", "--project", "test-project"])
         assert "❌ GCP authentication failed" in result.stdout
         assert result.exit_code == 3

@@ -9,18 +9,16 @@ from google.cloud import bigquery
 class AuthenticationError(Exception):
     """Raised when GCP authentication fails."""
 
-    def __init__(self, message: str, action: str):
+    def __init__(self, message: str):
         self.message = message
-        self.action = action
         super().__init__(message)
 
 
 class ProjectNotFoundError(Exception):
     """Raised when BigQuery project is not found or inaccessible."""
 
-    def __init__(self, message: str, action: str):
+    def __init__(self, message: str):
         self.message = message
-        self.action = action
         super().__init__(message)
 
 
@@ -51,12 +49,10 @@ def authenticate_bigquery(project_id: str) -> bigquery.Client:
 
     except DefaultCredentialsError:
         raise AuthenticationError(
-            message="GCP authentication failed - no credentials found",
-            action="Run: gcloud auth application-default login",
+            message="GCP authentication failed - no credentials found"
         )
 
     except NotFound:
         raise ProjectNotFoundError(
-            message=f"BigQuery project '{project_id}' not found or inaccessible",
-            action="Verify project ID and ensure BigQuery API is enabled",
+            message=f"BigQuery project '{project_id}' not found or inaccessible"
         )

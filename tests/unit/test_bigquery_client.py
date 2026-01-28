@@ -51,9 +51,8 @@ def test_authentication_failure(mock_default):
     with pytest.raises(AuthenticationError) as exc_info:
         authenticate_bigquery("test-project")
 
-    # Verify error message and action
+    # Verify error message
     assert exc_info.value.message == "GCP authentication failed - no credentials found"
-    assert exc_info.value.action == "Run: gcloud auth application-default login"
 
 
 @patch("bqaudit.scanner.bigquery_client.default")
@@ -73,14 +72,10 @@ def test_invalid_project_handling(mock_client_class, mock_default):
     with pytest.raises(ProjectNotFoundError) as exc_info:
         authenticate_bigquery("invalid-project")
 
-    # Verify error message and action
+    # Verify error message
     assert (
         exc_info.value.message
         == "BigQuery project 'invalid-project' not found or inaccessible"
-    )
-    assert (
-        exc_info.value.action
-        == "Verify project ID and ensure BigQuery API is enabled"
     )
 
 
