@@ -20,6 +20,12 @@ from typing_extensions import Annotated
 from bqaudit import __version__
 from bqaudit.api.client import check_server_health
 from bqaudit.config import configure_logging
+from bqaudit.queries import (
+    get_sample_queries_query,
+    get_simple_test_query,
+    get_table_count_query,
+    get_tables_query,
+)
 from bqaudit.scanner import (
     AuthenticationError,
     authenticate_bigquery,
@@ -94,14 +100,7 @@ def validate(
 
     except (AuthenticationError, DefaultCredentialsError):
         console.print("[red]❌ GCP authentication failed[/red]")
-        error_message = _format_error_guidance("auth_fail", project)
-        error_panel = Panel(
-            error_message,
-            title="[red]Validation Failed[/red]",
-            border_style="red",
-        )
-        console.print(error_panel)
-        raise typer.Exit(3)
+        _handle_validation_error("auth_fail", project, 3)
 
     # Step 2: BigQuery API Enablement Check
     try:
@@ -110,7 +109,7 @@ def validate(
             console.print("[blue]ℹ Checking BigQuery API enablement...[/blue]")
 
         # Test query to verify API is enabled
-        test_query = "SELECT 1"
+        test_query = get_simple_test_query()
         if verbose:
             console.print(f"[dim]  Query: {test_query}[/dim]")
 
@@ -123,14 +122,7 @@ def validate(
     except Forbidden as e:
         if "BigQuery API has not been used" in str(e) or "disabled" in str(e).lower():
             console.print("[red]❌ BigQuery API not enabled for project[/red]")
-            error_message = _format_error_guidance("api_disabled", project)
-            error_panel = Panel(
-                error_message,
-                title="[red]Validation Failed[/red]",
-                border_style="red",
-            )
-            console.print(error_panel)
-            raise typer.Exit(4)
+            _handle_validation_error("api_disabled", project, 4)
         else:
             # Re-raise for permissions check below
             raise
@@ -142,11 +134,7 @@ def validate(
             console.print("[blue]ℹ Checking IAM permissions...[/blue]")
 
         # Test bigquery.tables.get permission
-        tables_query = f"""
-        SELECT table_catalog, table_schema, table_name
-        FROM `{project}.INFORMATION_SCHEMA.TABLES`
-        LIMIT 1
-        """
+        tables_query = get_tables_query(project, limit=1)
         if verbose:
             console.print(f"[dim]  Query: {tables_query.strip()}[/dim]")
 
@@ -166,25 +154,14 @@ def validate(
 
     except Forbidden:
         console.print("[red]❌ Missing required permissions[/red]")
-        error_message = _format_error_guidance("permissions_missing", project)
-        error_panel = Panel(
-            error_message,
-            title="[red]Validation Failed[/red]",
-            border_style="red",
-        )
-        console.print(error_panel)
-        raise typer.Exit(4)
+        _handle_validation_error("permissions_missing", project, 4)
 
     # Step 4: Test Query Execution
     try:
         if verbose:
             console.print("[blue]ℹ Running test query...[/blue]")
 
-        test_query = f"""
-        SELECT table_catalog, table_schema, table_name
-        FROM `{project}.INFORMATION_SCHEMA.TABLES`
-        LIMIT 1
-        """
+        test_query = get_tables_query(project, limit=1)
         if verbose:
             console.print(f"[dim]  Query: {test_query.strip()}[/dim]")
 
@@ -196,24 +173,14 @@ def validate(
 
     except NotFound:
         console.print("[red]❌ Project not found or no datasets exist[/red]")
-        error_message = _format_error_guidance("project_not_found", project)
-        error_panel = Panel(
-            error_message,
-            title="[red]Validation Failed[/red]",
-            border_style="red",
-        )
-        console.print(error_panel)
-        raise typer.Exit(4)
+        _handle_validation_error("project_not_found", project, 4)
 
     # Step 5: Project Data Sufficiency Check
     try:
         if verbose:
             console.print("[blue]ℹ Checking project data sufficiency...[/blue]")
 
-        count_query = f"""
-        SELECT COUNT(*) as table_count
-        FROM `{project}.INFORMATION_SCHEMA.TABLES`
-        """
+        count_query = get_table_count_query(project)
         if verbose:
             console.print(f"[dim]  Query: {count_query.strip()}[/dim]")
 
@@ -243,27 +210,19 @@ def validate(
     # Step 5.5: Verbose Mode - Metadata Preview and Anonymization Display
     if verbose:
         try:
-            logger.debug(f"Extracting sample metadata for preview from project: {project}")
+            logger.debug(
+                f"Extracting sample metadata for preview from "
+                f"project: {project}"
+            )
             console.print("\n[blue]ℹ Extracting sample metadata for preview...[/blue]")
 
             # Extract sample tables (first 3)
-            sample_tables_query = f"""
-            SELECT table_catalog, table_schema, table_name
-            FROM `{project}.INFORMATION_SCHEMA.TABLES`
-            LIMIT 3
-            """
+            sample_tables_query = get_tables_query(project, limit=3)
             query_job = client.query(sample_tables_query)
             sample_tables = list(query_job.result())
 
             # Extract sample queries (first 3 SELECT queries)
-            sample_queries_query = f"""
-            SELECT query
-            FROM `{project}.INFORMATION_SCHEMA.JOBS_BY_PROJECT`
-            WHERE statement_type = 'SELECT'
-              AND query IS NOT NULL
-            ORDER BY creation_time DESC
-            LIMIT 3
-            """
+            sample_queries_query = get_sample_queries_query(project, limit=3)
             query_job = client.query(sample_queries_query)
             sample_queries = list(query_job.result())
 
@@ -285,13 +244,24 @@ def validate(
                 console.print("\n[bold]Table Name Anonymization:[/bold]")
                 for table in sample_tables:
                     # Defensive: skip rows with None values
-                    if not (table.table_catalog and table.table_schema and table.table_name):
+                    if not (
+                        table.table_catalog
+                        and table.table_schema
+                        and table.table_name
+                    ):
                         continue
-                    original = f"{table.table_catalog}.{table.table_schema}.{table.table_name}"
+                    original = (
+                        f"{table.table_catalog}."
+                        f"{table.table_schema}."
+                        f"{table.table_name}"
+                    )
                     anonymized = anonymize_table_name(table.table_name, salt)
                     # Truncate hash for display
                     anonymized_short = anonymized[:16] + "..."
-                    console.print(f"  Table: [yellow]{original}[/yellow] → [green]{anonymized_short}[/green]")
+                    console.print(
+                        f"  Table: [yellow]{original}[/yellow] → "
+                        f"[green]{anonymized_short}[/green]"
+                    )
 
             # Display query anonymization preview
             if sample_queries:
@@ -323,16 +293,21 @@ def validate(
                         "table_name": anonymize_table_name(t.table_name, salt),
                         "table_catalog": t.table_catalog,
                         "table_schema": t.table_schema,
-                        "size_bytes": (i + 1) * 5000000,  # Varied: 5MB, 10MB, 15MB
-                        "row_count": (i + 1) * 10000,  # Varied: 10k, 20k, 30k rows
+                        # Varied: 5MB, 10MB, 15MB
+                        "size_bytes": (i + 1) * 5000000,
+                        # Varied: 10k, 20k, 30k rows
+                        "row_count": (i + 1) * 10000,
                     }
                     for i, t in enumerate(sample_tables)
                     if t.table_catalog and t.table_schema and t.table_name
                 ],
                 "queries": [
                     {
-                        "query": anonymize_query_pattern(q.query if q.query else "", salt),
-                        "bytes_processed": (i + 1) * 2500000,  # Varied: 2.5MB, 5MB, 7.5MB
+                        "query": anonymize_query_pattern(
+                            q.query if q.query else "", salt
+                        ),
+                        # Varied: 2.5MB, 5MB, 7.5MB
+                        "bytes_processed": (i + 1) * 2500000,
                     }
                     for i, q in enumerate(sample_queries)
                     if q.query
@@ -341,7 +316,10 @@ def validate(
             payload_json = json.dumps(payload_sample)
             payload_size_kb = len(payload_json) / 1024
 
-            console.print(f"\n[bold]Estimated Payload Size:[/bold] [cyan]{payload_size_kb:.2f} KB[/cyan]")
+            console.print(
+                f"\n[bold]Estimated Payload Size:[/bold] "
+                f"[cyan]{payload_size_kb:.2f} KB[/cyan]"
+            )
 
             # Display privacy guarantees
             console.print("\n")
@@ -409,36 +387,15 @@ def validate(
 
     except httpx.ConnectError:
         console.print("[red]❌ Cannot reach bqaudit server[/red]")
-        error_message = _format_error_guidance("server_unreachable", project)
-        error_panel = Panel(
-            error_message,
-            title="[red]Validation Failed[/red]",
-            border_style="red",
-        )
-        console.print(error_panel)
-        raise typer.Exit(1)
+        _handle_validation_error("server_unreachable", project, 1)
 
     except httpx.TimeoutException:
         console.print("[red]❌ Server timeout (5s)[/red]")
-        error_message = _format_error_guidance("server_timeout", project)
-        error_panel = Panel(
-            error_message,
-            title="[red]Validation Failed[/red]",
-            border_style="red",
-        )
-        console.print(error_panel)
-        raise typer.Exit(1)
+        _handle_validation_error("server_timeout", project, 1)
 
     except httpx.HTTPStatusError as e:
         console.print(f"[red]❌ Server error: HTTP {e.response.status_code}[/red]")
-        error_message = _format_error_guidance("server_error", project)
-        error_panel = Panel(
-            error_message,
-            title="[red]Validation Failed[/red]",
-            border_style="red",
-        )
-        console.print(error_panel)
-        raise typer.Exit(1)
+        _handle_validation_error("server_error", project, 1)
 
     except Exception as e:
         console.print(f"[yellow]⚠ Server health check failed: {e}[/yellow]")
@@ -471,6 +428,27 @@ def validate(
     console.print(
         f"\n[green bold]✓ Validation completed in {elapsed:.2f}s[/green bold]\n"
     )
+
+
+def _handle_validation_error(error_type: str, project_id: str, exit_code: int) -> None:
+    """
+    Display error panel and exit with appropriate code.
+
+    Centralizes error handling pattern used throughout validate command.
+
+    Args:
+        error_type: Type of error for guidance (auth_fail, api_disabled, etc.)
+        project_id: GCP project ID for context
+        exit_code: Exit code to use (3=auth, 4=bigquery, 1=general)
+    """
+    error_message = _format_error_guidance(error_type, project_id)
+    error_panel = Panel(
+        error_message,
+        title="[red]Validation Failed[/red]",
+        border_style="red",
+    )
+    console.print(error_panel)
+    raise typer.Exit(exit_code)
 
 
 def _format_error_guidance(error_type: str, project_id: str) -> str:
