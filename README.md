@@ -29,14 +29,22 @@ pip install bqaudit
 
 ### Validate Access (Free)
 
+Check BigQuery access and permissions without consuming tokens:
+
 ```bash
-bqaudit validate my-gcp-project
+bqaudit validate --project my-gcp-project
+```
+
+Show detailed validation steps:
+
+```bash
+bqaudit validate --project my-gcp-project --verbose
 ```
 
 ### Run Audit (Consumes 1 Token)
 
 ```bash
-bqaudit scan my-gcp-project
+bqaudit scan --project my-gcp-project
 ```
 
 ### License Management
@@ -58,7 +66,7 @@ bqaudit license revoke
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/bqaudit.git
+git clone https://github.com/OxPuRe/bqaudit.git
 cd bqaudit
 
 # Install dependencies

@@ -521,7 +521,9 @@ Try again in a few minutes. If the problem persists, contact support."""
 
 @app.command()
 def scan(
-    project_id: Annotated[str, typer.Argument(help="GCP project ID to scan")],
+    project: Annotated[
+        str, typer.Option("--project", "-p", help="GCP project ID to scan")
+    ],
 ) -> None:
     """Run full audit scan (consumes 1 token)."""
     typer.echo("Scan command - placeholder")
