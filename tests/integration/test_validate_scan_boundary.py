@@ -37,7 +37,7 @@ def test_validate_succeeds_but_scan_fails_when_token_depleted(tmp_path: Path):
         "token_pool_balance": 0,  # DEPLETED
         "ephemeral_token": "mock-token-xyz",
         "server_url": "https://api.bqaudit.com",
-        "activated_at": "2024-01-01T00:00:00Z",
+        "activated_at": "2024-01-01T00:00:00+00:00",
         "used_tokens": [],
     }
 
@@ -104,7 +104,7 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
         "token_pool_balance": 5,  # Tokens available
         "ephemeral_token": "mock-token-xyz",
         "server_url": "https://api.bqaudit.com",
-        "activated_at": "2024-01-01T00:00:00Z",
+        "activated_at": "2024-01-01T00:00:00+00:00",
         "used_tokens": [],
     }
 

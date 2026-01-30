@@ -23,7 +23,7 @@ class TestCredentialStore:
             "token_pool_balance": 50,
             "ephemeral_token": "token123",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00Z",
+            "activated_at": "2026-01-30T10:00:00+00:00",
         }
 
         CredentialStore.save(credentials)
@@ -41,7 +41,7 @@ class TestCredentialStore:
             "token_pool_balance": 50,
             "ephemeral_token": "token123",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00Z",
+            "activated_at": "2026-01-30T10:00:00+00:00",
         }
 
         CredentialStore.save(credentials)
@@ -63,7 +63,7 @@ class TestCredentialStore:
             "token_pool_balance": 50,
             "ephemeral_token": "token123",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00Z",
+            "activated_at": "2026-01-30T10:00:00+00:00",
         }
 
         CredentialStore.save(credentials)
@@ -84,7 +84,7 @@ class TestCredentialStore:
             "token_pool_balance": 50,
             "ephemeral_token": "token123",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00Z",
+            "activated_at": "2026-01-30T10:00:00+00:00",
         }
         CredentialStore.save(credentials)
 
@@ -105,17 +105,20 @@ class TestCredentialStore:
             "token_pool_balance": 50,
             "ephemeral_token": "token123",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00Z",
+            "activated_at": "2026-01-30T10:00:00+00:00",
         }
 
         CredentialStore.save(credentials)
         loaded = CredentialStore.load()
 
         # Story 3.4 added used_tokens field with default=[]
-        assert loaded == {
+        # Note: activated_at is serialized to 'Z' format by field_serializer
+        expected = {
             **credentials,
+            "activated_at": "2026-01-30T10:00:00Z",  # Serialized to Z format
             "used_tokens": [],
         }
+        assert loaded == expected
 
     def test_load_raises_if_file_not_exists(self, tmp_path, monkeypatch):
         """Test that load() raises CredentialNotFoundError if no file."""
@@ -150,7 +153,7 @@ class TestCredentialStore:
             "token_pool_balance": 50,
             "ephemeral_token": "token123",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00Z",
+            "activated_at": "2026-01-30T10:00:00+00:00",
         }
         CredentialStore.save(credentials)
 
@@ -171,7 +174,7 @@ class TestCredentialStore:
             "token_pool_balance": 50,
             "ephemeral_token": "token123",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00Z",
+            "activated_at": "2026-01-30T10:00:00+00:00",
         }
         CredentialStore.save(credentials)
 
@@ -190,7 +193,7 @@ class TestCredentialStore:
             "token_pool_balance": 50,
             "ephemeral_token": "token123",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00Z",
+            "activated_at": "2026-01-30T10:00:00+00:00",
         }
         CredentialStore.save(initial)
 
@@ -199,7 +202,7 @@ class TestCredentialStore:
             "token_pool_balance": 49,
             "ephemeral_token": "token456",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00Z",
+            "activated_at": "2026-01-30T10:00:00+00:00",
         }
         CredentialStore.update(updated)
 

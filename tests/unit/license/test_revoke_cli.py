@@ -36,7 +36,7 @@ class TestLicenseRevokeCLI:
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00Z",
+            "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
         cred_file.write_text(json.dumps(credentials, indent=2))
@@ -76,7 +76,7 @@ class TestLicenseRevokeCLI:
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00Z",
+            "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
         cred_file.write_text(json.dumps(credentials, indent=2))
@@ -115,7 +115,7 @@ class TestLicenseRevokeCLI:
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00Z",
+            "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
         cred_file.write_text(json.dumps(credentials, indent=2))
@@ -149,7 +149,7 @@ class TestLicenseRevokeCLI:
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00Z",
+            "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
         cred_file.write_text(json.dumps(credentials, indent=2))
@@ -200,7 +200,7 @@ class TestLicenseRevokeCLI:
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00Z",
+            "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
         cred_file.write_text(json.dumps(credentials, indent=2))
@@ -310,7 +310,7 @@ class TestLicenseRevokeCLI:
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00Z",
+            "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
         cred_file.write_text(json.dumps(credentials, indent=2))
@@ -350,7 +350,7 @@ class TestCredentialStoreDelete:
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00Z",
+            "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
         cred_file.write_text(json.dumps(credentials, indent=2))
@@ -383,7 +383,7 @@ class TestCredentialStoreDelete:
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
             "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00Z",
+            "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
         cred_file.write_text(json.dumps(credentials, indent=2))
