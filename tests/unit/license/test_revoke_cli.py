@@ -239,13 +239,13 @@ class TestLicenseRevokeCLI:
             ephemeral_token="ephemeral-token-old",
             token_pool_balance=50,
             server_url="https://api.bqaudit.com",
-            activated_at=datetime.fromisoformat("2026-01-28T10:30:00Z"),
+            activated_at=datetime.fromisoformat("2026-01-28T10:30:00+00:00"),
         )
         mock_api_response_2 = ActivationResponse(
             ephemeral_token="ephemeral-token-new",
             token_pool_balance=100,
             server_url="https://api.bqaudit.com",
-            activated_at=datetime.fromisoformat("2026-01-30T14:00:00Z"),
+            activated_at=datetime.fromisoformat("2026-01-30T14:00:00+00:00"),
         )
 
         with patch("bqaudit.api.client.BQAuditAPIClient.activate_license") as mock_api:
