@@ -203,7 +203,9 @@ class BQAuditAPIClient:
                 f"Server error during activation. Status: {e.response.status_code}"
             )
 
-    def report_scan_success(self, project_id: str, scan_result: dict) -> dict:
+    def report_scan_success(
+        self, project_id: str, scan_result: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Report successful scan completion to server.
 
@@ -223,7 +225,9 @@ class BQAuditAPIClient:
             return self._mock_report_scan(project_id, scan_result)
         return self._real_report_scan(project_id, scan_result)
 
-    def _mock_report_scan(self, project_id: str, scan_result: dict) -> dict:
+    def _mock_report_scan(
+        self, project_id: str, scan_result: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Mock scan reporting for Epic 3."""
         return {
             "status": "acknowledged",
@@ -231,7 +235,9 @@ class BQAuditAPIClient:
             "timestamp": "2024-01-01T00:00:00Z",
         }
 
-    def _real_report_scan(self, project_id: str, scan_result: dict) -> dict:
+    def _real_report_scan(
+        self, project_id: str, scan_result: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Real scan reporting via HTTPS POST (Future Epic)."""
         url = f"{self.server_url}/v1/scan/report"
 
@@ -245,7 +251,7 @@ class BQAuditAPIClient:
                     },
                 )
                 response.raise_for_status()
-                return response.json()
+                return cast(Dict[str, Any], response.json())
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             raise NetworkError(f"Network error reporting scan: {e}")
         except httpx.HTTPStatusError as e:
