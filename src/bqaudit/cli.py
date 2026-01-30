@@ -5,6 +5,7 @@ Provides commands: validate, scan, license (activate, status, revoke).
 """
 
 import json
+import logging
 import os
 import time
 
@@ -418,8 +419,11 @@ def validate(
     # Display execution time
     elapsed = time.time() - start_time
     console.print(
-        f"\n[green bold]✓ Validation completed in {elapsed:.2f}s[/green bold]\n"
+        f"\n[green bold]✓ Validation completed in {elapsed:.2f}s[/green bold]"
     )
+
+    # AC4 (Story 3.5): Clarify no tokens consumed
+    console.print("[dim]Validation successful (no tokens consumed)[/dim]\n")
 
 
 def _handle_validation_error(error_type: str, project_id: str, exit_code: int) -> None:
@@ -526,8 +530,82 @@ def scan(
         str, typer.Option("--project", "-p", help="GCP project ID to scan")
     ],
 ) -> None:
-    """Run full audit scan (consumes 1 token)."""
-    typer.echo("Scan command - placeholder")
+    """
+    Run full audit scan (consumes 1 token).
+
+    Executes a simulated BigQuery audit scan (Epic 3).
+    Real INFORMATION_SCHEMA extraction coming in Epic 4.
+
+    Security:
+        - Uses ephemeral token (auto-renewed after success)
+        - Master key only transmitted for token renewal
+        - Tokens never logged
+
+    Exit Codes:
+        0: Scan completed successfully
+        1: Scan failed or no license found
+        4: Token pool depleted (Story 3.5)
+    """
+    from bqaudit.api.client import BQAuditAPIClient
+    from bqaudit.license.storage import CredentialStore
+    from bqaudit.scan.executor import ScanExecutor
+
+    try:
+        # Step 1: Check credentials exist
+        if not CredentialStore.exists():
+            console.print("\n[yellow]No active license found.[/yellow]\n")
+            console.print(
+                "Run: [cyan]bqaudit license activate <key>[/cyan]"
+            )
+            raise typer.Exit(1)
+
+        # Step 2: Load credentials and check balance (AC1, Story 3.5)
+        credentials = CredentialStore.load()
+
+        if credentials["token_pool_balance"] == 0:
+            # AC1, AC5: Token depletion error
+            console.print("\n[red]❌ Token pool depleted (0 scans remaining).[/red]\n")
+            console.print("💰 Purchase more tokens at https://bqaudit.com/pricing\n")
+            raise typer.Exit(4)  # Exit code 4 for depletion
+
+        # Step 3: Check if this is last token (AC2, Story 3.5)
+        is_last_token = (credentials["token_pool_balance"] == 1)
+
+        # Step 4: Execute scan with token management
+        # Mock mode: True (default for Epic 3)
+        mock_mode = os.getenv("BQAUDIT_REAL_MODE", "").lower() != "true"
+        api_client = BQAuditAPIClient(mock_mode=mock_mode)
+        executor = ScanExecutor(api_client)
+        result = executor.execute_scan_with_tokens(project)
+
+        # Step 5: Show warning if was last token (AC2, Story 3.5)
+        if is_last_token:
+            console.print("\n[yellow]⚠️  Warning: This was your last token.[/yellow]")
+            console.print("💰 Purchase more tokens to continue audits: https://bqaudit.com/pricing\n")
+
+        # Success - exit 0
+        raise typer.Exit(0)
+
+    except typer.Exit:
+        # Re-raise Exit to preserve exit code
+        raise
+
+    except Exception as e:
+        # Handle Pydantic ValidationError for corrupted credentials
+        from pydantic import ValidationError
+
+        if isinstance(e, ValidationError):
+            console.print(
+                "\n[red]❌ Credentials file has invalid data (e.g., negative balance).[/red]\n"
+            )
+            console.print(
+                "Run: [cyan]bqaudit license revoke && bqaudit license activate <key>[/cyan]\n"
+            )
+            raise typer.Exit(1)
+
+        # General error handler
+        console.print(f"\n[red]❌ Scan error: {e}[/red]\n")
+        raise typer.Exit(1)
 
 
 # License management subcommand group
@@ -611,14 +689,192 @@ def license_activate(
 
 @license_app.command("status")
 def license_status() -> None:
-    """Check token balance and license status."""
-    typer.echo("License status command - placeholder")
+    """
+    Display license status and token pool balance.
+
+    Shows current license activation status, remaining scan tokens,
+    and activation details. Returns exit code 0 if active, 1 if not.
+
+    Security:
+        - Master key is masked (only first 2 segments shown)
+        - Verifies file permissions (chmod 600)
+        - Validates credential integrity
+
+    Exit Codes:
+        0: License active and valid
+        1: No license, unsafe permissions, or corrupted credentials
+    """
+    import json
+    from datetime import datetime, timezone
+
+    from bqaudit.license.security import mask_key
+    from bqaudit.license.storage import (
+        CredentialNotFoundError,
+        CredentialStore,
+        UnsafePermissionsError,
+    )
+
+    try:
+        # Load and validate credentials
+        credentials = CredentialStore.load()
+
+        # Format activated timestamp for display
+        activated_at = datetime.fromisoformat(credentials["activated_at"])
+
+        # Ensure timezone-aware datetime for proper display
+        if activated_at.tzinfo is None:
+            # If naive datetime, assume UTC (from Story 3.1 implementation)
+            activated_at = activated_at.replace(tzinfo=timezone.utc)
+
+        # Convert to UTC for consistent display
+        activated_utc = activated_at.astimezone(timezone.utc)
+        formatted_time = activated_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        # Display status (AC1)
+        console.print("\n[green]License Status: Active[/green]\n")
+        console.print(f"Master Key: {mask_key(credentials['master_key'])}")
+
+        # AC3 (Story 3.5): Highlight depletion
+        balance = credentials['token_pool_balance']
+        if balance == 0:
+            console.print(f"Token Pool Balance: {balance} scans remaining [red](DEPLETED)[/red]")
+            console.print("\n💰 Purchase more tokens at https://bqaudit.com/pricing\n")
+        else:
+            console.print(f"Token Pool Balance: {balance} scans remaining")
+
+        console.print(f"Activated: {formatted_time}")
+        console.print(f"Server: {credentials['server_url']}\n")
+
+        # Success exit code
+        # No explicit raise typer.Exit(0) needed - function returns normally
+
+    except CredentialNotFoundError:
+        # AC2: No credentials found
+        console.print("\n[yellow]No active license found.[/yellow]\n")
+        console.print("To activate your license, run:")
+        console.print(
+            "  [cyan]bqaudit license activate <your-license-key>[/cyan]"
+        )
+        console.print("\nDon't have a license key? Visit https://bqaudit.com/pricing\n")
+        raise typer.Exit(1)
+
+    except UnsafePermissionsError:
+        # AC3: Wrong file permissions
+        console.print("\n[red]Credentials file has unsafe permissions.[/red]\n")
+        console.print(
+            "Run: [cyan]chmod 600 ~/.bqaudit/credentials.json[/cyan]\n"
+        )
+        raise typer.Exit(1)
+
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        # AC4: Corrupted credentials (invalid JSON or missing fields)
+        console.print(
+            "\n[red]Credentials file corrupted. Please re-activate your license.[/red]\n"
+        )
+        console.print(
+            "Run: [cyan]bqaudit license revoke && bqaudit license activate <key>[/cyan]\n"
+        )
+        raise typer.Exit(1)
+
+    except Exception as e:
+        # Catch Pydantic ValidationError and other unexpected errors
+        # (ValidationError happens if balance is negative, wrong types, etc.)
+        from pydantic import ValidationError
+
+        if isinstance(e, ValidationError):
+            console.print(
+                "\n[red]Credentials file has invalid data (e.g., negative balance).[/red]\n"
+            )
+            console.print(
+                "Run: [cyan]bqaudit license revoke && bqaudit license activate <key>[/cyan]\n"
+            )
+            raise typer.Exit(1)
+        # Re-raise unexpected errors
+        raise
 
 
 @license_app.command("revoke")
-def license_revoke() -> None:
-    """Revoke credentials and clear local license."""
-    typer.echo("License revoke command - placeholder")
+def license_revoke(
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "-y",
+            "--yes",
+            help="Skip confirmation prompt and immediately revoke license",
+        ),
+    ] = False,
+) -> None:
+    """
+    Revoke stored license credentials.
+
+    Deletes the local credentials file (~/.bqaudit/credentials.json).
+    This deactivates the license on this machine.
+
+    Use Cases:
+        - Switch to a different license key (revoke → activate new key)
+        - Deactivate license on this machine
+        - Clear credentials for security reasons (e.g., machine being decommissioned or compromised)
+
+    Examples:
+        # Revoke with confirmation prompt
+        bqaudit license revoke
+
+        # Revoke without confirmation (automation-friendly)
+        bqaudit license revoke -y
+        bqaudit license revoke --yes
+
+    Exit Codes:
+        0: Revocation successful (or user cancelled)
+        1: No active license to revoke
+    """
+    from bqaudit.license.storage import (
+        CredentialNotFoundError,
+        CredentialStore,
+    )
+
+    # AC3: Check if credentials exist
+    if not CredentialStore.exists():
+        console.print("\n[yellow]No active license to revoke.[/yellow]\n")
+        raise typer.Exit(1)
+
+    # AC1: Confirmation prompt (unless -y flag)
+    if not yes:
+        confirm = typer.confirm(
+            "Are you sure you want to revoke your license?",
+            default=False,
+        )
+        if not confirm:
+            console.print("\n[blue]Revocation cancelled.[/blue]\n")
+            # Exit code 0 (cancellation is not an error)
+            return
+
+    # Delete credentials (required for both AC1 and AC2)
+    try:
+        # Audit logging for security trail
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Revoking license credentials at %s",
+            CredentialStore._get_credentials_path(),
+        )
+
+        CredentialStore.delete()
+
+        # AC1: Success message
+        console.print("\n[green]✅ License revoked successfully.[/green]\n")
+        console.print("Credentials removed from this machine.\n")
+        console.print("To activate a new license, run:")
+        console.print("  [cyan]bqaudit license activate <key>[/cyan]\n")
+        # Exit code 0 (success) - no raise needed
+
+    except CredentialNotFoundError:
+        # Edge case: file was deleted between exists() check and delete()
+        console.print("\n[yellow]No active license to revoke.[/yellow]\n")
+        raise typer.Exit(1)
+
+    except (OSError, PermissionError, IOError) as e:
+        # File system errors: permission denied, read-only filesystem, etc.
+        console.print(f"\n[red]❌ Error revoking license: {e}[/red]\n")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

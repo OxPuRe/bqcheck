@@ -204,7 +204,63 @@ class BQAuditAPIClient:
                 f"Server error during activation. Status: {e.response.status_code}"
             )
 
-    def renew_token(self, master_key: str) -> TokenRenewalResponse:
+    def report_scan_success(
+        self, project_id: str, scan_result: dict
+    ) -> dict:
+        """
+        Report successful scan completion to server.
+
+        Used by Story 3.4 (AC1: report success to server).
+
+        Args:
+            project_id: GCP project ID that was scanned
+            scan_result: Scan result metadata
+
+        Returns:
+            Server acknowledgment response
+
+        Raises:
+            NetworkError: If network communication fails
+        """
+        if self.mock_mode:
+            return self._mock_report_scan(project_id, scan_result)
+        return self._real_report_scan(project_id, scan_result)
+
+    def _mock_report_scan(
+        self, project_id: str, scan_result: dict
+    ) -> dict:
+        """Mock scan reporting for Epic 3."""
+        return {
+            "status": "acknowledged",
+            "project_id": project_id,
+            "timestamp": "2024-01-01T00:00:00Z",
+        }
+
+    def _real_report_scan(
+        self, project_id: str, scan_result: dict
+    ) -> dict:
+        """Real scan reporting via HTTPS POST (Future Epic)."""
+        url = f"{self.server_url}/v1/scan/report"
+
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(
+                    url,
+                    json={
+                        "project_id": project_id,
+                        "scan_result": scan_result,
+                    },
+                )
+                response.raise_for_status()
+                return response.json()
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            raise NetworkError(f"Network error reporting scan: {e}")
+        except httpx.HTTPStatusError as e:
+            raise NetworkError(
+                f"Server error reporting scan. Status: {e.response.status_code}"
+            )
+
+    def renew_token(self, master_key: str, current_balance: int) -> TokenRenewalResponse:
         """
         Renew ephemeral token after successful scan.
 
@@ -212,6 +268,7 @@ class BQAuditAPIClient:
 
         Args:
             master_key: Master license key for token renewal
+            current_balance: Current token pool balance (for mock mode calculation)
 
         Returns:
             TokenRenewalResponse with new token and updated balance
@@ -220,11 +277,20 @@ class BQAuditAPIClient:
             NetworkError: If network communication fails
         """
         if self.mock_mode:
-            return self._mock_renew(master_key)
+            return self._mock_renew(master_key, current_balance)
         return self._real_renew(master_key)
 
-    def _mock_renew(self, master_key: str) -> TokenRenewalResponse:
-        """Mock token renewal for Epic 3 testing."""
+    def _mock_renew(self, master_key: str, current_balance: int) -> TokenRenewalResponse:
+        """
+        Mock token renewal for Epic 3 testing.
+
+        Args:
+            master_key: Master license key (not used in mock)
+            current_balance: Current token balance before scan
+
+        Returns:
+            TokenRenewalResponse with new balance decremented by 1
+        """
         # Simulate new token (different from original)
         import random
         import string
@@ -233,7 +299,7 @@ class BQAuditAPIClient:
 
         return TokenRenewalResponse(
             ephemeral_token=f"mock-renewed-token-{token_suffix}",
-            token_pool_balance=49,  # Decremented by 1 after scan
+            token_pool_balance=current_balance - 1,  # Server decrements balance
         )
 
     def _real_renew(self, master_key: str) -> TokenRenewalResponse:
