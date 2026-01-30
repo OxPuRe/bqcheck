@@ -5,6 +5,7 @@ Provides commands: validate, scan, license (activate, status, revoke).
 """
 
 import json
+import os
 import time
 
 import httpx
@@ -538,8 +539,74 @@ app.add_typer(license_app, name="license")
 def license_activate(
     master_key: Annotated[str, typer.Argument(help="Master license key")],
 ) -> None:
-    """Activate license with master license key."""
-    typer.echo("License activate command - placeholder")
+    """
+    Activate license with master license key (one-time setup).
+
+    Exchanges your master license key for ephemeral credentials and stores
+    them securely at ~/.bqaudit/credentials.json with chmod 600.
+
+    After activation, you can run scans without manually entering tokens.
+
+    Example:
+        bqaudit license activate VALID-ABC-XYZ-123
+
+    Security:
+        - Credentials stored with chmod 600 (owner read/write only)
+        - Master key transmitted only during activation (never during scans)
+        - Ephemeral tokens auto-renewed after each successful scan
+
+    Exit Codes:
+        0: Activation successful
+        1: Invalid key, network error, or other failure
+    """
+    from bqaudit.api.exceptions import InvalidLicenseKeyError, NetworkError
+    from bqaudit.license.activate import activate_license
+    from bqaudit.license.security import mask_key
+
+    try:
+        # AC4: Check for existing credentials
+        # activate_license will raise FileExistsError if already activated
+        # Mock mode: True (default for Epic 3), False if BQAUDIT_REAL_MODE=true
+        mock_mode = os.getenv("BQAUDIT_REAL_MODE", "").lower() != "true"
+        result = activate_license(master_key, mock_mode=mock_mode)
+
+        # AC1: Success message with balance
+        console.print("\n[green]✅ License activated successfully![/green]\n")
+        console.print(f"Master Key: {mask_key(master_key)}")
+        console.print(
+            f"Token Pool Balance: {result['token_pool_balance']} scans remaining"
+        )
+        console.print(f"Activated: {result['activated_at']}\n")
+        console.print(
+            "You can now run audits with: [cyan]bqaudit scan --project <project-id>[/cyan]"
+        )
+
+        # Success - no raise needed, typer will exit with 0
+
+    except FileExistsError as e:
+        # AC4: Credentials already exist
+        console.print(f"\n[yellow]⚠️  {e}[/yellow]\n")
+        # Exit with 0 (success) per AC4 specification
+        # Rationale: "Already activated" is not an error state - it's a valid
+        # system state where credentials exist and are functional. The user's
+        # goal (having activated credentials) is already satisfied.
+        # This allows scripts to safely call `activate` idempotently.
+        # If user wants to re-activate, they must explicitly revoke first.
+
+    except InvalidLicenseKeyError as e:
+        # AC2: Invalid license key
+        console.print(f"\n[red]❌ {e}[/red]\n")
+        raise typer.Exit(1)
+
+    except NetworkError as e:
+        # AC3: Network failure
+        console.print(f"\n[red]❌ {e}[/red]\n")
+        raise typer.Exit(1)
+
+    except Exception as e:
+        # Unexpected error
+        console.print(f"\n[red]❌ Activation failed: {e}[/red]\n")
+        raise typer.Exit(1)
 
 
 @license_app.command("status")
