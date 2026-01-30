@@ -92,17 +92,17 @@ class TestBQAuditAPIClient:
         """Test token renewal returns new ephemeral token."""
         client = BQAuditAPIClient(mock_mode=True)
 
-        response = client.renew_token("VALID-TEST-KEY")
+        response = client.renew_token("VALID-TEST-KEY", current_balance=50)
 
         assert response.ephemeral_token.startswith("mock-renewed-token-")
-        assert response.token_pool_balance == 49  # Decremented
+        assert response.token_pool_balance == 49  # Decremented from 50
 
     def test_renew_token_different_each_time(self):
         """Test that renewed tokens are unique."""
         client = BQAuditAPIClient(mock_mode=True)
 
-        token1 = client.renew_token("VALID-TEST-KEY").ephemeral_token
-        token2 = client.renew_token("VALID-TEST-KEY").ephemeral_token
+        token1 = client.renew_token("VALID-TEST-KEY", current_balance=50).ephemeral_token
+        token2 = client.renew_token("VALID-TEST-KEY", current_balance=50).ephemeral_token
 
         # Should be different (random suffix)
         assert token1 != token2
