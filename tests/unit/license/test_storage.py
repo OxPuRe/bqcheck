@@ -111,7 +111,11 @@ class TestCredentialStore:
         CredentialStore.save(credentials)
         loaded = CredentialStore.load()
 
-        assert loaded == credentials
+        # Story 3.4 added used_tokens field with default=[]
+        assert loaded == {
+            **credentials,
+            "used_tokens": [],
+        }
 
     def test_load_raises_if_file_not_exists(self, tmp_path, monkeypatch):
         """Test that load() raises CredentialNotFoundError if no file."""

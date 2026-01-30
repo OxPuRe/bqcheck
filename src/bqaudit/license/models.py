@@ -1,7 +1,7 @@
 """Data models for license management."""
 
 from datetime import datetime
-from typing import Union
+from typing import Any, Dict, List, Union
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
@@ -21,6 +21,10 @@ class Credentials(BaseModel):
     ephemeral_token: str = Field(description="Current single-use scan token")
     server_url: str = Field(description="API server URL")
     activated_at: datetime = Field(description="ISO8601 timestamp of activation")
+    used_tokens: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Client-side tracking of used tokens (Story 3.4, AC8)"
+    )
 
     @field_validator("activated_at", mode="before")
     @classmethod
@@ -36,3 +40,26 @@ class Credentials(BaseModel):
         # Use 'Z' suffix instead of '+00:00' for consistency
         iso_str = dt.isoformat()
         return iso_str.replace('+00:00', 'Z')
+
+    def to_safe_dict(self) -> Dict[str, Any]:
+        """
+        Export credentials with sensitive fields masked for safe display/logging.
+
+        This method should be used instead of model_dump() when displaying
+        credentials to users or logging, to prevent accidental exposure of
+        sensitive data like master_key and ephemeral_token.
+
+        Returns:
+            dict: Credentials with sensitive fields masked as ***REDACTED***
+
+        Example:
+            >>> creds = Credentials(master_key="secret", ...)
+            >>> safe = creds.to_safe_dict()
+            >>> safe["master_key"]
+            '***REDACTED***'
+        """
+        data = self.model_dump(mode='json')
+        # Mask sensitive fields
+        data["master_key"] = "***REDACTED***"
+        data["ephemeral_token"] = "***REDACTED***"
+        return data

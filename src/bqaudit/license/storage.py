@@ -1,11 +1,14 @@
 """Secure credential storage with chmod 600 enforcement."""
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict
 
 from bqaudit.license.models import Credentials
+
+logger = logging.getLogger(__name__)
 
 
 class CredentialNotFoundError(Exception):
@@ -73,6 +76,8 @@ class CredentialStore:
             OSError: If file operations fail
             ValidationError: If credentials data is invalid
         """
+        logger.debug(f"Saving credentials to {cls._get_credentials_path()}")
+
         # Validate credentials structure and types
         validated = Credentials.model_validate(credentials)
 
@@ -91,6 +96,7 @@ class CredentialStore:
 
         # Atomic rename (POSIX guarantees atomicity)
         temp_path.rename(credentials_path)
+        logger.info(f"Credentials saved successfully with chmod 600")
 
     @classmethod
     def load(cls) -> Dict[str, Any]:
@@ -113,8 +119,10 @@ class CredentialStore:
             ValidationError: If credentials data is invalid
         """
         credentials_path = cls._get_credentials_path()
+        logger.debug(f"Loading credentials from {credentials_path}")
 
         if not credentials_path.exists():
+            logger.warning(f"Credentials not found at {credentials_path}")
             raise CredentialNotFoundError(
                 f"Credentials not found at {credentials_path}"
             )
@@ -123,6 +131,7 @@ class CredentialStore:
         mode = credentials_path.stat().st_mode
         # Check if group (07) or other (0177) have any permissions
         if mode & 0o177:
+            logger.error(f"Unsafe permissions detected on credentials file")
             raise UnsafePermissionsError(
                 f"Credentials file has unsafe permissions. "
                 f"Run: chmod 600 {credentials_path}"
@@ -131,6 +140,7 @@ class CredentialStore:
         # Load and validate credentials
         data = json.loads(credentials_path.read_text())
         validated = Credentials.model_validate(data)
+        logger.info("Credentials loaded and validated successfully")
         return validated.model_dump(mode='json')
 
     @classmethod
@@ -151,9 +161,20 @@ class CredentialStore:
         Used by 'license revoke' command.
 
         Raises:
-            FileNotFoundError: If credentials file doesn't exist
+            CredentialNotFoundError: If credentials file doesn't exist
         """
-        cls._get_credentials_path().unlink()
+        credentials_path = cls._get_credentials_path()
+
+        if not credentials_path.exists():
+            raise CredentialNotFoundError(
+                f"No credentials to delete at {credentials_path}"
+            )
+
+        credentials_path.unlink()
+
+        # Verify deletion succeeded (AC4 requirement)
+        if credentials_path.exists():
+            raise IOError(f"Failed to delete credentials at {credentials_path}")
 
     @classmethod
     def update(cls, credentials: Dict[str, Any]) -> None:

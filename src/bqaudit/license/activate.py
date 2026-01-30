@@ -1,11 +1,14 @@
 """License activation logic for bqaudit."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict
 
 from bqaudit.api.client import BQAuditAPIClient
 from bqaudit.api.exceptions import InvalidLicenseKeyError, NetworkError
 from bqaudit.license.storage import CredentialStore
+
+logger = logging.getLogger(__name__)
 
 
 def activate_license(
@@ -32,8 +35,11 @@ def activate_license(
         NetworkError: If network communication fails (AC3)
         FileExistsError: If credentials already exist (AC4)
     """
+    logger.info(f"Starting license activation (mock_mode={mock_mode})")
+
     # AC4: Check if credentials already exist
     if CredentialStore.exists():
+        logger.warning("License activation attempted but credentials already exist")
         raise FileExistsError(
             "License already activated. "
             "Use 'bqaudit license revoke' first to re-activate."
@@ -44,6 +50,7 @@ def activate_license(
 
     try:
         # AC1: Valid activation
+        logger.debug("Calling API to activate license")
         response = api_client.activate_license(master_key)
 
         # Build credentials dictionary
@@ -59,6 +66,7 @@ def activate_license(
 
         # AC5: Save with chmod 600
         CredentialStore.save(credentials)
+        logger.info(f"License activated successfully with {response.token_pool_balance} tokens")
 
         # Return success data
         return {
@@ -67,9 +75,11 @@ def activate_license(
             "activated_at": credentials["activated_at"],
         }
 
-    except InvalidLicenseKeyError:
+    except InvalidLicenseKeyError as e:
         # AC2: Invalid key → NO credential file created
+        logger.error(f"License activation failed: Invalid key - {e}")
         raise
-    except NetworkError:
+    except NetworkError as e:
         # AC3: Network error → NO credential file created
+        logger.error(f"License activation failed: Network error - {e}")
         raise
