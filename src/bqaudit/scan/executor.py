@@ -84,8 +84,13 @@ class ScanExecutor:
             from pydantic import ValidationError
 
             if isinstance(e, ValidationError):
-                typer.echo("❌ Error: Credentials file has invalid data (e.g., negative balance).")
-                typer.echo("Run: bqaudit license revoke && bqaudit license activate <key>")
+                typer.echo(
+                    "❌ Error: Credentials file has invalid data "  # noqa: E501
+                    "(e.g., negative balance)."
+                )
+                typer.echo(
+                    "Run: bqaudit license revoke && bqaudit license activate <key>"
+                )
                 raise
             # Re-raise other exceptions
             raise
@@ -100,15 +105,14 @@ class ScanExecutor:
 
             # Step 3: Report success to server (AC1)
             self.api_client.report_scan_success(
-                project_id,
-                {"simulated": result.simulated, "success": result.success}
+                project_id, {"simulated": result.simulated, "success": result.success}
             )
 
             # Step 4: Renew token (AC3)
             # AC5: Master key ONLY for renewal (not during scan)
             new_token_data = self.api_client.renew_token(
                 credentials["master_key"],
-                current_balance=credentials["token_pool_balance"]
+                current_balance=credentials["token_pool_balance"],
             )
 
             # Step 5: Update credentials atomically (AC6, AC8)
@@ -119,10 +123,13 @@ class ScanExecutor:
             # Track used tokens (AC8: Single-use enforcement)
             if "used_tokens" not in credentials:
                 credentials["used_tokens"] = []
-            credentials["used_tokens"].append({
-                "token": old_token[:16] + "...",  # Truncated for security
-                "used_at": new_token_data.ephemeral_token,  # Use new token timestamp as proxy
-            })
+            credentials["used_tokens"].append(
+                {
+                    "token": old_token[:16] + "...",  # Truncated for security
+                    # Use new token timestamp as proxy  # noqa: E501
+                    "used_at": new_token_data.ephemeral_token,
+                }
+            )
             # Keep only last 5 used tokens to prevent bloat
             credentials["used_tokens"] = credentials["used_tokens"][-5:]
 
@@ -133,9 +140,10 @@ class ScanExecutor:
             CredentialStore.update(credentials)
 
             # AC1: Display success with balance
-            typer.echo(f"\n✅ Scan completed successfully!")
+            typer.echo("\n✅ Scan completed successfully!")
             typer.echo(
-                f"Token pool balance: {credentials['token_pool_balance']} scans remaining\n"
+                f"Token pool balance: {credentials['token_pool_balance']} "
+                "scans remaining\n"
             )
 
             return result
@@ -144,7 +152,7 @@ class ScanExecutor:
             # AC2: CRITICAL - Token preserved on failure
             # Credentials NOT updated
             logger.error(f"Scan failed: {e}")
-            typer.echo(f"❌ Error: Scan failed. Token preserved for retry.")
+            typer.echo("❌ Error: Scan failed. Token preserved for retry.")
             raise
 
     def _execute_simulated_scan(

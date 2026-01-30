@@ -23,7 +23,7 @@ class Credentials(BaseModel):
     activated_at: datetime = Field(description="ISO8601 timestamp of activation")
     used_tokens: List[Dict[str, Any]] = Field(
         default_factory=list,
-        description="Client-side tracking of used tokens (Story 3.4, AC8)"
+        description="Client-side tracking of used tokens (Story 3.4, AC8)",
     )
 
     @field_validator("activated_at", mode="before")
@@ -39,7 +39,7 @@ class Credentials(BaseModel):
         """Serialize datetime to ISO8601 string with 'Z' suffix for UTC."""
         # Use 'Z' suffix instead of '+00:00' for consistency
         iso_str = dt.isoformat()
-        return iso_str.replace('+00:00', 'Z')
+        return iso_str.replace("+00:00", "Z")
 
     def to_safe_dict(self) -> Dict[str, Any]:
         """
@@ -58,7 +58,7 @@ class Credentials(BaseModel):
             >>> safe["master_key"]
             '***REDACTED***'
         """
-        data = self.model_dump(mode='json')
+        data = self.model_dump(mode="json")
         # Mask sensitive fields
         data["master_key"] = "***REDACTED***"
         data["ephemeral_token"] = "***REDACTED***"

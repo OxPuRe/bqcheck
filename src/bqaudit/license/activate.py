@@ -11,9 +11,7 @@ from bqaudit.license.storage import CredentialStore
 logger = logging.getLogger(__name__)
 
 
-def activate_license(
-    master_key: str, mock_mode: bool = True
-) -> Dict[str, Any]:
+def activate_license(master_key: str, mock_mode: bool = True) -> Dict[str, Any]:
     """
     Activate license with master license key.
 
@@ -66,7 +64,9 @@ def activate_license(
 
         # AC5: Save with chmod 600
         CredentialStore.save(credentials)
-        logger.info(f"License activated successfully with {response.token_pool_balance} tokens")
+        logger.info(
+            f"License activated successfully with {response.token_pool_balance} tokens"
+        )
 
         # Return success data
         return {

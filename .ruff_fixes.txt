@@ -1,0 +1,14 @@
+# Lines to fix manually
+src/bqaudit/cli.py:659
+src/bqaudit/cli.py:770  
+src/bqaudit/cli.py:773
+src/bqaudit/cli.py:784
+src/bqaudit/cli.py:787
+src/bqaudit/cli.py:814
+src/bqaudit/scan/executor.py:88
+src/bqaudit/scan/executor.py:128
+src/bqaudit/scan/executor.py:143
+tests/integration/test_validate_scan_boundary.py:52
+tests/unit/scan/test_scan_cli.py:272
+tests/unit/scan/test_scan_cli.py:275
+tests/unit/scan/test_simulator.py:33

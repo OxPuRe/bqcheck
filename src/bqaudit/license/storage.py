@@ -89,14 +89,14 @@ class CredentialStore:
         # Write to temp file first (atomic write pattern)
         # Use model_dump to ensure consistent serialization
         temp_path = credentials_path.with_suffix(".tmp")
-        temp_path.write_text(json.dumps(validated.model_dump(mode='json'), indent=2))
+        temp_path.write_text(json.dumps(validated.model_dump(mode="json"), indent=2))
 
         # Set chmod 600 BEFORE moving to final location (critical security step)
         temp_path.chmod(0o600)
 
         # Atomic rename (POSIX guarantees atomicity)
         temp_path.rename(credentials_path)
-        logger.info(f"Credentials saved successfully with chmod 600")
+        logger.info("Credentials saved successfully with chmod 600")
 
     @classmethod
     def load(cls) -> Dict[str, Any]:
@@ -131,7 +131,7 @@ class CredentialStore:
         mode = credentials_path.stat().st_mode
         # Check if group (07) or other (0177) have any permissions
         if mode & 0o177:
-            logger.error(f"Unsafe permissions detected on credentials file")
+            logger.error("Unsafe permissions detected on credentials file")
             raise UnsafePermissionsError(
                 f"Credentials file has unsafe permissions. "
                 f"Run: chmod 600 {credentials_path}"
@@ -141,7 +141,7 @@ class CredentialStore:
         data = json.loads(credentials_path.read_text())
         validated = Credentials.model_validate(data)
         logger.info("Credentials loaded and validated successfully")
-        return validated.model_dump(mode='json')
+        return validated.model_dump(mode="json")
 
     @classmethod
     def exists(cls) -> bool:

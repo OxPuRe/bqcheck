@@ -47,7 +47,7 @@ def mock_creds_path(tmp_path: Path, monkeypatch):
     # Mock the _get_credentials_path method to return our test path
     monkeypatch.setattr(
         "bqaudit.license.storage.CredentialStore._get_credentials_path",
-        lambda: creds_path
+        lambda: creds_path,
     )
     return creds_path
 

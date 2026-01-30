@@ -18,5 +18,5 @@ class ScanResult(BaseModel):
     simulated: bool = False
     findings: List[Dict[str, Any]] = Field(
         default_factory=list,
-        description="List of audit findings (Epic 4: will contain Finding objects)"
+        description="List of audit findings (Epic 4: will contain Finding objects)",
     )

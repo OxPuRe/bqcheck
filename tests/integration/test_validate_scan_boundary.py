@@ -47,11 +47,10 @@ def test_validate_succeeds_but_scan_fails_when_token_depleted(tmp_path: Path):
     # Patch HOME to use tmp_path
     with patch.dict("os.environ", {"HOME": str(tmp_path)}):
         # ACT 1: Run validate command (should succeed despite balance=0)
-        validate_result = runner.invoke(
-            app, ["validate", "--project", "test-project"]
-        )
+        validate_result = runner.invoke(app, ["validate", "--project", "test-project"])
 
-        # ASSERT 1: Validate succeeds (or fails for other reasons, but NOT token depletion)
+        # ASSERT 1: Validate succeeds (or fails for other reasons,
+        # but NOT token depletion)
         # Exit code should NOT be 4 (token depletion code)
         assert validate_result.exit_code != 4, (
             f"Validate should not fail due to token depletion. "
@@ -115,14 +114,10 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
     # Patch HOME to use tmp_path
     with patch.dict("os.environ", {"HOME": str(tmp_path)}):
         # ACT 1: Run validate (should succeed)
-        validate_result = runner.invoke(
-            app, ["validate", "--project", "test-project"]
-        )
+        validate_result = runner.invoke(app, ["validate", "--project", "test-project"])
 
         # ASSERT 1: Validate doesn't fail due to token issues
-        assert validate_result.exit_code != 4, (
-            "Validate should not check token balance"
-        )
+        assert validate_result.exit_code != 4, "Validate should not check token balance"
 
         # Verify balance unchanged (validate doesn't consume)
         creds_after_validate = json.loads(mock_creds_path.read_text())

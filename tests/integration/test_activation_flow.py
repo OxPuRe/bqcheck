@@ -1,12 +1,10 @@
 """Integration tests for end-to-end activation flow."""
 
-import json
 import pytest
 from typer.testing import CliRunner
 
 from bqaudit.cli import app
 from bqaudit.license.storage import CredentialStore
-
 
 runner = CliRunner()
 
@@ -120,9 +118,7 @@ class TestActivationFlowIntegration:
         """
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        result = runner.invoke(
-            app, ["license", "activate", "VALID-ABC-XYZ-123-SECRET"]
-        )
+        result = runner.invoke(app, ["license", "activate", "VALID-ABC-XYZ-123-SECRET"])
 
         assert result.exit_code == 0
 

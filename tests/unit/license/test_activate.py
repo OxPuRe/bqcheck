@@ -1,8 +1,8 @@
 """Unit tests for license activation logic."""
 
 import json
+
 import pytest
-from pathlib import Path
 
 from bqaudit.api.exceptions import InvalidLicenseKeyError, NetworkError
 from bqaudit.license.activate import activate_license

@@ -11,7 +11,6 @@ Tests cover:
 import json
 import logging
 from pathlib import Path
-from unittest import mock
 
 import pytest
 from typer.testing import CliRunner
@@ -50,7 +49,7 @@ def mock_creds_path(tmp_path: Path, monkeypatch):
     # Mock the _get_credentials_path method to return our test path
     monkeypatch.setattr(
         "bqaudit.license.storage.CredentialStore._get_credentials_path",
-        lambda: creds_path
+        lambda: creds_path,
     )
     return creds_path
 
@@ -130,7 +129,7 @@ class TestScanCommand:
 
         # Capture ALL log levels
         with caplog.at_level(logging.DEBUG):
-            result = runner.invoke(app, ["scan", "--project", "test-project"])
+            runner.invoke(app, ["scan", "--project", "test-project"])
 
         # AC4: Token NEVER in logs
         ephemeral_token = mock_credentials["ephemeral_token"]
@@ -152,7 +151,7 @@ class TestScanCommand:
 
         # Capture ALL log levels
         with caplog.at_level(logging.DEBUG):
-            result = runner.invoke(app, ["scan", "--project", "test-project"])
+            runner.invoke(app, ["scan", "--project", "test-project"])
 
         # AC5: Master key NEVER in logs
         master_key = mock_credentials["master_key"]
@@ -270,10 +269,12 @@ class TestScanCommand:
         # Act
         result = runner.invoke(app, ["scan", "--project", "test-project"])
 
-        # Assert: Should fail gracefully (either Pydantic validation error or scan prevention)
+        # Assert: Should fail gracefully (either Pydantic validation error
+        # or scan prevention)
         # Exit code should NOT be 0 (should not allow scan with negative balance)
         assert result.exit_code != 0
-        # Should either show validation error, invalid data message, or token depletion message
+        # Should either show validation error, invalid data message,
+        # or token depletion message
         assert (
             "validation error" in result.stdout.lower()
             or "invalid data" in result.stdout.lower()

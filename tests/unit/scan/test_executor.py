@@ -26,7 +26,7 @@ def mock_creds_path(tmp_path: Path, monkeypatch):
     # Mock the _get_credentials_path method to return our test path
     monkeypatch.setattr(
         "bqaudit.license.storage.CredentialStore._get_credentials_path",
-        lambda: creds_path
+        lambda: creds_path,
     )
     return creds_path
 
@@ -59,7 +59,9 @@ class TestScanExecutor:
 
         assert ScanExecutor is not None
 
-    def test_execute_scan_with_valid_credentials(self, test_credentials, mock_creds_path):
+    def test_execute_scan_with_valid_credentials(
+        self, test_credentials, mock_creds_path
+    ):
         """AC1: Execute scan loads credentials and runs simulated scan."""
         from bqaudit.scan.executor import ScanExecutor
 
@@ -82,7 +84,7 @@ class TestScanExecutor:
         api_client = BQAuditAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
-        result = executor.execute_scan_with_tokens("test-project")
+        executor.execute_scan_with_tokens("test-project")
 
         # Load updated credentials
         updated_creds = CredentialStore.load()
@@ -98,7 +100,7 @@ class TestScanExecutor:
         api_client = BQAuditAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
-        result = executor.execute_scan_with_tokens("test-project")
+        executor.execute_scan_with_tokens("test-project")
 
         # Load updated credentials
         updated_creds = CredentialStore.load()
@@ -120,7 +122,7 @@ class TestScanExecutor:
         with mock.patch.object(
             executor,
             "_execute_simulated_scan",
-            side_effect=RuntimeError("Simulated scan failure")
+            side_effect=RuntimeError("Simulated scan failure"),
         ):
             with pytest.raises(RuntimeError, match="Simulated scan failure"):
                 executor.execute_scan_with_tokens("test-project")
@@ -134,7 +136,9 @@ class TestScanExecutor:
         # AC2: Balance unchanged
         assert updated_creds["token_pool_balance"] == original_balance
 
-    def test_atomic_credential_update_on_failure(self, test_credentials, mock_creds_path):
+    def test_atomic_credential_update_on_failure(
+        self, test_credentials, mock_creds_path
+    ):
         """AC6: Credential update failure preserves original credentials."""
         from bqaudit.scan.executor import ScanExecutor
 
@@ -147,7 +151,7 @@ class TestScanExecutor:
         # Mock CredentialStore.update to fail
         with mock.patch(
             "bqaudit.license.storage.CredentialStore.update",
-            side_effect=IOError("Simulated write failure")
+            side_effect=IOError("Simulated write failure"),
         ):
             with pytest.raises(IOError):
                 executor.execute_scan_with_tokens("test-project")
@@ -165,11 +169,11 @@ class TestScanExecutor:
         executor = ScanExecutor(api_client)
 
         # Execute 2 scans
-        result1 = executor.execute_scan_with_tokens("test-project-1")
+        executor.execute_scan_with_tokens("test-project-1")
         creds1 = CredentialStore.load()
         token1 = creds1["ephemeral_token"]
 
-        result2 = executor.execute_scan_with_tokens("test-project-2")
+        executor.execute_scan_with_tokens("test-project-2")
         creds2 = CredentialStore.load()
         token2 = creds2["ephemeral_token"]
 
@@ -178,7 +182,9 @@ class TestScanExecutor:
         assert token1 != test_credentials["ephemeral_token"]
         assert token2 != test_credentials["ephemeral_token"]
 
-    def test_credentials_file_permissions_preserved(self, test_credentials, mock_creds_path):
+    def test_credentials_file_permissions_preserved(
+        self, test_credentials, mock_creds_path
+    ):
         """AC6: Credentials file maintains chmod 600 after update."""
         from bqaudit.scan.executor import ScanExecutor
 
@@ -186,10 +192,11 @@ class TestScanExecutor:
         executor = ScanExecutor(api_client)
 
         # Execute scan (triggers credential update)
-        result = executor.execute_scan_with_tokens("test-project")
+        executor.execute_scan_with_tokens("test-project")
 
         # Verify file permissions are still 600
         import stat
+
         file_mode = mock_creds_path.stat().st_mode
         permissions = stat.filemode(file_mode)
 
@@ -206,7 +213,7 @@ class TestScanExecutor:
         executor = ScanExecutor(api_client)
 
         # Execute scan
-        result = executor.execute_scan_with_tokens("test-project")
+        executor.execute_scan_with_tokens("test-project")
 
         # Load updated credentials
         updated_creds = CredentialStore.load()
@@ -216,9 +223,7 @@ class TestScanExecutor:
         assert len(updated_creds["used_tokens"]) >= 1
 
         # Verify old token is tracked (truncated for security)
-        used_token_prefixes = [
-            ut["token"] for ut in updated_creds["used_tokens"]
-        ]
+        used_token_prefixes = [ut["token"] for ut in updated_creds["used_tokens"]]
         assert any(original_token[:16] in prefix for prefix in used_token_prefixes)
 
     def test_scan_reports_success_to_server(self, test_credentials, mock_creds_path):
@@ -232,7 +237,7 @@ class TestScanExecutor:
         with mock.patch.object(
             api_client, "report_scan_success", return_value={"status": "acknowledged"}
         ) as mock_report:
-            result = executor.execute_scan_with_tokens("test-project")
+            executor.execute_scan_with_tokens("test-project")
 
             # Verify report was called with correct project_id
             mock_report.assert_called_once()

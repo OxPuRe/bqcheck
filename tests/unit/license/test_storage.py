@@ -1,12 +1,12 @@
 """Unit tests for credential storage module."""
 
 import json
+
 import pytest
-from pathlib import Path
 
 from bqaudit.license.storage import (
-    CredentialStore,
     CredentialNotFoundError,
+    CredentialStore,
     UnsafePermissionsError,
 )
 

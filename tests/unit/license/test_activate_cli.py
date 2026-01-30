@@ -1,8 +1,7 @@
 """Unit tests for license activate CLI command."""
 
-import pytest
-from pathlib import Path
 from typer.testing import CliRunner
+
 from bqaudit.cli import app
 
 runner = CliRunner()

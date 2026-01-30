@@ -2,7 +2,6 @@
 
 import logging
 
-import pytest
 from typer.testing import CliRunner
 
 from bqaudit.cli import app
@@ -78,9 +77,7 @@ class TestTokenLogging:
         assert "mock-ephemeral-token" not in result.stdout
         assert "eyJ" not in result.stdout  # JWT pattern
 
-    def test_ephemeral_tokens_never_in_logs(
-        self, tmp_path, monkeypatch, caplog
-    ):
+    def test_ephemeral_tokens_never_in_logs(self, tmp_path, monkeypatch, caplog):
         """
         AC7 CRITICAL: Verify ephemeral tokens never appear in debug logs.
 

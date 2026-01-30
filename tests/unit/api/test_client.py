@@ -101,8 +101,12 @@ class TestBQAuditAPIClient:
         """Test that renewed tokens are unique."""
         client = BQAuditAPIClient(mock_mode=True)
 
-        token1 = client.renew_token("VALID-TEST-KEY", current_balance=50).ephemeral_token
-        token2 = client.renew_token("VALID-TEST-KEY", current_balance=50).ephemeral_token
+        token1 = client.renew_token(
+            "VALID-TEST-KEY", current_balance=50
+        ).ephemeral_token
+        token2 = client.renew_token(
+            "VALID-TEST-KEY", current_balance=50
+        ).ephemeral_token
 
         # Should be different (random suffix)
         assert token1 != token2

@@ -102,8 +102,7 @@ class BQAuditAPIClient:
         # Enforce HTTPS (AC8 - FR62)
         if not self.mock_mode and not self.server_url.startswith("https://"):
             raise HTTPSRequiredError(
-                f"HTTPS required for server communication. "
-                f"Got: {self.server_url}"
+                f"HTTPS required for server communication. Got: {self.server_url}"
             )
 
     def activate_license(self, master_key: str) -> ActivationResponse:
@@ -204,9 +203,7 @@ class BQAuditAPIClient:
                 f"Server error during activation. Status: {e.response.status_code}"
             )
 
-    def report_scan_success(
-        self, project_id: str, scan_result: dict
-    ) -> dict:
+    def report_scan_success(self, project_id: str, scan_result: dict) -> dict:
         """
         Report successful scan completion to server.
 
@@ -226,9 +223,7 @@ class BQAuditAPIClient:
             return self._mock_report_scan(project_id, scan_result)
         return self._real_report_scan(project_id, scan_result)
 
-    def _mock_report_scan(
-        self, project_id: str, scan_result: dict
-    ) -> dict:
+    def _mock_report_scan(self, project_id: str, scan_result: dict) -> dict:
         """Mock scan reporting for Epic 3."""
         return {
             "status": "acknowledged",
@@ -236,9 +231,7 @@ class BQAuditAPIClient:
             "timestamp": "2024-01-01T00:00:00Z",
         }
 
-    def _real_report_scan(
-        self, project_id: str, scan_result: dict
-    ) -> dict:
+    def _real_report_scan(self, project_id: str, scan_result: dict) -> dict:
         """Real scan reporting via HTTPS POST (Future Epic)."""
         url = f"{self.server_url}/v1/scan/report"
 
@@ -260,7 +253,9 @@ class BQAuditAPIClient:
                 f"Server error reporting scan. Status: {e.response.status_code}"
             )
 
-    def renew_token(self, master_key: str, current_balance: int) -> TokenRenewalResponse:
+    def renew_token(
+        self, master_key: str, current_balance: int
+    ) -> TokenRenewalResponse:
         """
         Renew ephemeral token after successful scan.
 
@@ -280,7 +275,9 @@ class BQAuditAPIClient:
             return self._mock_renew(master_key, current_balance)
         return self._real_renew(master_key)
 
-    def _mock_renew(self, master_key: str, current_balance: int) -> TokenRenewalResponse:
+    def _mock_renew(
+        self, master_key: str, current_balance: int
+    ) -> TokenRenewalResponse:
         """
         Mock token renewal for Epic 3 testing.
 

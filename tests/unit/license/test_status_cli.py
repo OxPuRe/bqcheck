@@ -1,7 +1,7 @@
 """Unit tests for license status CLI command."""
 
 import json
-import pytest
+
 from typer.testing import CliRunner
 
 from bqaudit.cli import app

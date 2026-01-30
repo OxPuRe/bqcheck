@@ -1,9 +1,10 @@
 """Unit tests for license revoke CLI command."""
 
 import json
+from unittest.mock import patch
+
 import pytest
 from typer.testing import CliRunner
-from unittest.mock import patch
 
 from bqaudit.cli import app
 
@@ -228,11 +229,11 @@ class TestLicenseRevokeCLI:
         """
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        from bqaudit.license.storage import CredentialStore
+        from datetime import datetime
 
         # Mock API client responses (called by activate_license internally)
         from bqaudit.api.models import ActivationResponse
-        from datetime import datetime, timezone
+        from bqaudit.license.storage import CredentialStore
 
         mock_api_response_1 = ActivationResponse(
             ephemeral_token="ephemeral-token-old",
@@ -400,8 +401,8 @@ class TestCredentialStoreDelete:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         from bqaudit.license.storage import (
-            CredentialStore,
             CredentialNotFoundError,
+            CredentialStore,
         )
 
         # No credentials file exists

@@ -7,9 +7,6 @@ Tests cover:
 """
 
 import time
-from unittest import mock
-
-import pytest
 
 
 class TestScanSimulator:
@@ -23,18 +20,18 @@ class TestScanSimulator:
 
     def test_simulate_scan_takes_configured_time(self):
         """AC7: Simulated scan takes configured delay time."""
-        import os
         from bqaudit.scan.simulator import DEFAULT_SIMULATION_DELAY, simulate_scan
 
         start_time = time.time()
-        result = simulate_scan("test-project", "mock-token-xyz")
+        simulate_scan("test-project", "mock-token-xyz")
         elapsed = time.time() - start_time
 
         # Should take approximately DEFAULT_SIMULATION_DELAY seconds
         # Allow 90% to 150% of target delay (accounting for system overhead)
         expected_delay = DEFAULT_SIMULATION_DELAY
         assert expected_delay * 0.9 <= elapsed <= expected_delay * 1.5, (
-            f"Scan took {elapsed:.2f}s (expected ~{expected_delay}s with BQAUDIT_SIMULATED_SCAN_DELAY)"
+            f"Scan took {elapsed:.2f}s "
+            f"(expected ~{expected_delay}s with BQAUDIT_SIMULATED_SCAN_DELAY)"
         )
 
     def test_simulate_scan_returns_success_result(self):
@@ -51,12 +48,13 @@ class TestScanSimulator:
     def test_simulate_scan_never_logs_token(self, caplog):
         """AC4: Simulator never logs ephemeral token."""
         import logging
+
         from bqaudit.scan.simulator import simulate_scan
 
         token = "secret-token-should-never-appear"
 
         with caplog.at_level(logging.DEBUG):
-            result = simulate_scan("test-project", token)
+            simulate_scan("test-project", token)
 
         # Token should NEVER appear in logs
         for record in caplog.records:
