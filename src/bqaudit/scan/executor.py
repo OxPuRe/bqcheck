@@ -8,12 +8,15 @@ Manages ephemeral token lifecycle:
 - Atomic token consumption (preserve on failure)
 """
 
+from __future__ import annotations
+
 import logging
 import os
 
 import typer
 
 from bqaudit.api.client import BQAuditAPIClient
+from bqaudit.api.models import AuditResponse
 from bqaudit.license.storage import (
     CredentialNotFoundError,
     CredentialStore,
@@ -52,7 +55,7 @@ class ScanExecutor:
 
         Process:
         1. Load credentials
-        2. Execute scan (simulated for Epic 3)
+        2. Execute scan (simulated or real based on BQAUDIT_REAL_SCAN env var)
         3. On success: renew token + decrement balance + save
         4. On failure: preserve token (atomic consumption)
 
@@ -64,6 +67,10 @@ class ScanExecutor:
 
         Raises:
             Exception: If scan fails (token preserved - AC2)
+
+        Environment Variables:
+            BQAUDIT_REAL_SCAN: Set to 'true' to execute real audit with server.
+                              Default: 'false' (simulated scan for Epic 3)
 
         Security:
         - AC4: Tokens NEVER logged
@@ -96,11 +103,13 @@ class ScanExecutor:
             # Re-raise other exceptions
             raise
 
-        # Step 2: Execute scan (SIMULATED for Epic 3)
+        # Step 2: Execute scan (SIMULATED for Epic 3, or REAL for Epic 5)
         try:
             # AC1, AC7: Simulated scan
             # AC4: Token never logged - passed to simulator but not logged
             # Choose scan mode based on environment variable
+            # Note: BQAUDIT_REAL_SCAN controls scan execution (simulated vs real)
+            # Note: BQAUDIT_REAL_MODE controls API client mode (mock vs real server)
             use_real_scan = os.getenv('BQAUDIT_REAL_SCAN', '').lower() == 'true'
             
             if use_real_scan:
@@ -110,15 +119,11 @@ class ScanExecutor:
                 audit_response = asyncio.run(
                     self.execute_real_scan(project_id, credentials['ephemeral_token'])
                 )
-                # Update credentials with new token from audit response
-                credentials['ephemeral_token'] = audit_response.new_ephemeral_token
-                credentials['token_pool_balance'] -= 1
-                CredentialStore.update(credentials)
-                
+
+                # Display audit results immediately (credentials updated later atomically)
                 typer.echo(f'\n✅ Audit complete! {audit_response.summary.total_recommendations} recommendations found.')
                 typer.echo(f'💰 Potential monthly savings: €{audit_response.summary.total_potential_savings_eur:.2f}')
-                typer.echo(f'Token pool balance: {credentials["token_pool_balance"]} scans remaining\n')
-                
+
                 # Create a ScanResult wrapper for compatibility
                 result = ScanResult(
                     simulated=False,
@@ -169,10 +174,14 @@ class ScanExecutor:
             credentials["token_pool_balance"] = new_token_data.token_pool_balance
             CredentialStore.update(credentials)
 
-            # AC1: Display success with balance
-            typer.echo("\n✅ Scan completed successfully!")
+            # AC1: Display success with balance (for simulated scans only)
+            # Real scan already displayed results earlier
+            if not use_real_scan:
+                typer.echo("\n✅ Scan completed successfully!")
+
+            # Display token balance for both real and simulated scans
             typer.echo(
-                f"Token pool balance: {credentials['token_pool_balance']} "
+                f"💰 Token pool balance: {credentials['token_pool_balance']} "
                 "scans remaining\n"
             )
 
@@ -207,7 +216,7 @@ class ScanExecutor:
 
     async def execute_real_scan(
         self, project_id: str, ephemeral_token: str
-    ) -> "AuditResponse":
+    ) -> AuditResponse:
         """
         Execute REAL BigQuery scan with server integration (Story 5.1).
 
@@ -234,7 +243,7 @@ class ScanExecutor:
         - HTTPS-only enforcement
         """
         import hashlib
-        from bqaudit.api.models import AuditRequest, AuditResponse
+        from bqaudit.api.models import AuditRequest
         from bqaudit.scanner import authenticate_bigquery
 
         # Step 1: Extract BigQuery metadata (Epic 2)
@@ -288,19 +297,3 @@ class ScanExecutor:
 
         logger.info(f"Audit complete: {response.summary.total_recommendations} recommendations")
         return response
-
-    def execute_scan_with_real_audit(self, project_id: str, ephemeral_token: str):
-        """
-        Execute real audit (Story 5.1) - synchronous wrapper for CLI.
-        
-        This wraps the async execute_real_scan for use in the synchronous CLI context.
-        
-        Args:
-            project_id: GCP project ID to scan
-            ephemeral_token: Ephemeral token for authentication
-            
-        Returns:
-            AuditResponse from server
-        """
-        import asyncio
-        return asyncio.run(self.execute_real_scan(project_id, ephemeral_token))
