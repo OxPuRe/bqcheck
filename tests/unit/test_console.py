@@ -189,3 +189,27 @@ class TestElapsedTimer:
         # Then: Minutes formatted correctly
         output = console.file.getvalue()
         assert "Elapsed: 2m 5s" in output
+
+    @pytest.mark.asyncio
+    async def test_timer_cleanup_on_cancellation(self):
+        """Test timer task is properly cleaned up when cancelled (Issue #11)."""
+        # Given: Console for testing
+        console = Console(file=io.StringIO())
+
+        # When: Start timer, let it run briefly, then cancel
+        with patch('bqaudit.console.console', console):
+            timer_task = asyncio.create_task(show_analysis_progress())
+
+            # Let timer start
+            await asyncio.sleep(0.1)
+
+            # Cancel timer
+            timer_task.cancel()
+
+            # Then: Task cancellation completes without raising
+            with pytest.raises(asyncio.CancelledError):
+                await timer_task
+
+            # Verify task is done and cancelled
+            assert timer_task.done()
+            assert timer_task.cancelled()

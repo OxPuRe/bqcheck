@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
+from datetime import datetime, timezone
 
 import httpx
 import typer
@@ -133,6 +135,9 @@ class ScanExecutor:
                 # Epic 5: Execute real audit with server
                 logger.info('Executing REAL audit (BQAUDIT_REAL_SCAN=true)')
                 import asyncio
+                # Note: Using asyncio.run() in sync context. This creates a new event loop.
+                # LIMITATION: Cannot be called from existing async context (would raise RuntimeError).
+                # This is acceptable for CLI entry point but limits future async refactoring.
                 audit_response = asyncio.run(
                     self.execute_real_scan(project_id, credentials['ephemeral_token'])
                 )
@@ -187,8 +192,7 @@ class ScanExecutor:
             credentials["used_tokens"].append(
                 {
                     "token": old_token[:16] + "...",  # Truncated for security
-                    # Use new token timestamp as proxy  # noqa: E501
-                    "used_at": new_token_data.ephemeral_token,
+                    "used_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
             # Keep only last 5 used tokens to prevent bloat
@@ -319,12 +323,14 @@ class ScanExecutor:
         except PermissionDenied:
             # AC6: BigQuery permission error
             # Get user email for IAM binding command
-            import subprocess
             try:
                 email = subprocess.check_output(
                     ["gcloud", "config", "get-value", "account"],
                     text=True,
                 ).strip()
+                # Handle empty email (no active account)
+                if not email:
+                    raise ValueError("gcloud returned empty email")
             except Exception:
                 email = "<your-email@example.com>"
             handle_bigquery_permission_error(console, project_id, email)
@@ -361,7 +367,9 @@ class ScanExecutor:
                     ephemeral_token=ephemeral_token,
                 )
             finally:
-                # Cancel timer when request completes
+                # IMPORTANT: This finally block executes BEFORE exception handlers below.
+                # Timer is guaranteed to be cancelled before any error handler runs.
+                # This prevents resource leaks (timer keeps running after error).
                 timer_task.cancel()
                 try:
                     await timer_task

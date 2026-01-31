@@ -11,6 +11,7 @@ import asyncio
 from datetime import datetime, timezone
 
 from rich.console import Console
+from rich.status import Status
 
 # Initialize Rich console (output to stderr to not interfere with stdout)
 console = Console(stderr=True)
@@ -30,12 +31,12 @@ def show_start_message(project_id: str) -> None:
     console.print(f"🔍 Starting BigQuery audit for project: [bold cyan]{project_id}[/bold cyan]")
 
 
-def show_extraction_progress() -> Console.status:
+def show_extraction_progress() -> Status:
     """
     Show spinner during metadata extraction (AC2).
 
     Returns:
-        Rich status context manager with spinner
+        Rich Status context manager with spinner
 
     Example:
         >>> with show_extraction_progress():
@@ -74,15 +75,18 @@ def show_success_message(count: int, savings: float) -> None:
     )
 
 
-async def show_analysis_progress() -> asyncio.Task:
+async def show_analysis_progress() -> None:
     """
     Show analysis progress with elapsed timer (AC4).
 
     Displays "⚙️  Analyzing BigQuery patterns..." with elapsed time
-    updated every 5 seconds.
+    updated every 5 seconds. Runs indefinitely until cancelled by caller.
+
+    This is an async coroutine that should be wrapped in an asyncio.Task
+    by the caller using asyncio.create_task(), then cancelled when done.
 
     Returns:
-        Async task that updates timer (should be cancelled when done)
+        None (runs until cancelled, never returns normally)
 
     Example:
         >>> timer_task = asyncio.create_task(show_analysis_progress())

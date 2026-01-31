@@ -4,6 +4,12 @@ Provides user-friendly error messages with actionable guidance for:
 - BigQuery permission errors (AC6)
 - Network errors (AC7)
 - Timeout errors (AC8)
+
+NOTE: These handlers call sys.exit() directly for CLI convenience.
+This makes them CLI-specific and harder to test/reuse in library contexts.
+For future refactoring: consider separating message formatting from exit behavior,
+allowing callers to decide when to exit. Current design prioritizes simplicity
+for MVP CLI use case.
 """
 
 import sys
