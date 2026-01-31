@@ -124,6 +124,13 @@ class ScanExecutor:
                 typer.echo(f'\n✅ Audit complete! {audit_response.summary.total_recommendations} recommendations found.')
                 typer.echo(f'💰 Potential monthly savings: €{audit_response.summary.total_potential_savings_eur:.2f}')
 
+                # Generate and save Markdown report (Story 5.2)
+                from bqaudit.report_generator import MarkdownReportGenerator
+
+                generator = MarkdownReportGenerator(audit_response, project_name=project_id)
+                report_path = generator.save_report()
+                typer.echo(f'\n📄 Audit report saved to: {report_path}')
+
                 # Create a ScanResult wrapper for compatibility
                 result = ScanResult(
                     simulated=False,
