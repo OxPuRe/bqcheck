@@ -79,14 +79,23 @@ class MarkdownReportGenerator:
 
         # Add category breakdown if we have recommendations
         if summary.categories_breakdown:
+            # Calculate savings per category from recommendations
+            category_savings = {}
+            for rec in self.audit_response.recommendations:
+                category = rec.type  # Use type as category proxy
+                if category not in category_savings:
+                    category_savings[category] = 0.0
+                category_savings[category] += rec.savings_eur
+
             exec_summary += """
 ### Savings Breakdown by Category
 
-| Category | Count |
-|----------|-------|
+| Category | Count | Monthly Savings |
+|----------|-------|-----------------|
 """
             for category, count in sorted(summary.categories_breakdown.items()):
-                exec_summary += f"| {category.capitalize()} | {count} |\n"
+                savings = category_savings.get(category, 0.0)
+                exec_summary += f"| {category.capitalize()} | {count} | €{savings:.2f} |\n"
 
         return exec_summary
 
@@ -178,6 +187,40 @@ Top high-priority optimizations for immediate impact:
 
         return detailed
 
+    def generate_implementation_guidance(self) -> str:
+        """
+        Generate Implementation Guidance section.
+
+        Returns:
+            Markdown-formatted Implementation Guidance section
+        """
+        if not self.audit_response.recommendations:
+            return ""
+
+        guidance = """
+## Implementation Guidance
+
+### Getting Started
+
+1. **Prioritize High-Impact Changes**: Start with HIGH priority recommendations that offer the largest monthly savings
+2. **Test in Non-Production**: Always test changes in a development or staging environment first
+3. **Monitor Query Performance**: Use BigQuery's query execution details to validate improvements
+4. **Backup Before Changes**: Create table snapshots before modifying partitioning or clustering
+
+### Best Practices
+
+- **Partitioning**: Implement date-based partitioning for time-series data to reduce scan costs
+- **Clustering**: Add clustering keys for columns frequently used in WHERE and GROUP BY clauses
+- **Storage Cleanup**: Schedule regular reviews of unused tables and datasets
+- **Query Optimization**: Review and optimize queries identified as expensive or repetitive
+
+### Need Help?
+
+Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-practices) for detailed guidance on implementing these recommendations.
+
+"""
+        return guidance
+
     def generate_report(self) -> str:
         """
         Generate complete Markdown report.
@@ -196,6 +239,9 @@ Top high-priority optimizations for immediate impact:
 
         # Add Detailed Recommendations
         report += self.generate_detailed_recommendations()
+
+        # Add Implementation Guidance
+        report += self.generate_implementation_guidance()
 
         return report
 

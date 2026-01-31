@@ -257,6 +257,49 @@ class TestQuickWins:
         assert quick_wins.count("2. **") == 1
         assert quick_wins.count("3. **") == 0
 
+    def test_quick_wins_with_zero_high_priority(self):
+        """Test Quick Wins with 0 HIGH priority recommendations."""
+        # Create recommendations with no HIGH priority
+        recommendations = [
+            Recommendation(
+                type=f"type_{i}",
+                priority="MEDIUM",
+                title=f"Medium priority {i}",
+                description=f"Description {i}",
+                savings_eur=float(50 - i * 5),
+                implementation_steps=["Step 1"],
+            )
+            for i in range(7)
+        ] + [
+            Recommendation(
+                type="type_low",
+                priority="LOW",
+                title="Low priority",
+                description="Low priority desc",
+                savings_eur=10.0,
+                implementation_steps=["Step 1"],
+            )
+        ]
+        response = AuditResponse(
+            recommendations=recommendations,
+            summary=AuditSummary(
+                total_recommendations=8,
+                total_potential_savings_eur=200.0,
+                high_priority_count=0,
+                medium_priority_count=7,
+                low_priority_count=1,
+                categories_breakdown={},
+            ),
+            audit_id="test",
+            new_ephemeral_token="token",
+        )
+        generator = MarkdownReportGenerator(response)
+
+        quick_wins = generator.generate_quick_wins()
+
+        # Should show message about no high-priority recommendations
+        assert "_No high-priority recommendations at this time._" in quick_wins
+
 
 class TestDetailedRecommendations:
     """Test Detailed Recommendations section (Task 4)."""
@@ -376,3 +419,46 @@ class TestEdgeCases:
         assert "No optimization opportunities detected" in report
         assert "well-optimized" in report
         assert "€0.00" in report
+
+    def test_large_recommendations_set(self):
+        """Test report generation with 100+ recommendations."""
+        # Create 150 recommendations with mixed priorities
+        recommendations = []
+        for i in range(150):
+            priority = "HIGH" if i < 50 else "MEDIUM" if i < 120 else "LOW"
+            recommendations.append(
+                Recommendation(
+                    type=f"type_{i % 5}",
+                    priority=priority,
+                    title=f"Recommendation {i}",
+                    description=f"Description for recommendation {i}",
+                    savings_eur=float(1000 - i),
+                    implementation_steps=[f"Step {j}" for j in range(1, 4)],
+                )
+            )
+
+        response = AuditResponse(
+            recommendations=recommendations,
+            summary=AuditSummary(
+                total_recommendations=150,
+                total_potential_savings_eur=sum(r.savings_eur for r in recommendations),
+                high_priority_count=50,
+                medium_priority_count=70,
+                low_priority_count=30,
+                categories_breakdown={"storage": 30, "queries": 40, "partitioning": 40, "clustering": 30, "temporal": 10},
+            ),
+            audit_id="test",
+            new_ephemeral_token="token",
+        )
+        generator = MarkdownReportGenerator(response)
+
+        report = generator.generate_report()
+
+        # Verify report generates successfully
+        assert "# BigQuery Audit Report" in report
+        assert "Total Recommendations | 150" in report
+        assert "## Quick Wins" in report
+        assert "## Detailed Recommendations" in report
+
+        # Verify all 150 recommendations are in detailed section
+        assert report.count("### Recommendation") == 150
