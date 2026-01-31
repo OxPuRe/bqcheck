@@ -11,7 +11,12 @@ from bqaudit.api.exceptions import (
     InvalidLicenseKeyError,
     NetworkError,
 )
-from bqaudit.api.models import ActivationResponse, TokenRenewalResponse
+from bqaudit.api.models import (
+    ActivationResponse,
+    TokenRenewalResponse,
+    AuditRequest,
+    AuditResponse,
+)
 
 # Mock mode test key prefixes (Epic 3)
 MOCK_VALID_KEY_PREFIX = "VALID-"
@@ -336,4 +341,93 @@ class BQAuditAPIClient:
         except httpx.HTTPStatusError as e:
             raise NetworkError(
                 f"Server error during token renewal. Status: {e.response.status_code}"
+            )
+
+    async def execute_audit(
+        self, audit_request: AuditRequest, ephemeral_token: str
+    ) -> AuditResponse:
+        """
+        Execute audit by sending request to server.
+
+        Story 5.1 - Task 2: HTTP client for server communication with retry logic.
+
+        Args:
+            audit_request: Audit request with anonymized metadata
+            ephemeral_token: Ephemeral token for authentication
+
+        Returns:
+            AuditResponse with recommendations and new ephemeral token
+
+        Raises:
+            NetworkError: If network communication fails after retries
+            HTTPSRequiredError: If attempting HTTP instead of HTTPS
+
+        Security:
+        - Ephemeral token in X-Ephemeral-Token header (single-use, auto-renewed)
+        - HTTPS-only enforcement
+        - No master key transmission
+
+        Retry Logic:
+        - Max retries: 3 attempts
+        - Backoff: Exponential (1s, 2s, 4s)
+        - Retry on: ConnectError, TimeoutException, NetworkError
+        """
+        # Import here to avoid circular imports
+        from tenacity import (
+            retry,
+            stop_after_attempt,
+            wait_exponential,
+            retry_if_exception_type,
+        )
+        from bqaudit.constants import (
+            HTTP_TIMEOUT_TOTAL,
+            HTTP_TIMEOUT_CONNECT,
+            HTTP_MAX_RETRIES,
+            HTTP_RETRY_MIN_WAIT,
+            HTTP_RETRY_MAX_WAIT,
+        )
+
+        @retry(
+            stop=stop_after_attempt(HTTP_MAX_RETRIES),
+            wait=wait_exponential(
+                multiplier=1, min=HTTP_RETRY_MIN_WAIT, max=HTTP_RETRY_MAX_WAIT
+            ),
+            retry=retry_if_exception_type(
+                (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError)
+            ),
+        )
+        async def _send_request():
+            """Send HTTP request with retry logic."""
+            timeout = httpx.Timeout(HTTP_TIMEOUT_TOTAL, connect=HTTP_TIMEOUT_CONNECT)
+
+            async with httpx.AsyncClient(
+                timeout=timeout, follow_redirects=True
+            ) as client:
+                response = await client.post(
+                    f"{self.server_url}/v1/audit",
+                    json=audit_request.model_dump(),
+                    headers={
+                        "X-Ephemeral-Token": ephemeral_token,
+                        "Content-Type": "application/json",
+                    },
+                )
+
+                response.raise_for_status()
+                return response.json()
+
+        try:
+            response_data = await _send_request()
+            return AuditResponse(**response_data)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                raise InvalidLicenseKeyError(
+                    "Ephemeral token invalid or expired. Please re-activate license."
+                )
+            raise NetworkError(
+                f"Server error during audit. Status: {e.response.status_code}"
+            )
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as e:
+            # After max retries exhausted
+            raise NetworkError(
+                f"Network error during audit after {HTTP_MAX_RETRIES} retries: {e}"
             )
