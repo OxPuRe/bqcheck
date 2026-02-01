@@ -222,9 +222,12 @@ class TestScanExecutor:
         assert "used_tokens" in updated_creds
         assert len(updated_creds["used_tokens"]) >= 1
 
-        # Verify old token is tracked (truncated for security)
-        used_token_prefixes = [ut["token"] for ut in updated_creds["used_tokens"]]
-        assert any(original_token[:16] in prefix for prefix in used_token_prefixes)
+        # Code Review Round 8, Issue #7: Token stored as SHA-256 hash, not truncated
+        import hashlib
+
+        expected_hash = hashlib.sha256(original_token.encode("utf-8")).hexdigest()
+        used_token_hashes = [ut["token_hash"] for ut in updated_creds["used_tokens"]]
+        assert expected_hash in used_token_hashes
 
     def test_scan_reports_success_to_server(self, test_credentials, mock_creds_path):
         """AC1: Scan reports success to server (mocked)."""

@@ -132,7 +132,7 @@ def test_extract_table_metadata_api_error(mock_client):
         extract_table_metadata(mock_bq_client, "my-project")
 
     assert "Failed to extract table metadata" in str(exc_info.value)
-    assert "my-project" in str(exc_info.value)
+    # Code Review Round 8, Issue #4: project_id removed from error to prevent info disclosure
 
 
 @patch("bqaudit.scanner.metadata_extractor.bigquery.Client")

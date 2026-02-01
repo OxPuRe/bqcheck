@@ -25,6 +25,29 @@ MOCK_VALID_KEY_PREFIX = "VALID-"
 MOCK_NETWORK_ERROR_PREFIX = "NETWORK-ERROR"
 
 
+def _validate_json_content_type(response: httpx.Response) -> None:
+    """
+    Validate response Content-Type is application/json (Code Review Round 8, Issue #5).
+
+    Prevents type confusion attacks where server returns HTML error pages,
+    binary data, or other Content-Types that would fail during JSON parsing.
+
+    Args:
+        response: httpx Response object
+
+    Raises:
+        NetworkError: If Content-Type is not application/json
+    """
+    content_type = response.headers.get("content-type", "")
+
+    # Content-Type may include charset: "application/json; charset=utf-8"
+    if not content_type.startswith("application/json"):
+        raise NetworkError(
+            f"Server returned invalid Content-Type: expected application/json, "
+            f"got {content_type!r}. Response may be HTML error page or binary data."
+        )
+
+
 class ServerHealthResponse(TypedDict, total=False):
     """Server health endpoint response schema."""
 
@@ -61,14 +84,30 @@ def check_server_health() -> Dict[str, Any]:
         This endpoint does NOT transmit any user data or project information.
         It only checks server availability and version compatibility.
     """
-    # Allow override via environment variable (useful for testing/dev)
+    # Code Review Round 8, Issue #2: Validate API URL from environment variable
+    from urllib.parse import urlparse
+
     base_url = os.getenv("BQAUDIT_API_URL", "https://api.bqaudit.com")
+
+    # Validate URL format before use
+    try:
+        parsed = urlparse(base_url)
+        if not parsed.scheme or not parsed.netloc or parsed.scheme != "https":
+            raise ValueError(
+                f"Invalid BQAUDIT_API_URL: must be https:// URL, got {base_url}"
+            )
+    except (ValueError, AttributeError) as e:
+        raise ValueError(f"Invalid BQAUDIT_API_URL environment variable: {e}")
+
     health_url = f"{base_url}/v1/health"
 
     try:
         with httpx.Client(timeout=HTTP_SYNC_TIMEOUT_CHECK) as client:
             response = client.get(health_url)
             response.raise_for_status()
+
+            # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+            _validate_json_content_type(response)
 
             # Code Review Round 6, Issue #3: Replace cast() with runtime validation
             # cast() only helps type checkers, provides NO runtime safety
@@ -80,7 +119,9 @@ def check_server_health() -> Dict[str, Any]:
                 )
             return data
     except httpx.ConnectError as e:
-        raise httpx.ConnectError(f"Cannot reach bqaudit server: {e}")
+        # Code Review Round 8, Issue #3: Don't expose internal exception details
+        # Original exception may contain DNS lookup info, IP addresses, etc.
+        raise httpx.ConnectError("Cannot reach bqaudit server (network error)")
     except httpx.TimeoutException:
         raise httpx.TimeoutException("Server timeout (5s)")
     except httpx.HTTPStatusError as e:
@@ -129,12 +170,43 @@ class BQAuditAPIClient:
                       If False, make real HTTP calls to server.
         """
         self.mock_mode = mock_mode
-        self.server_url = os.getenv("BQAUDIT_API_URL", "https://api.bqaudit.com")
 
-        # Enforce HTTPS (AC8 - FR62)
-        if not self.mock_mode and not self.server_url.startswith("https://"):
-            raise HTTPSRequiredError(
-                f"HTTPS required for server communication. Got: {self.server_url}"
+        # Code Review Round 8, Issue #6: Warn if mock mode enabled
+        if mock_mode:
+            logging.getLogger(__name__).info(
+                "API client initialized in MOCK MODE - using test responses. "
+                "Set BQAUDIT_REAL_MODE=true for production use."
+            )
+        server_url_raw = os.getenv("BQAUDIT_API_URL", "https://api.bqaudit.com")
+
+        # Code Review Round 8, Issue #2: Validate API URL from environment variable
+        # Prevents URL injection attacks, path traversal, and credential redirect
+        from urllib.parse import urlparse
+
+        try:
+            parsed = urlparse(server_url_raw)
+
+            # Validate URL structure
+            if not parsed.scheme or not parsed.netloc:
+                raise ValueError(f"Invalid URL format: {server_url_raw}")
+
+            # Enforce HTTPS in ALL modes (AC8 - FR62)
+            # Code Review Round 8: Removed mock_mode exception - HTTPS always required
+            if parsed.scheme != "https":
+                raise HTTPSRequiredError(
+                    f"HTTPS required for server communication (got {parsed.scheme}://). "
+                    f"Set BQAUDIT_API_URL to https:// URL"
+                )
+
+            # Validate no path traversal attempts
+            if ".." in parsed.netloc or ".." in parsed.path:
+                raise ValueError(f"Invalid URL (path traversal detected): {server_url_raw}")
+
+            self.server_url = server_url_raw
+        except (ValueError, AttributeError) as e:
+            raise ValueError(
+                f"Invalid BQAUDIT_API_URL environment variable: {e}. "
+                "Must be a valid https:// URL."
             )
 
     def activate_license(self, master_key: str) -> ActivationResponse:
@@ -213,6 +285,9 @@ class BQAuditAPIClient:
                     )
 
                 response.raise_for_status()
+
+                # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+                _validate_json_content_type(response)
                 data = response.json()
 
                 return ActivationResponse(**data)
@@ -288,6 +363,9 @@ class BQAuditAPIClient:
                     },
                 )
                 response.raise_for_status()
+
+                # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+                _validate_json_content_type(response)
 
                 # Code Review Round 6, Issue #3: Replace cast() with runtime validation
                 data = response.json()
@@ -378,6 +456,9 @@ class BQAuditAPIClient:
                 )
 
                 response.raise_for_status()
+
+                # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+                _validate_json_content_type(response)
                 data = response.json()
 
                 return TokenRenewalResponse(**data)
@@ -471,6 +552,9 @@ class BQAuditAPIClient:
                 )
 
                 response.raise_for_status()
+
+                # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+                _validate_json_content_type(response)
                 return response.json()
 
         try:

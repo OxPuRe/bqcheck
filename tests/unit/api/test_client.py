@@ -51,13 +51,13 @@ class TestBQAuditAPIClient:
     #     """AC8 (Full): Verify self-signed certificates are rejected."""
     #     pass
 
-    def test_https_not_enforced_in_mock_mode(self, monkeypatch):
-        """Test that HTTPS check skipped in mock mode."""
+    def test_https_enforced_in_all_modes(self, monkeypatch):
+        """Test that HTTPS check enforced even in mock mode (Round 8, Issue #2)."""
         monkeypatch.setenv("BQAUDIT_API_URL", "http://localhost:8000")
 
-        # Should NOT raise in mock mode
-        client = BQAuditAPIClient(mock_mode=True)
-        assert client.server_url == "http://localhost:8000"
+        # Code Review Round 8: HTTPS now required in ALL modes for security
+        with pytest.raises(HTTPSRequiredError, match="HTTPS required"):
+            BQAuditAPIClient(mock_mode=True)
 
     def test_activate_license_success_with_valid_key(self):
         """AC1: Test activation success with VALID- prefix."""

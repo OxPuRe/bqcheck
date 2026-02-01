@@ -213,10 +213,20 @@ class ScanExecutor:
 
             # Step 4: Renew token (AC3)
             # AC5: Master key ONLY for renewal (not during scan)
-            new_token_data = self.api_client.renew_token(
-                credentials["master_key"],
-                current_balance=credentials["token_pool_balance"],
-            )
+            # Code Review Round 8, Issue #8: Token renewal lacks idempotency
+            # If renew_token() fails after scan success, token is decremented server-side
+            # but NOT renewed locally → out-of-sync. Server must support idempotent renewal.
+            try:
+                new_token_data = self.api_client.renew_token(
+                    credentials["master_key"],
+                    current_balance=credentials["token_pool_balance"],
+                )
+            except Exception as e:
+                logger.error(
+                    f"Token renewal failed after successful scan. "
+                    f"Credentials may be out of sync. Please re-activate license. Error: {e}"
+                )
+                raise  # Re-raise to prevent saving invalid credentials
 
             # Step 5: Update credentials atomically (AC6, AC8)
             # AC8: Mark old token as used (client-side tracking)
@@ -224,11 +234,18 @@ class ScanExecutor:
             credentials["ephemeral_token"] = new_token_data.ephemeral_token
 
             # Track used tokens (AC8: Single-use enforcement)
+            # Code Review Round 8, Issue #7: Use hash instead of truncation
+            # Truncation loses entropy and makes tokens guessable. Hash preserves
+            # uniqueness while being irreversible.
+            import hashlib
+
+            token_hash = hashlib.sha256(old_token.encode("utf-8")).hexdigest()
+
             if "used_tokens" not in credentials:
                 credentials["used_tokens"] = []
             credentials["used_tokens"].append(
                 {
-                    "token": old_token[:16] + "...",  # Truncated for security
+                    "token_hash": token_hash,  # SHA-256 hash for security
                     "used_at": datetime.now(timezone.utc).isoformat(),
                 }
             )

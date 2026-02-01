@@ -124,10 +124,11 @@ class CredentialStore:
 
         except FileExistsError:
             # Temp file already exists (concurrent save or stale file)
+            # Code Review Round 8, Issue #3: Don't expose temp path to users
             logger.error(f"Temp file already exists: {temp_path}")
             raise OSError(
-                f"Credentials save conflict: temporary file already exists. "
-                f"If no other save is running, delete {temp_path} manually."
+                "Credentials save conflict: temporary file already exists. "
+                "If no other save is running, delete ~/.bqaudit/credentials.json.tmp manually."
             )
 
         except Exception:
