@@ -1,9 +1,10 @@
 """Pydantic models for API requests and responses."""
 
+import json
 from datetime import datetime
-from typing import Optional
+from typing import Any, ClassVar, Optional
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 
 class ActivationRequest(BaseModel):
@@ -58,7 +59,13 @@ class AuditMetadata(BaseModel):
 
     Code Review Round 7, Issue #4: Added max_items limits to prevent memory exhaustion
     attacks where malicious payloads contain millions of empty dicts.
+
+    Code Review Round 10, Issue #3: Added per-dict size validation to prevent memory
+    exhaustion via large dicts (max_length limits list items but not dict size).
     """
+
+    # Maximum serialized size per dict (1MB) to prevent DoS attacks
+    MAX_DICT_SIZE_BYTES: ClassVar[int] = 1024 * 1024  # 1MB
 
     tables: list[dict] = Field(
         description="List of table metadata dicts (validated upstream via TableMetadata.model_dump())",
@@ -75,6 +82,41 @@ class AuditMetadata(BaseModel):
         default_factory=list,
         max_length=10000,  # Prevent memory exhaustion attacks
     )
+
+    @field_validator("tables", "queries", "access_patterns")
+    @classmethod
+    def validate_dict_sizes(cls, value: list[dict]) -> list[dict]:
+        """
+        Validate individual dict sizes to prevent memory exhaustion.
+
+        Code Review Round 10, Issue #3: max_length limits list items but NOT dict size.
+        Attacker could send 10000 dicts × 2MB each = 20GB memory consumption.
+
+        Args:
+            value: List of dicts to validate
+
+        Returns:
+            Original value if valid
+
+        Raises:
+            ValueError: If any dict exceeds MAX_DICT_SIZE_BYTES (1MB)
+        """
+        for i, item in enumerate(value):
+            if not isinstance(item, dict):
+                raise ValueError(f"Item {i} must be a dict, got {type(item).__name__}")
+
+            # Check serialized size of each dict
+            serialized = json.dumps(item)
+            size_bytes = len(serialized.encode("utf-8"))
+
+            if size_bytes > cls.MAX_DICT_SIZE_BYTES:
+                raise ValueError(
+                    f"Dict at index {i} exceeds maximum size: "
+                    f"{size_bytes} bytes > {cls.MAX_DICT_SIZE_BYTES} bytes (1MB). "
+                    "This may indicate a memory exhaustion attack or data corruption."
+                )
+
+        return value
 
 
 class AuditRequest(BaseModel):

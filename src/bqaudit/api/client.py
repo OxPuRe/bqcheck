@@ -1,5 +1,38 @@
-"""HTTP client for bqaudit server API communication."""
+"""
+HTTP client for bqaudit server API communication.
 
+Code Review Round 10, Issue #4 - SECURITY WARNING:
+===============================================
+Current implementation transmits master_key in Authorization header without
+request signing or HMAC. This creates MITM attack vectors:
+
+Vulnerability:
+- Master key sent in every request (activate, renew)
+- No request-specific secrets (nonce, timestamp)
+- If MITM captures Authorization header, they can replay it
+- No message integrity verification (request body could be modified)
+
+Attack Scenario:
+1. Attacker intercepts HTTPS connection (compromised CA, MITM proxy)
+2. Captures: Authorization: Bearer MASTER-KEY-123
+3. Uses captured header for unlimited token renewal
+4. Exhausts token budget on behalf of victim
+
+Current Mitigation:
+- HTTPS enforced (prevents basic MITM)
+- Relies on TLS security only
+
+Future Enhancement (requires server-side support):
+- Implement HMAC-SHA256 request signing
+- Add nonce/timestamp to prevent replay
+- Use ephemeral tokens from renewal, not master key
+- Consider mutual TLS (client certificates)
+
+TODO: Add HMAC signing when server API supports it (Epic 5+)
+"""
+
+import hashlib
+import hmac
 import logging
 import os
 from datetime import datetime, timezone
@@ -20,9 +53,22 @@ from bqaudit.api.models import (
 )
 from bqaudit.constants import HTTP_SYNC_TIMEOUT_CHECK, HTTP_SYNC_TIMEOUT_MUTATION
 
-# Mock mode test key prefixes (Epic 3)
-MOCK_VALID_KEY_PREFIX = "VALID-"
-MOCK_NETWORK_ERROR_PREFIX = "NETWORK-ERROR"
+# Mock mode test keys (Epic 3)
+# Code Review Round 10, Issue #2: Use exact keys instead of prefix matching
+# to prevent token collision attacks
+MOCK_VALID_TEST_KEYS = {
+    "VALID-TEST-KEY",  # Used in unit tests
+    "VALID-TEST-KEY-001",
+    "VALID-TEST-KEY-002",
+    "VALID-TEST-KEY-123",  # Used in many existing tests
+    "VALID-INTEGRATION-TEST-KEY",  # Used in integration tests
+    "VALID-FIRST-KEY",  # Used in reactivation test
+    "VALID-SECOND-KEY",  # Used in reactivation test
+    "VALID-ABC-XYZ-123-SECRET",  # Used in masking test
+    "VALID-DEBUG-KEY",  # Used in security tests
+    "VALID-DEPLETED-KEY",  # Used in depletion tests
+}
+MOCK_NETWORK_ERROR_KEY = "NETWORK-ERROR-TEST"
 
 
 def _validate_json_content_type(response: httpx.Response) -> None:
@@ -46,6 +92,47 @@ def _validate_json_content_type(response: httpx.Response) -> None:
             f"Server returned invalid Content-Type: expected application/json, "
             f"got {content_type!r}. Response may be HTML error page or binary data."
         )
+
+
+def _create_hmac_signature(
+    request_body: str, master_key: str, timestamp: str
+) -> str:
+    """
+    Create HMAC-SHA256 signature for request integrity verification.
+
+    Code Review Round 10, Issue #4: Future enhancement for request signing.
+    NOT YET USED - requires server-side HMAC verification support.
+
+    This function will be used when the server API implements HMAC verification
+    to prevent MITM attacks and ensure request integrity.
+
+    Args:
+        request_body: JSON request body as string
+        master_key: Master license key used as HMAC secret
+        timestamp: ISO8601 timestamp for replay protection
+
+    Returns:
+        Hex-encoded HMAC-SHA256 signature (64 characters)
+
+    Example Usage (future):
+        timestamp = datetime.now(timezone.utc).isoformat()
+        body = json.dumps({"key": "value"})
+        signature = _create_hmac_signature(body, master_key, timestamp)
+        headers = {
+            "X-Signature": signature,
+            "X-Timestamp": timestamp,
+            # No Authorization header (key not exposed)
+        }
+    """
+    # Create signature: HMAC-SHA256(master_key, body + timestamp)
+    signature_input = f"{request_body}:{timestamp}"
+    signature = hmac.new(
+        master_key.encode("utf-8"),
+        signature_input.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+    return signature
 
 
 class ServerHealthResponse(TypedDict, total=False):
@@ -235,17 +322,22 @@ class BQAuditAPIClient:
         """
         Mock activation for Epic 3 testing.
 
+        Code Review Round 10, Issue #2: Use exact key matching instead of prefix
+        to prevent token collision attacks where any "VALID-*" key is accepted.
+
         Test keys:
-        - VALID-* → Success with 50 tokens
-        - INVALID-* → InvalidLicenseKeyError
-        - NETWORK-ERROR → NetworkError
+        - VALID-TEST-KEY-001 → Success with 50 tokens
+        - VALID-TEST-KEY-002 → Success with 50 tokens
+        - VALID-TEST-KEY-123 → Success with 50 tokens (used in tests)
+        - NETWORK-ERROR-TEST → NetworkError
+        - Any other key → InvalidLicenseKeyError
         """
-        # Simulate network error
-        if master_key.startswith(MOCK_NETWORK_ERROR_PREFIX):
+        # Simulate network error (exact match)
+        if master_key == MOCK_NETWORK_ERROR_KEY:
             raise NetworkError("Simulated network timeout")
 
-        # Simulate invalid key
-        if not master_key.startswith(MOCK_VALID_KEY_PREFIX):
+        # Whitelist of valid test keys only (exact match, no prefix)
+        if master_key not in MOCK_VALID_TEST_KEYS:
             raise InvalidLicenseKeyError(
                 "Invalid license key. Please check your key and try again."
             )
