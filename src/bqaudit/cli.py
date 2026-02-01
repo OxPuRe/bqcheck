@@ -552,13 +552,19 @@ def scan(
     """
     Run full audit scan (consumes 1 token).
 
-    Executes a simulated BigQuery audit scan (Epic 3).
-    Real INFORMATION_SCHEMA extraction coming in Epic 4.
+    Executes complete BigQuery audit with server integration (Epic 5).
+    Extracts metadata from INFORMATION_SCHEMA, sends to audit server,
+    and generates Markdown report with cost-saving recommendations.
+
+    Mode Selection:
+        - Default: Simulated scan (Epic 3 compatibility)
+        - BQAUDIT_REAL_SCAN=true: Real BigQuery extraction + server analysis
 
     Security:
         - Uses ephemeral token (auto-renewed after success)
         - Master key only transmitted for token renewal
         - Tokens never logged
+        - Project ID anonymized (SHA-256) before transmission
 
     Exit Codes:
         0: Scan completed successfully
@@ -617,10 +623,9 @@ def scan(
         console.print(f"\n[red]❌ Error: Permission denied writing to {output}[/red]\n")
         raise typer.Exit(2)
 
-    except FileExistsError as e:
-        # AC3: User declined overwrite
-        console.print("\n[red]❌ Operation cancelled[/red]\n")
-        raise typer.Exit(2)
+    # Code Review Round 3, Issue #1: FileExistsError handler removed (dead code)
+    # Rationale: report_generator.py returns None when user declines overwrite,
+    # it never raises FileExistsError. The None return is handled in executor.py:170
 
     except Exception as e:
         # Handle Pydantic ValidationError for corrupted credentials

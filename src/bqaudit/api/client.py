@@ -17,6 +17,7 @@ from bqaudit.api.models import (
     AuditRequest,
     AuditResponse,
 )
+from bqaudit.constants import HTTP_SYNC_TIMEOUT_CHECK, HTTP_SYNC_TIMEOUT_MUTATION
 
 # Mock mode test key prefixes (Epic 3)
 MOCK_VALID_KEY_PREFIX = "VALID-"
@@ -64,7 +65,7 @@ def check_server_health() -> Dict[str, Any]:
     health_url = f"{base_url}/v1/health"
 
     try:
-        with httpx.Client(timeout=5.0) as client:
+        with httpx.Client(timeout=HTTP_SYNC_TIMEOUT_CHECK) as client:
             response = client.get(health_url)
             response.raise_for_status()
             return cast(Dict[str, Any], response.json())
@@ -91,6 +92,16 @@ class BQAuditAPIClient:
     - HTTPS-only enforcement (FR62)
     - Master key never transmitted during scans (FR63)
     - Ephemeral tokens auto-renewed after scans (FR49)
+
+    Architecture Note (Code Review Round 3, Issue #2):
+    This class uses BOTH sync (httpx.Client) and async (httpx.AsyncClient):
+    - Sync methods: activate_license(), renew_token(), report_scan(), check_license()
+      Rationale: Called from synchronous CLI commands, low latency requirements
+    - Async method: execute_audit()
+      Rationale: Long-running operation (up to 15 min) with progress indicators,
+      requires concurrent timer task, benefits from async I/O
+    This intentional mixing allows simple sync API for quick operations while
+    leveraging async for complex workflows. Future refactoring could unify to async.
     """
 
     def __init__(self, mock_mode: bool = True):
@@ -171,7 +182,7 @@ class BQAuditAPIClient:
         url = f"{self.server_url}/v1/license/activate"
 
         try:
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=HTTP_SYNC_TIMEOUT_MUTATION) as client:
                 response = client.post(
                     url,
                     headers={
@@ -247,7 +258,7 @@ class BQAuditAPIClient:
         url = f"{self.server_url}/v1/scan/report"
 
         try:
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=HTTP_SYNC_TIMEOUT_MUTATION) as client:
                 response = client.post(
                     url,
                     json={
@@ -322,7 +333,7 @@ class BQAuditAPIClient:
         url = f"{self.server_url}/v1/token/renew"
 
         try:
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=HTTP_SYNC_TIMEOUT_MUTATION) as client:
                 response = client.post(
                     url,
                     headers={

@@ -147,22 +147,6 @@ class TestElapsedTimer:
         assert "Elapsed: 0m 10s" in output
 
     @pytest.mark.asyncio
-    async def test_timer_can_be_cancelled(self):
-        """Test timer task can be cancelled when server responds."""
-        # Given: Console for testing
-        console = Console(file=io.StringIO())
-
-        # When: Start timer and cancel immediately
-        with patch('bqaudit.console.console', console):
-            timer_task = asyncio.create_task(show_analysis_progress())
-            await asyncio.sleep(0.1)  # Let timer start
-            timer_task.cancel()
-
-            # Then: Timer cancellation doesn't raise unexpected exception
-            with pytest.raises(asyncio.CancelledError):
-                await timer_task
-
-    @pytest.mark.asyncio
     async def test_timer_displays_minutes_correctly(self):
         """Test timer formats minutes correctly for long operations."""
         # Given: Mock console
@@ -192,7 +176,18 @@ class TestElapsedTimer:
 
     @pytest.mark.asyncio
     async def test_timer_cleanup_on_cancellation(self):
-        """Test timer task is properly cleaned up when cancelled (Issue #11)."""
+        """
+        Test timer task cancellation and cleanup (Code Review Round 3, Issue #8).
+
+        This test consolidates two previously duplicate tests:
+        - test_timer_can_be_cancelled (basic cancellation)
+        - test_timer_cleanup_on_cancellation (full state verification)
+
+        Verifies that timer task:
+        1. Can be cancelled mid-execution
+        2. Raises CancelledError when awaited
+        3. Properly transitions to done() and cancelled() states
+        """
         # Given: Console for testing
         console = Console(file=io.StringIO())
 

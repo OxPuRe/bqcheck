@@ -280,6 +280,16 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
             PermissionError: If permission denied creating directory or writing file
             ValueError: If output_path is a directory instead of a file path
         """
+        # Code Review Round 3, Issue #4: Call Path.cwd() once at the beginning
+        # to avoid race conditions and duplicate exception handling
+        try:
+            current_dir = Path.cwd()
+        except FileNotFoundError as e:
+            raise ValueError(
+                "Current directory no longer exists (was it deleted?). "
+                "Please specify an absolute path with --output."
+            ) from e
+
         # Determine final output path
         if output_path is not None:
             # Story 5.3: Detect trailing slash (user might think it's a directory)
@@ -292,15 +302,7 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
             # Custom path provided - resolve to absolute
             if not output_path.is_absolute():
                 # Relative path - resolve against cwd
-                # Story 5.3: Handle case where cwd was deleted (race condition)
-                try:
-                    cwd = Path.cwd()
-                except FileNotFoundError as e:
-                    raise ValueError(
-                        "Current directory no longer exists (was it deleted?). "
-                        "Please specify an absolute path with --output."
-                    ) from e
-                final_path = cwd / output_path
+                final_path = current_dir / output_path
             else:
                 final_path = output_path
 
@@ -315,14 +317,7 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
             filename = f"audit-report-{date_str}.md"
 
             if output_dir is None:
-                # Story 5.3: Handle case where cwd was deleted (race condition)
-                try:
-                    output_dir = Path.cwd()
-                except FileNotFoundError as e:
-                    raise ValueError(
-                        "Current directory no longer exists (was it deleted?). "
-                        "Cannot save report without output path. Use --output with absolute path."
-                    ) from e
+                output_dir = current_dir
 
             final_path = output_dir / filename
 
