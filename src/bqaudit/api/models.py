@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
@@ -53,7 +53,7 @@ class AuditMetadata(BaseModel):
 
     Validates BigQuery metadata structure to prevent server-side errors.
 
-    Note: Uses list[dict[str, Any]] instead of typed Pydantic models for JSON serialization.
+    Note: Uses List[Dict[str, Any]] instead of typed Pydantic models for JSON serialization.
     Content validation is performed upstream via scanner.models (TableMetadata,
     QueryMetadata, AccessPattern) which are converted to dicts via model_dump()
     before being passed here (see executor.py:323-327). This ensures all required
@@ -69,17 +69,17 @@ class AuditMetadata(BaseModel):
     # Maximum serialized size per dict (1MB) to prevent DoS attacks
     MAX_DICT_SIZE_BYTES: ClassVar[int] = 1024 * 1024  # 1MB
 
-    tables: list[dict[str, Any]] = Field(
+    tables: List[Dict[str, Any]] = Field(
         description="List of table metadata dicts (validated upstream via TableMetadata.model_dump())",
         default_factory=list,
         max_length=10000,  # Prevent memory exhaustion attacks
     )
-    queries: list[dict[str, Any]] = Field(
+    queries: List[Dict[str, Any]] = Field(
         description="List of query metadata dicts (validated upstream via QueryMetadata.model_dump())",
         default_factory=list,
         max_length=10000,  # Prevent memory exhaustion attacks
     )
-    access_patterns: list[dict[str, Any]] = Field(
+    access_patterns: List[Dict[str, Any]] = Field(
         description="List of access pattern dicts (validated upstream via AccessPattern.model_dump())",
         default_factory=list,
         max_length=10000,  # Prevent memory exhaustion attacks
@@ -87,7 +87,7 @@ class AuditMetadata(BaseModel):
 
     @field_validator("tables", "queries", "access_patterns")
     @classmethod
-    def validate_dict_sizes(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def validate_dict_sizes(cls, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Validate individual dict sizes to prevent memory exhaustion.
 
@@ -143,7 +143,7 @@ class Recommendation(BaseModel):
     title: str = Field(description="Brief recommendation title")
     description: str = Field(description="Detailed recommendation description")
     savings_eur: float = Field(ge=0, description="Estimated monthly savings in EUR")
-    implementation_steps: list[str] = Field(description="Steps to implement")
+    implementation_steps: List[str] = Field(description="Steps to implement")
 
 
 class AuditSummary(BaseModel):
@@ -156,7 +156,7 @@ class AuditSummary(BaseModel):
     high_priority_count: int = Field(ge=0, description="HIGH priority count")
     medium_priority_count: int = Field(ge=0, description="MEDIUM priority count")
     low_priority_count: int = Field(ge=0, description="LOW priority count")
-    categories_breakdown: dict[str, int] = Field(
+    categories_breakdown: Dict[str, int] = Field(
         default_factory=dict, description="Count by category"
     )
 
@@ -164,7 +164,7 @@ class AuditSummary(BaseModel):
 class AuditResponse(BaseModel):
     """Response payload for audit execution."""
 
-    recommendations: list[Recommendation] = Field(
+    recommendations: List[Recommendation] = Field(
         description="List of cost-saving recommendations"
     )
     summary: AuditSummary = Field(description="Audit summary statistics")
