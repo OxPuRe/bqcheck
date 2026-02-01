@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 
 import httpx
 import typer
@@ -529,6 +530,24 @@ def scan(
     project: Annotated[
         str, typer.Option("--project", "-p", help="GCP project ID to scan")
     ],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Custom output file path for audit report",
+            dir_okay=False,
+            writable=True,
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Force overwrite existing file without prompt",
+        ),
+    ] = False,
 ) -> None:
     """
     Run full audit scan (consumes 1 token).
@@ -544,6 +563,7 @@ def scan(
     Exit Codes:
         0: Scan completed successfully
         1: Scan failed or no license found
+        2: File error (permission denied, file exists and user declined)
         4: Token pool depleted (Story 3.5)
     """
     from bqaudit.api.client import BQAuditAPIClient
@@ -574,7 +594,9 @@ def scan(
         mock_mode = os.getenv("BQAUDIT_REAL_MODE", "").lower() != "true"
         api_client = BQAuditAPIClient(mock_mode=mock_mode)
         executor = ScanExecutor(api_client)
-        executor.execute_scan_with_tokens(project)
+        executor.execute_scan_with_tokens(
+            project, output_path=output, force=force
+        )
 
         # Step 5: Show warning if was last token (AC2, Story 3.5)
         if is_last_token:
@@ -589,6 +611,16 @@ def scan(
     except typer.Exit:
         # Re-raise Exit to preserve exit code
         raise
+
+    except PermissionError as e:
+        # AC5: Permission denied writing file
+        console.print(f"\n[red]❌ Error: Permission denied writing to {output}[/red]\n")
+        raise typer.Exit(2)
+
+    except FileExistsError as e:
+        # AC3: User declined overwrite
+        console.print("\n[red]❌ Operation cancelled[/red]\n")
+        raise typer.Exit(2)
 
     except Exception as e:
         # Handle Pydantic ValidationError for corrupted credentials
