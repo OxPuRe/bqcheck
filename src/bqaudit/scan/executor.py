@@ -6,6 +6,32 @@ Manages ephemeral token lifecycle:
 - Execute scan (simulated for Epic 3)
 - Renew token after success
 - Atomic token consumption (preserve on failure)
+
+Code Review Round 11, Issue #5 - KNOWN LIMITATION:
+=================================================
+Sensitive data (master_key, ephemeral_token) is stored in Python dicts and
+never truly scrubbed from process memory after use. Python's memory management
+doesn't provide secure memory clearing mechanisms:
+
+Limitations:
+- Python strings are immutable (can't overwrite in place)
+- del/gc.collect() mark for deletion but don't zero memory
+- CPython may cache small strings/ints (internment)
+- Process memory accessible via debuggers/core dumps
+
+Mitigation Strategies Attempted:
+- Credentials removed from dict after use (del credentials["master_key"])
+- Explicit variable deletion (del master_key)
+- However, references may persist in stack frames, exception traces
+
+Future Enhancement:
+- Use ctypes/mmap for sensitive data (requires C extension)
+- Use process isolation (separate process per scan)
+- Encrypted memory regions (requires OS-level support)
+
+Current Risk: If attacker gains process memory access (gdb, core dump, cold boot),
+master key may be recoverable. Acceptable risk for CLI tool with short-lived
+processes in typical usage.
 """
 
 from __future__ import annotations
@@ -417,6 +443,7 @@ class ScanExecutor:
                     ["gcloud", "config", "get-value", "account"],
                     text=True,
                     timeout=5,  # Prevent hanging if gcloud is stuck
+                    stdin=subprocess.DEVNULL,  # Code Review Round 11, Issue #7: Prevent stdin inheritance
                     stderr=subprocess.DEVNULL,  # Suppress stderr noise
                 ).strip()
                 # Code Review Round 9, Issue #3: Proper email validation with CRLF injection prevention

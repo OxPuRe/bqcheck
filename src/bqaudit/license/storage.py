@@ -56,11 +56,31 @@ class CredentialStore:
         """
         Get credentials path (dynamically reads HOME for testability).
 
+        Code Review Round 11, Issue #4: Validate $HOME to prevent path traversal.
+
         Returns:
             Path: Path to credentials file (~/.bqaudit/credentials.json)
+
+        Raises:
+            ValueError: If HOME is not absolute or outside expected paths
         """
         home_env = os.environ.get("HOME")
         home = Path(home_env) if home_env else Path.home()
+
+        # Code Review Round 11, Issue #4: Validate $HOME is absolute
+        if not home.is_absolute():
+            raise ValueError(f"HOME must be absolute path, got: {home}")
+
+        # Code Review Round 11, Issue #4: Prevent path traversal outside safe zones
+        # Allow /home/*, /root, /Users/* (macOS), /private/var/* (macOS tmp), /tmp/*
+        home_str = str(home)
+        allowed_prefixes = ('/home/', '/root', '/Users/', '/private/var/', '/tmp/')
+        if not any(home_str.startswith(prefix) for prefix in allowed_prefixes):
+            raise ValueError(
+                f"HOME outside expected paths: {home}. "
+                f"Must start with: {', '.join(allowed_prefixes)}"
+            )
+
         return home / ".bqaudit" / "credentials.json"
 
     @classmethod
@@ -96,9 +116,47 @@ class CredentialStore:
         validated = Credentials.model_validate(credentials)
 
         credentials_path = cls._get_credentials_path()
+        dir_path = credentials_path.parent
+
+        # Code Review Round 11, Issue #4: Check for symlink attacks before mkdir
+        if dir_path.exists():
+            # CRITICAL: Check if .bqaudit directory is a symlink (potential attack)
+            if dir_path.is_symlink():
+                raise ValueError(
+                    f"Credentials directory is a symlink (potential attack): {dir_path}. "
+                    f"Remove it: rm {dir_path}"
+                )
+
+            # Check if it's actually a directory (not a file)
+            if not dir_path.is_dir():
+                raise ValueError(
+                    f"Credentials directory path is not a directory: {dir_path}"
+                )
+
+            # Check permissions are safe (should be 0o700 - owner only)
+            mode = dir_path.stat().st_mode
+            if mode & 0o077:  # Check if group/other have any permissions
+                logger.warning(
+                    f"Credentials directory has unsafe permissions: {oct(mode)}"
+                )
+                # Try to fix permissions automatically
+                try:
+                    dir_path.chmod(0o700)
+                except (PermissionError, OSError) as e:
+                    raise ValueError(
+                        f"Credentials directory has unsafe permissions: {oct(mode)}. "
+                        f"Cannot auto-fix ({e}). Run: chmod 700 {dir_path}"
+                    )
 
         # Create directory if needed with secure permissions (owner access only)
-        credentials_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        dir_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+        # Code Review Round 11, Issue #4: Verify it's still not a symlink after creation
+        # (defend against TOCTOU race condition)
+        if dir_path.is_symlink():
+            raise ValueError(
+                f"Credentials directory became a symlink after creation: {dir_path}"
+            )
 
         # Write to temp file with secure permissions from creation
         temp_path = credentials_path.with_suffix(".tmp")
@@ -210,7 +268,32 @@ class CredentialStore:
                 )
 
         # Load and validate credentials
-        data = json.loads(credentials_path.read_text())
+        # Code Review Round 11, Issue #1: Validate JSON depth to prevent stack overflow
+        try:
+            data = json.loads(credentials_path.read_text())
+        except RecursionError:
+            raise ValueError(
+                "Credentials file has deeply nested JSON structure (potential attack). "
+                f"Delete and recreate: rm {credentials_path}"
+            )
+
+        # Validate nesting depth manually (Pydantic doesn't enforce this)
+        def check_depth(obj: Any, depth: int = 0, max_depth: int = 20) -> None:
+            """Check JSON nesting depth to prevent stack overflow attacks."""
+            if depth > max_depth:
+                raise ValueError(
+                    f"Credentials file has JSON nesting > {max_depth} levels (potential attack). "
+                    f"Delete and recreate: rm {credentials_path}"
+                )
+            if isinstance(obj, dict):
+                for v in obj.values():
+                    check_depth(v, depth + 1, max_depth)
+            elif isinstance(obj, list):
+                for item in obj:
+                    check_depth(item, depth + 1, max_depth)
+
+        check_depth(data)
+
         validated = Credentials.model_validate(data)
         logger.info("Credentials loaded and validated successfully")
         return validated.model_dump(mode="json")
