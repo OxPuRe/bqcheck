@@ -41,6 +41,14 @@ class CredentialStore:
     - ephemeral_token: Current single-use scan token
     - server_url: API server URL
     - activated_at: ISO8601 timestamp of activation
+
+    **Code Review Round 9, Issue #4 - Concurrency Warning:**
+    This implementation uses atomic file rename but does NOT use file-level
+    locking (fcntl.flock). Running multiple concurrent scans can cause race
+    conditions where token_pool_balance becomes inconsistent. Avoid running
+    parallel scans with the same credentials file.
+
+    TODO: Implement file-level advisory locking for concurrent access safety.
     """
 
     @classmethod

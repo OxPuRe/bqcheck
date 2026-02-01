@@ -424,10 +424,11 @@ class BQAuditAPIClient:
             TokenRenewalResponse with new balance decremented by 1
         """
         # Simulate new token (different from original)
-        import random
-        import string
+        # Code Review Round 9, Issue #2: Use secrets module for cryptographically
+        # secure random token generation, not random.choices() which is predictable
+        import secrets
 
-        token_suffix = "".join(random.choices(string.ascii_lowercase, k=8))
+        token_suffix = secrets.token_hex(8)  # 16 hex chars (8 bytes)
 
         return TokenRenewalResponse(
             ephemeral_token=f"mock-renewed-token-{token_suffix}",

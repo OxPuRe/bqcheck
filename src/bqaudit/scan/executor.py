@@ -243,19 +243,51 @@ class ScanExecutor:
 
             if "used_tokens" not in credentials:
                 credentials["used_tokens"] = []
+
+            # Code Review Round 9, Issue #5: Validate used_tokens length before append
+            # Prevent unbounded growth and log when truncation occurs
+            MAX_USED_TOKENS = 100  # Reasonable limit for audit trail
+
+            if len(credentials["used_tokens"]) >= MAX_USED_TOKENS:
+                logger.warning(
+                    f"used_tokens list at maximum capacity ({MAX_USED_TOKENS}). "
+                    "Keeping only last 5 tokens for recent audit trail."
+                )
+                credentials["used_tokens"] = credentials["used_tokens"][-4:]  # Keep 4, add 1 = 5
+
             credentials["used_tokens"].append(
                 {
                     "token_hash": token_hash,  # SHA-256 hash for security
                     "used_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
-            # Keep only last 5 used tokens to prevent bloat
-            credentials["used_tokens"] = credentials["used_tokens"][-5:]
+
+            # Keep only last 5 used tokens in normal operation to prevent credential file bloat
+            if len(credentials["used_tokens"]) > 5:
+                credentials["used_tokens"] = credentials["used_tokens"][-5:]
 
             # Use server-provided balance (server decrements on its side)
             # In mock mode: mock calculates new_balance = current - 1
             # In real mode: server tracks balance and returns new balance
-            credentials["token_pool_balance"] = new_token_data.token_pool_balance
+
+            # Code Review Round 9, Issue #6: Validate balance after renewal
+            # Prevent server bugs/MITM from corrupting token pool
+            new_balance = new_token_data.token_pool_balance
+            old_balance = credentials["token_pool_balance"]
+
+            if new_balance < 0:
+                raise ValueError(
+                    f"Server returned invalid token pool balance: {new_balance}. "
+                    "Balance cannot be negative. Please contact support."
+                )
+
+            if new_balance > old_balance:
+                logger.warning(
+                    f"Token pool balance INCREASED after scan: {old_balance} → {new_balance}. "
+                    "This is unexpected and may indicate a server-side issue."
+                )
+
+            credentials["token_pool_balance"] = new_balance
             CredentialStore.update(credentials)
 
             # AC1: Display success with balance (for simulated scans only)
@@ -387,8 +419,19 @@ class ScanExecutor:
                     timeout=5,  # Prevent hanging if gcloud is stuck
                     stderr=subprocess.DEVNULL,  # Suppress stderr noise
                 ).strip()
-                # Validate email format
-                if not email or "@" not in email:
+                # Code Review Round 9, Issue #3: Proper email validation with CRLF injection prevention
+                import re
+
+                # Validate email format (basic RFC 5322 subset)
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+                if not email:
+                    raise ValueError("gcloud returned empty email")
+                # Check for CRLF injection (prevents log poisoning)
+                if '\n' in email or '\r' in email:
+                    raise ValueError(f"Invalid email (contains newline): {email!r}")
+                # Validate format
+                if not re.match(email_pattern, email):
                     raise ValueError(f"Invalid email format from gcloud: {email!r}")
             except subprocess.TimeoutExpired:
                 # Code Review Round 7: gcloud hung, can't get email
