@@ -334,9 +334,16 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
         if final_path.exists() and not force:
             if interactive:
                 # Prompt user for overwrite
-                response = input(f"File exists: {final_path}. Overwrite? [y/N] ")
-                if response.lower() not in ["y", "yes"]:
-                    # User declined - return None to indicate no action taken
+                # Code Review Round 7, Issue #8: Validate input, handle non-TTY, limit length
+                try:
+                    response = input(f"File exists: {final_path}. Overwrite? [y/N] ").strip()[:10]
+                    if response.lower() not in ("y", "yes"):
+                        # User declined - return None to indicate no action taken
+                        return None
+                except (EOFError, KeyboardInterrupt):
+                    # Code Review Round 7, Issue #8: Handle non-TTY or user cancellation
+                    # EOFError: No TTY (batch mode, piped input)
+                    # KeyboardInterrupt: User pressed Ctrl+C
                     return None
             else:
                 # Non-interactive and not force - return None to let caller decide
@@ -346,9 +353,30 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
         report_content = self.generate_report()
         try:
             final_path.write_text(report_content, encoding="utf-8")
+
+            # Code Review Round 7, Issue #5: Verify write succeeded (detect disk full, encoding errors)
+            # Reading back is cheap for text files and prevents silent corruption
+            try:
+                written_size = final_path.stat().st_size
+                expected_size = len(report_content.encode("utf-8"))
+                if written_size != expected_size:
+                    raise IOError(
+                        f"Partial write detected: wrote {written_size} bytes, expected {expected_size}"
+                    )
+            except OSError as e:
+                # Cleanup partial file on verification failure
+                final_path.unlink(missing_ok=True)
+                raise IOError(f"Failed to verify write: {e}") from e
+
         except PermissionError as e:
             raise PermissionError(
                 f"Permission denied writing to {final_path}"
             ) from e
+        except (OSError, IOError, UnicodeEncodeError) as e:
+            # Code Review Round 7, Issue #5: Catch all file operation errors
+            # OSError: disk full, filesystem errors
+            # IOError: I/O operation failed
+            # UnicodeEncodeError: encoding failed
+            raise IOError(f"Failed to write report to {final_path}: {e}") from e
 
         return final_path

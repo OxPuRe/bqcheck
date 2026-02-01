@@ -55,19 +55,25 @@ class AuditMetadata(BaseModel):
     QueryMetadata, AccessPattern) which are converted to dicts via model_dump()
     before being passed here (see executor.py:323-327). This ensures all required
     fields are present and correctly typed.
+
+    Code Review Round 7, Issue #4: Added max_items limits to prevent memory exhaustion
+    attacks where malicious payloads contain millions of empty dicts.
     """
 
     tables: list[dict] = Field(
         description="List of table metadata dicts (validated upstream via TableMetadata.model_dump())",
         default_factory=list,
+        max_length=10000,  # Prevent memory exhaustion attacks
     )
     queries: list[dict] = Field(
         description="List of query metadata dicts (validated upstream via QueryMetadata.model_dump())",
         default_factory=list,
+        max_length=10000,  # Prevent memory exhaustion attacks
     )
     access_patterns: list[dict] = Field(
         description="List of access pattern dicts (validated upstream via AccessPattern.model_dump())",
         default_factory=list,
+        max_length=10000,  # Prevent memory exhaustion attacks
     )
 
 

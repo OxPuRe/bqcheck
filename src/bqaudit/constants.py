@@ -49,19 +49,51 @@ def is_real_mode() -> bool:
     """
     Check if real mode is enabled via BQAUDIT_REAL_MODE environment variable.
 
+    Code Review Round 7, Issue #7: Added validation and warnings for invalid values
+    to prevent silent feature flag failures where users expect real mode but get mock.
+
     Returns:
         True if BQAUDIT_REAL_MODE=true, False otherwise (default: mock mode)
     """
+    import logging
     import os
-    return os.getenv(ENV_VAR_REAL_MODE, "").lower() == "true"
+
+    value = os.getenv(ENV_VAR_REAL_MODE, "").strip().lower()
+
+    # Code Review Round 7, Issue #7: Warn on invalid values
+    if value and value not in ("true", "false", ""):
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"{ENV_VAR_REAL_MODE}={value!r} is invalid. "
+            "Use 'true' or 'false'. Defaulting to mock mode."
+        )
+        return False
+
+    return value == "true"
 
 
 def is_real_scan() -> bool:
     """
     Check if real scan is enabled via BQAUDIT_REAL_SCAN environment variable.
 
+    Code Review Round 7, Issue #7: Added validation and warnings for invalid values
+    to prevent silent feature flag failures where users expect real scan but get simulated.
+
     Returns:
         True if BQAUDIT_REAL_SCAN=true, False otherwise (default: simulated scan)
     """
+    import logging
     import os
-    return os.getenv(ENV_VAR_REAL_SCAN, "").lower() == "true"
+
+    value = os.getenv(ENV_VAR_REAL_SCAN, "").strip().lower()
+
+    # Code Review Round 7, Issue #7: Warn on invalid values
+    if value and value not in ("true", "false", ""):
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"{ENV_VAR_REAL_SCAN}={value!r} is invalid. "
+            "Use 'true' or 'false'. Defaulting to simulated scan."
+        )
+        return False
+
+    return value == "true"

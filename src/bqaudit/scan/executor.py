@@ -362,21 +362,28 @@ class ScanExecutor:
         except PermissionDenied:
             # AC6: BigQuery permission error
             # Get user email for IAM binding command
+            # Code Review Round 7, Issue #1: Add timeout, validation, stderr capture
             try:
                 email = subprocess.check_output(
                     ["gcloud", "config", "get-value", "account"],
                     text=True,
+                    timeout=5,  # Prevent hanging if gcloud is stuck
+                    stderr=subprocess.DEVNULL,  # Suppress stderr noise
                 ).strip()
-                # Handle empty email (no active account)
-                if not email:
-                    raise ValueError("gcloud returned empty email")
+                # Validate email format
+                if not email or "@" not in email:
+                    raise ValueError(f"Invalid email format from gcloud: {email!r}")
+            except subprocess.TimeoutExpired:
+                # Code Review Round 7: gcloud hung, can't get email
+                logger.warning("gcloud command timed out, cannot retrieve user email")
+                email = None
             except (subprocess.CalledProcessError, FileNotFoundError, ValueError, OSError):
                 # Story 5.3: Narrow exception catching to specific gcloud CLI failures
                 # CalledProcessError: gcloud command failed
                 # FileNotFoundError: gcloud not installed
-                # ValueError: empty email
+                # ValueError: invalid email format
                 # OSError: permission issues
-                email = "<your-email@example.com>"
+                email = None
             exit_code = handle_bigquery_permission_error(console, project_id, email)
             # Story 5.3: Raise exception instead of sys.exit() from async context
             raise ScanError(exit_code, "BigQuery permission denied")
@@ -436,7 +443,10 @@ class ScanExecutor:
                 # This prevents resource leaks (timer keeps running after error).
                 from bqaudit.constants import TIMER_CANCEL_TIMEOUT_SECONDS
 
-                timer_task.cancel()
+                # Code Review Round 7, Issue #2: Robust task cancellation with exception handling
+                if not timer_task.done():
+                    timer_task.cancel()
+
                 try:
                     # Story 5.3: Add timeout to prevent race condition where timer doesn't cancel
                     await asyncio.wait_for(timer_task, timeout=TIMER_CANCEL_TIMEOUT_SECONDS)
@@ -449,6 +459,11 @@ class ScanExecutor:
                         f"Timer task did not cancel within {TIMER_CANCEL_TIMEOUT_SECONDS}s. "
                         "Possible console.print() blocking (slow terminal/NFS)."
                     )
+                except Exception as e:
+                    # Code Review Round 7, Issue #2: Catch unexpected timer exceptions
+                    # Timer task might raise from run_in_executor() or other failures
+                    logger.error(f"Unexpected timer task exception during cleanup: {e}")
+                    # Don't re-raise - we're in cleanup, audit error takes precedence
 
         except asyncio.TimeoutError:
             # Story 5.3: Global timeout exceeded (20 minutes)

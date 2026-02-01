@@ -92,6 +92,9 @@ async def show_analysis_progress() -> None:
     Code Review Round 4, Issue #2: Use get_running_loop() instead of deprecated
     get_event_loop() for correct async context behavior (Python 3.10+).
 
+    Code Review Round 7, Issue #6: Added timeout protection on executor tasks
+    to prevent deadlock if console.print() hangs (slow SSH, NFS mount, etc).
+
     Returns:
         None (runs until cancelled, never returns normally)
 
@@ -106,17 +109,25 @@ async def show_analysis_progress() -> None:
         ...     except asyncio.CancelledError:
         ...         pass
     """
+    import logging
     from bqaudit.constants import GLOBAL_AUDIT_TIMEOUT_SECONDS
 
+    logger = logging.getLogger(__name__)
     start_time = datetime.now(timezone.utc)
     loop = asyncio.get_running_loop()  # Correct for async context (not deprecated)
 
+    async def safe_print(msg: str, timeout: float = 2.0) -> None:
+        """Print with timeout protection to prevent executor thread starvation."""
+        try:
+            await asyncio.wait_for(
+                loop.run_in_executor(None, console.print, msg),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Console print timed out after {timeout}s (slow terminal?)")
+
     # Non-blocking initial message
-    await loop.run_in_executor(
-        None,
-        console.print,
-        "⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)..."
-    )
+    await safe_print("⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)...")
 
     while True:
         await asyncio.sleep(5)
@@ -125,17 +136,11 @@ async def show_analysis_progress() -> None:
         # Story 5.3: Add max timeout protection to prevent infinite loop
         # Uses same timeout as executor.py execute_audit() for consistency
         if elapsed >= GLOBAL_AUDIT_TIMEOUT_SECONDS:
-            await loop.run_in_executor(
-                None,
-                console.print,
+            await safe_print(
                 f"[yellow]⚠️  Maximum timeout reached ({int(GLOBAL_AUDIT_TIMEOUT_SECONDS // 60)} minutes)[/yellow]"
             )
             break
 
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)
-        await loop.run_in_executor(
-            None,
-            console.print,
-            f"⏱️  Elapsed: {minutes}m {seconds}s"
-        )
+        await safe_print(f"⏱️  Elapsed: {minutes}m {seconds}s")

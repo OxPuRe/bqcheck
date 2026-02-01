@@ -25,7 +25,7 @@ from bqaudit.constants import (
 
 
 def handle_bigquery_permission_error(
-    console: Console, project_id: str, email: str
+    console: Console, project_id: str, email: str | None
 ) -> int:
     """
     Handle BigQuery permission denied errors (AC6).
@@ -33,7 +33,7 @@ def handle_bigquery_permission_error(
     Args:
         console: Rich console for output
         project_id: GCP project ID
-        email: User email for IAM binding
+        email: User email for IAM binding (None if gcloud unavailable)
 
     Returns:
         EXIT_AUTH_ERROR code (3)
@@ -43,7 +43,11 @@ def handle_bigquery_permission_error(
     console.print(
         f"[yellow]gcloud projects add-iam-policy-binding {project_id} \\[/yellow]"
     )
-    console.print(f"[yellow]  --member=user:{email} \\[/yellow]")
+    # Code Review Round 7, Issue #1: Handle None email gracefully
+    if email:
+        console.print(f"[yellow]  --member=user:{email} \\[/yellow]")
+    else:
+        console.print("[yellow]  --member=user:YOUR-EMAIL@example.com \\[/yellow]")
     console.print(
         "[yellow]  --role=roles/bigquery.metadataViewer[/yellow]"
     )

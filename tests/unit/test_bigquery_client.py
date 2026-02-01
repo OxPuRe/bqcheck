@@ -37,7 +37,7 @@ def test_successful_authentication(mock_client_class, mock_default):
         credentials=mock_creds, project="test-project"
     )
     # Verify project verification was performed
-    mock_bq_client.list_datasets.assert_called_once_with(max_results=1)
+    mock_bq_client.list_datasets.assert_called_once_with(max_results=1, timeout=30.0)
     assert client == mock_bq_client
 
 
@@ -96,6 +96,6 @@ def test_project_verification(mock_client_class, mock_default):
     client = authenticate_bigquery("verified-project")
 
     # Verify that list_datasets was called to verify project access
-    mock_bq_client.list_datasets.assert_called_once_with(max_results=1)
+    mock_bq_client.list_datasets.assert_called_once_with(max_results=1, timeout=30.0)
     # Verify client was returned
     assert client == mock_bq_client
