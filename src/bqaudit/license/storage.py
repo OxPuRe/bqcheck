@@ -63,12 +63,17 @@ class CredentialStore:
         Process:
         1. Validate credentials against Credentials model
         2. Create directory if needed
-        3. Write to temp file
-        4. Set chmod 600 on temp file
+        3. Create temp file with 0o600 permissions from creation (secure!)
+        4. Write credentials to temp file
         5. Atomic rename to final location
+        6. Cleanup temp file on any error
 
-        This ensures credentials are always stored with secure permissions
-        and writes are atomic (no partial file if interrupted).
+        Code Review Round 6, Issue #1 (CRITICAL): Use os.open() to create file
+        with secure permissions (0o600) from the start. This prevents TOCTOU
+        vulnerability where credentials are temporarily world-readable.
+
+        Code Review Round 6, Issue #4: Add try/finally to ensure temp file
+        cleanup on errors (PermissionError, OSError, KeyboardInterrupt).
 
         Args:
             credentials: Dictionary containing credential data
@@ -87,17 +92,54 @@ class CredentialStore:
         # Create directory if needed with secure permissions (owner access only)
         credentials_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-        # Write to temp file first (atomic write pattern)
-        # Use model_dump to ensure consistent serialization
+        # Write to temp file with secure permissions from creation
         temp_path = credentials_path.with_suffix(".tmp")
-        temp_path.write_text(json.dumps(validated.model_dump(mode="json"), indent=2))
 
-        # Set chmod 600 BEFORE moving to final location (critical security step)
-        temp_path.chmod(0o600)
+        try:
+            # Round 6 Issue #1: Create file with 0o600 permissions IMMEDIATELY
+            # This prevents TOCTOU race condition where credentials are readable
+            # between write_text() and chmod() calls
+            fd = os.open(
+                str(temp_path),
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                mode=0o600  # Secure permissions from creation!
+            )
 
-        # Atomic rename (POSIX guarantees atomicity)
-        temp_path.rename(credentials_path)
-        logger.info("Credentials saved successfully with chmod 600")
+            try:
+                # Write through file descriptor
+                with os.fdopen(fd, 'w') as f:
+                    f.write(json.dumps(validated.model_dump(mode="json"), indent=2))
+                    f.write('\n')  # Trailing newline for cleaner files
+            except Exception:
+                # If write fails, close FD manually before cleanup
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                raise
+
+            # Atomic rename (POSIX guarantees atomicity)
+            temp_path.rename(credentials_path)
+            logger.info("Credentials saved successfully with chmod 600")
+
+        except FileExistsError:
+            # Temp file already exists (concurrent save or stale file)
+            logger.error(f"Temp file already exists: {temp_path}")
+            raise OSError(
+                f"Credentials save conflict: temporary file already exists. "
+                f"If no other save is running, delete {temp_path} manually."
+            )
+
+        except Exception:
+            # Round 6 Issue #4: Cleanup temp file on ANY error
+            try:
+                temp_path.unlink()
+                logger.debug(f"Cleaned up temp file after error: {temp_path}")
+            except FileNotFoundError:
+                pass  # Already gone, that's fine
+            except OSError as cleanup_err:
+                logger.warning(f"Failed to cleanup temp file {temp_path}: {cleanup_err}")
+            raise
 
     @classmethod
     def load(cls) -> Dict[str, Any]:
@@ -130,13 +172,33 @@ class CredentialStore:
 
         # Verify permissions (critical security check)
         mode = credentials_path.stat().st_mode
-        # Check if group (07) or other (0177) have any permissions
-        if mode & 0o177:
-            logger.error("Unsafe permissions detected on credentials file")
-            raise UnsafePermissionsError(
-                f"Credentials file has unsafe permissions. "
-                f"Run: chmod 600 {credentials_path}"
-            )
+
+        # Code Review Round 6, Issue #6: Fix bitmask 0o177 → 0o077
+        # 0o077 = 0b000_111_111 = group (rwx) + other (rwx)
+        # 0o177 = 0b001_111_111 = WRONG (also checks owner execute bit!)
+        # Check if group or other have ANY permissions
+        if mode & 0o077:
+            logger.warning("Unsafe permissions detected on credentials file")
+
+            # Code Review Round 6, Issue #5: Try to auto-fix permissions
+            try:
+                credentials_path.chmod(0o600)
+                logger.info("Automatically corrected permissions to 0o600")
+                # Re-read mode to verify fix succeeded
+                mode = credentials_path.stat().st_mode
+                if mode & 0o077:
+                    # Still unsafe after chmod (shouldn't happen)
+                    raise UnsafePermissionsError(
+                        f"Failed to set secure permissions on {credentials_path}. "
+                        f"Manual intervention required: chmod 600 {credentials_path}"
+                    )
+            except (PermissionError, OSError) as e:
+                # Can't fix automatically, tell user
+                logger.error(f"Cannot auto-fix permissions: {e}")
+                raise UnsafePermissionsError(
+                    f"Credentials file has unsafe permissions (cannot auto-fix: {e}). "
+                    f"Run: chmod 600 {credentials_path}"
+                )
 
         # Load and validate credentials
         data = json.loads(credentials_path.read_text())

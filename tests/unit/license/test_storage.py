@@ -127,22 +127,32 @@ class TestCredentialStore:
         with pytest.raises(CredentialNotFoundError):
             CredentialStore.load()
 
-    def test_load_verifies_chmod_600(self, tmp_path, monkeypatch):
-        """AC5: Test that load() verifies file permissions."""
+    def test_load_auto_fixes_unsafe_permissions(self, tmp_path, monkeypatch):
+        """AC5 (Round 6, Issue #5): Test that load() auto-fixes unsafe permissions."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials file with unsafe permissions
         cred_dir = tmp_path / ".bqaudit"
         cred_dir.mkdir(parents=True)
         cred_file = cred_dir / "credentials.json"
-        cred_file.write_text('{"master_key": "TEST"}')
+
+        # Need complete credentials to avoid ValidationError after auto-fix
+        credentials = {
+            "master_key": "TEST-KEY-123",
+            "token_pool_balance": 50,
+            "ephemeral_token": "token123",
+            "server_url": "https://api.bqaudit.com",
+            "activated_at": "2026-01-30T10:00:00+00:00",
+        }
+        cred_file.write_text(json.dumps(credentials, indent=2))
         cred_file.chmod(0o644)  # Unsafe: group/other can read
 
-        with pytest.raises(UnsafePermissionsError) as exc_info:
-            CredentialStore.load()
+        # Should auto-fix permissions and load successfully
+        result = CredentialStore.load()
 
-        assert "unsafe permissions" in str(exc_info.value).lower()
-        assert "chmod 600" in str(exc_info.value)
+        assert result["master_key"] == "TEST-KEY-123"
+        # Verify permissions were corrected to 0o600
+        assert cred_file.stat().st_mode & 0o777 == 0o600
 
     def test_exists_returns_true_if_file_exists(self, tmp_path, monkeypatch):
         """Test exists() returns True when credentials file exists."""

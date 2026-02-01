@@ -76,15 +76,14 @@ class TestLicenseStatusCLI:
         assert "bqaudit license activate" in result.stdout
         assert "https://bqaudit.com/pricing" in result.stdout
 
-    def test_status_unsafe_permissions(self, tmp_path, monkeypatch):
+    def test_status_auto_fixes_unsafe_permissions(self, tmp_path, monkeypatch):
         """
-        AC3: Warn about unsafe file permissions.
+        AC3 (Round 6, Issue #5): Auto-fix unsafe file permissions.
 
         Tests that when credentials file has permissions != 600:
-        - Security warning shown
-        - Credentials not displayed
-        - chmod fix instructions provided
-        - Exit code 1
+        - Permissions are automatically corrected to 0o600
+        - Status is displayed successfully
+        - Exit code 0
         """
         monkeypatch.setenv("HOME", str(tmp_path))
 
@@ -106,11 +105,12 @@ class TestLicenseStatusCLI:
 
         result = runner.invoke(app, ["license", "status"])
 
-        # AC3: Verify security warning
-        assert result.exit_code == ExitCode.FILE_ERROR
-        assert "unsafe permissions" in result.stdout.lower()
-        assert "chmod 600" in result.stdout
-        assert "ABC-XYZ" not in result.stdout  # Credentials not shown
+        # AC3 (updated): Verify auto-fix succeeded
+        assert result.exit_code == 0
+        assert "License Status: Active" in result.stdout
+        assert "ABC-XYZ-***" in result.stdout  # Credentials shown (masked)
+        # Verify permissions were corrected
+        assert cred_file.stat().st_mode & 0o777 == 0o600
 
     def test_status_corrupted_json(self, tmp_path, monkeypatch):
         """

@@ -69,7 +69,16 @@ def check_server_health() -> Dict[str, Any]:
         with httpx.Client(timeout=HTTP_SYNC_TIMEOUT_CHECK) as client:
             response = client.get(health_url)
             response.raise_for_status()
-            return cast(Dict[str, Any], response.json())
+
+            # Code Review Round 6, Issue #3: Replace cast() with runtime validation
+            # cast() only helps type checkers, provides NO runtime safety
+            data = response.json()
+            if not isinstance(data, dict):
+                raise NetworkError(
+                    f"Server returned invalid health response type: "
+                    f"expected dict, got {type(data).__name__}"
+                )
+            return data
     except httpx.ConnectError as e:
         raise httpx.ConnectError(f"Cannot reach bqaudit server: {e}")
     except httpx.TimeoutException:
@@ -279,7 +288,16 @@ class BQAuditAPIClient:
                     },
                 )
                 response.raise_for_status()
-                return cast(Dict[str, Any], response.json())
+
+                # Code Review Round 6, Issue #3: Replace cast() with runtime validation
+                data = response.json()
+                if not isinstance(data, dict):
+                    raise NetworkError(
+                        f"Server returned invalid scan report response type: "
+                        f"expected dict, got {type(data).__name__}"
+                    )
+                return data
+
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             raise NetworkError(f"Network error reporting scan: {e}")
         except httpx.HTTPStatusError as e:

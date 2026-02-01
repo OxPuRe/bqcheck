@@ -6,7 +6,6 @@ All queries use consistent formatting with SQL injection protection.
 """
 
 import logging
-from functools import lru_cache
 
 from bqaudit.scanner.metadata_extractor import _validate_project_id
 
@@ -20,7 +19,9 @@ __all__ = [
 ]
 
 
-@lru_cache(maxsize=32)
+# Code Review Round 6, Issue #2: Removed @lru_cache decorator
+# Caching BEFORE validation allows cache poisoning and SQL injection bypass.
+# Query generation is cheap (string formatting), so caching is premature optimization.
 def get_simple_test_query() -> str:
     """
     Get simple test query for API enablement check.
@@ -32,7 +33,7 @@ def get_simple_test_query() -> str:
     return "SELECT 1"
 
 
-@lru_cache(maxsize=32)
+# Code Review Round 6, Issue #2: Removed @lru_cache to prevent validation bypass
 def get_tables_query(project_id: str, limit: int = 1) -> str:
     """
     Get query to retrieve table metadata from INFORMATION_SCHEMA.
@@ -60,7 +61,7 @@ def get_tables_query(project_id: str, limit: int = 1) -> str:
     """
 
 
-@lru_cache(maxsize=32)
+# Code Review Round 6, Issue #2: Removed @lru_cache to prevent validation bypass
 def get_table_count_query(project_id: str) -> str:
     """
     Get query to count total tables in project.
@@ -82,7 +83,7 @@ def get_table_count_query(project_id: str) -> str:
     """
 
 
-@lru_cache(maxsize=32)
+# Code Review Round 6, Issue #2: Removed @lru_cache to prevent validation bypass
 def get_sample_queries_query(project_id: str, limit: int = 3) -> str:
     """
     Get query to retrieve sample SELECT queries from JOBS_BY_PROJECT.

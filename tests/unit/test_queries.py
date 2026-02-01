@@ -76,11 +76,12 @@ class TestTablesQuery:
         with pytest.raises(ValueError, match="Invalid limit value"):
             get_tables_query("test-project", limit="10")  # type: ignore
 
-    def test_query_is_cached(self):
-        """Test query result is cached for same inputs."""
+    def test_query_is_not_cached(self):
+        """Test query result is NOT cached (Round 6: removed @lru_cache)."""
         query1 = get_tables_query("test-project", limit=5)
         query2 = get_tables_query("test-project", limit=5)
-        assert query1 is query2  # Same object due to lru_cache
+        assert query1 is not query2  # Different objects, no cache
+        assert query1 == query2  # But same content
 
 
 class TestTableCountQuery:
@@ -103,11 +104,12 @@ class TestTableCountQuery:
         with pytest.raises(ValueError, match="Invalid project_id format"):
             get_table_count_query("project_with_underscores")
 
-    def test_query_is_cached(self):
-        """Test query result is cached."""
+    def test_query_is_not_cached(self):
+        """Test query result is NOT cached (Round 6: removed @lru_cache)."""
         query1 = get_table_count_query("test-project")
         query2 = get_table_count_query("test-project")
-        assert query1 is query2  # Same object due to lru_cache
+        assert query1 is not query2  # Different objects, no cache
+        assert query1 == query2  # But same content
 
 
 class TestSampleQueriesQuery:
@@ -157,11 +159,12 @@ class TestSampleQueriesQuery:
         with pytest.raises(ValueError, match="Invalid limit value"):
             get_sample_queries_query("test-project", limit=3.5)  # type: ignore
 
-    def test_query_is_cached(self):
-        """Test query result is cached."""
+    def test_query_is_not_cached(self):
+        """Test query result is NOT cached (Round 6: removed @lru_cache)."""
         query1 = get_sample_queries_query("test-project", limit=3)
         query2 = get_sample_queries_query("test-project", limit=3)
-        assert query1 is query2  # Same object due to lru_cache
+        assert query1 is not query2  # Different objects, no cache
+        assert query1 == query2  # But same content
 
 
 class TestModuleExports:
