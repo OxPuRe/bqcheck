@@ -99,12 +99,23 @@ async def show_analysis_progress() -> None:
         ...     except asyncio.CancelledError:
         ...         pass
     """
+    from bqaudit.constants import GLOBAL_AUDIT_TIMEOUT_SECONDS
+
     start_time = datetime.now(timezone.utc)
     console.print("⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)...")
 
     while True:
         await asyncio.sleep(5)
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+
+        # Story 5.3: Add max timeout protection to prevent infinite loop
+        # Uses same timeout as executor.py execute_audit() for consistency
+        if elapsed >= GLOBAL_AUDIT_TIMEOUT_SECONDS:
+            console.print(
+                f"[yellow]⚠️  Maximum timeout reached ({int(GLOBAL_AUDIT_TIMEOUT_SECONDS // 60)} minutes)[/yellow]"
+            )
+            break
+
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)
         console.print(f"⏱️  Elapsed: {minutes}m {seconds}s")

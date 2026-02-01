@@ -378,7 +378,9 @@ class BQAuditAPIClient:
             stop_after_attempt,
             wait_exponential,
             retry_if_exception_type,
+            after_log,
         )
+        import logging
         from bqaudit.constants import (
             HTTP_TIMEOUT_TOTAL,
             HTTP_TIMEOUT_CONNECT,
@@ -392,9 +394,15 @@ class BQAuditAPIClient:
             wait=wait_exponential(
                 multiplier=1, min=HTTP_RETRY_MIN_WAIT, max=HTTP_RETRY_MAX_WAIT
             ),
+            # Story 5.3: Only retry on truly transient errors
+            # ConnectError: connection failures (DNS, refused connection) - transient
+            # TimeoutException: request timeout - transient
+            # NOT NetworkError: too broad, includes permanent errors (SSL, certificates)
             retry=retry_if_exception_type(
-                (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError)
+                (httpx.ConnectError, httpx.TimeoutException)
             ),
+            # Story 5.3: Log retry attempts for debugging
+            after=after_log(logging.getLogger(__name__), logging.WARNING),
         )
         async def _send_request():
             """Send HTTP request with retry logic."""

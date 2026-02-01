@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import sys
 from datetime import datetime, timezone
 
 import httpx
@@ -47,6 +48,21 @@ from bqaudit.scan.simulator import simulate_scan
 logger = logging.getLogger(__name__)
 
 
+class ScanError(Exception):
+    """
+    Base exception for scan errors that should exit the CLI.
+
+    Attributes:
+        exit_code: The exit code to use when terminating the CLI
+        message: Human-readable error message
+    """
+
+    def __init__(self, exit_code: int, message: str):
+        self.exit_code = exit_code
+        self.message = message
+        super().__init__(message)
+
+
 class ScanExecutor:
     """
     Manages scan execution with automatic token lifecycle.
@@ -68,7 +84,12 @@ class ScanExecutor:
         """
         self.api_client = api_client
 
-    def execute_scan_with_tokens(self, project_id: str) -> ScanResult:
+    def execute_scan_with_tokens(
+        self,
+        project_id: str,
+        output_path: "Path | None" = None,
+        force: bool = False,
+    ) -> ScanResult:
         """
         Execute scan with automatic token management.
 
@@ -138,9 +159,14 @@ class ScanExecutor:
                 # Note: Using asyncio.run() in sync context. This creates a new event loop.
                 # LIMITATION: Cannot be called from existing async context (would raise RuntimeError).
                 # This is acceptable for CLI entry point but limits future async refactoring.
-                audit_response = asyncio.run(
-                    self.execute_real_scan(project_id, credentials['ephemeral_token'])
-                )
+                try:
+                    audit_response = asyncio.run(
+                        self.execute_real_scan(project_id, credentials['ephemeral_token'])
+                    )
+                except ScanError as e:
+                    # Story 5.3: Handle errors from async context properly
+                    # Error handlers already displayed messages, just exit with code
+                    sys.exit(e.exit_code)
 
                 # AC5: Display audit results immediately (credentials updated later atomically)
                 show_success_message(
@@ -148,12 +174,20 @@ class ScanExecutor:
                     audit_response.summary.total_potential_savings_eur
                 )
 
-                # Generate and save Markdown report (Story 5.2)
+                # Generate and save Markdown report (Story 5.2, 5.4)
                 from bqaudit.report_generator import MarkdownReportGenerator
 
                 generator = MarkdownReportGenerator(audit_response, project_name=project_id)
-                report_path = generator.save_report()
-                typer.echo(f'\n📄 Audit report saved to: {report_path}')
+                report_path = generator.save_report(
+                    output_path=output_path,
+                    force=force,
+                    interactive=False,  # CLI handles prompts at higher level
+                )
+                if report_path is None:
+                    # File exists and user/config declined overwrite
+                    console.print('[yellow]⚠️  Report not saved: file exists (use --force to overwrite)[/yellow]')
+                else:
+                    console.print(f'[green]✅ Audit report saved to:[/green] {report_path}')
 
                 # Create a ScanResult wrapper for compatibility
                 result = ScanResult(
@@ -308,12 +342,14 @@ class ScanExecutor:
                 logger.info("Extracting access patterns...")
                 access_patterns = extract_access_patterns(client, project_id, days=90)
 
-            # Convert Pydantic models to dicts for JSON serialization
-            metadata = {
-                "tables": [table.model_dump() for table in table_metadata],
-                "queries": [query.model_dump() for query in query_metadata],
-                "access_patterns": [pattern.model_dump() for pattern in access_patterns],
-            }
+            # Convert Pydantic models to dicts and create validated AuditMetadata
+            from bqaudit.api.models import AuditMetadata
+
+            metadata = AuditMetadata(
+                tables=[table.model_dump() for table in table_metadata],
+                queries=[query.model_dump() for query in query_metadata],
+                access_patterns=[pattern.model_dump() for pattern in access_patterns],
+            )
 
             logger.info(
                 f"Extracted metadata: {len(table_metadata)} tables, "
@@ -331,20 +367,38 @@ class ScanExecutor:
                 # Handle empty email (no active account)
                 if not email:
                     raise ValueError("gcloud returned empty email")
-            except Exception:
+            except (subprocess.CalledProcessError, FileNotFoundError, ValueError, OSError):
+                # Story 5.3: Narrow exception catching to specific gcloud CLI failures
+                # CalledProcessError: gcloud command failed
+                # FileNotFoundError: gcloud not installed
+                # ValueError: empty email
+                # OSError: permission issues
                 email = "<your-email@example.com>"
-            handle_bigquery_permission_error(console, project_id, email)
+            exit_code = handle_bigquery_permission_error(console, project_id, email)
+            # Story 5.3: Raise exception instead of sys.exit() from async context
+            raise ScanError(exit_code, "BigQuery permission denied")
 
         except NotFound:
             # Project not found error
-            handle_bigquery_not_found_error(console, project_id)
+            exit_code = handle_bigquery_not_found_error(console, project_id)
+            raise ScanError(exit_code, "BigQuery project not found")
 
         except Forbidden:
             # Access forbidden error
-            handle_bigquery_forbidden_error(console, project_id)
+            exit_code = handle_bigquery_forbidden_error(console, project_id)
+            raise ScanError(exit_code, "BigQuery access forbidden")
 
         # Step 2: Anonymize project_id (SHA-256)
         project_id_hash = hashlib.sha256(project_id.encode()).hexdigest()
+
+        # Story 5.3: Validate SHA-256 hash format (64 hex characters)
+        # Use explicit check instead of assert (assertions disabled with python -O)
+        if len(project_id_hash) != 64 or not all(
+            c in "0123456789abcdef" for c in project_id_hash
+        ):
+            raise ValueError(
+                f"Invalid SHA-256 hash format (expected 64 hex chars): {project_id_hash}"
+            )
 
         # Step 3: Create audit request
         audit_request = AuditRequest(
@@ -362,27 +416,51 @@ class ScanExecutor:
             timer_task = asyncio.create_task(show_analysis_progress())
 
             try:
-                response = await self.api_client.execute_audit(
-                    audit_request=audit_request,
-                    ephemeral_token=ephemeral_token,
+                # Story 5.3: Global timeout for execute_audit
+                # Prevents indefinite waits during retries or server-side processing
+                from bqaudit.constants import GLOBAL_AUDIT_TIMEOUT_SECONDS
+
+                response = await asyncio.wait_for(
+                    self.api_client.execute_audit(
+                        audit_request=audit_request,
+                        ephemeral_token=ephemeral_token,
+                    ),
+                    timeout=GLOBAL_AUDIT_TIMEOUT_SECONDS
                 )
             finally:
                 # IMPORTANT: This finally block executes BEFORE exception handlers below.
                 # Timer is guaranteed to be cancelled before any error handler runs.
                 # This prevents resource leaks (timer keeps running after error).
+                from bqaudit.constants import TIMER_CANCEL_TIMEOUT_SECONDS
+
                 timer_task.cancel()
                 try:
-                    await timer_task
+                    # Story 5.3: Add timeout to prevent race condition where timer doesn't cancel
+                    await asyncio.wait_for(timer_task, timeout=TIMER_CANCEL_TIMEOUT_SECONDS)
                 except asyncio.CancelledError:
+                    # Expected: timer was cancelled successfully
                     pass
+                except asyncio.TimeoutError:
+                    # Unexpected: timer didn't cancel within timeout (console.print() blocked?)
+                    logger.warning(
+                        f"Timer task did not cancel within {TIMER_CANCEL_TIMEOUT_SECONDS}s. "
+                        "Possible console.print() blocking (slow terminal/NFS)."
+                    )
+
+        except asyncio.TimeoutError:
+            # Story 5.3: Global timeout exceeded (20 minutes)
+            exit_code = handle_timeout_error(console)
+            raise ScanError(exit_code, "Audit timeout exceeded")
 
         except httpx.TimeoutException:
             # AC8: Timeout error
-            handle_timeout_error(console)
+            exit_code = handle_timeout_error(console)
+            raise ScanError(exit_code, "HTTP timeout")
 
         except (httpx.ConnectError, httpx.NetworkError):
             # AC7: Network error
-            handle_network_error(console)
+            exit_code = handle_network_error(console)
+            raise ScanError(exit_code, "Network error")
 
         except Exception as e:
             # Catch RetryError from tenacity and check underlying cause
@@ -392,9 +470,11 @@ class ScanExecutor:
                 if e.last_attempt and e.last_attempt.exception():
                     original_exc = e.last_attempt.exception()
                     if isinstance(original_exc, httpx.TimeoutException):
-                        handle_timeout_error(console)
+                        exit_code = handle_timeout_error(console)
+                        raise ScanError(exit_code, "Timeout after retries")
                     elif isinstance(original_exc, (httpx.ConnectError, httpx.NetworkError)):
-                        handle_network_error(console)
+                        exit_code = handle_network_error(console)
+                        raise ScanError(exit_code, "Network error after retries")
             # Re-raise if not handled
             raise
 

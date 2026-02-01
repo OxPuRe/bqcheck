@@ -307,9 +307,9 @@ class TestScanCommandProgressIndicators:
         Scenario:
         - BigQuery raises PermissionDenied
         - Display actionable error message
-        - Exit code 3
+        - Raises ScanError with exit code 3
         """
-        from bqaudit.scan.executor import ScanExecutor
+        from bqaudit.scan.executor import ScanExecutor, ScanError
         from bqaudit.api.client import BQAuditAPIClient
         from google.api_core.exceptions import PermissionDenied
 
@@ -323,14 +323,14 @@ class TestScanCommandProgressIndicators:
                 client = BQAuditAPIClient(mock_mode=False)
                 executor = ScanExecutor(client)
 
-                # Should exit with code 3
-                with pytest.raises(SystemExit) as exc_info:
+                # Story 5.3: Should raise ScanError with code 3 instead of sys.exit()
+                with pytest.raises(ScanError) as exc_info:
                     await executor.execute_real_scan(
                         project_id="my-project",
                         ephemeral_token="eph_test_token"
                     )
 
-                assert exc_info.value.code == 3
+                assert exc_info.value.exit_code == 3
 
                 # Verify error message was printed (captured by Rich to stderr)
                 captured = capsys.readouterr()
@@ -344,9 +344,9 @@ class TestScanCommandProgressIndicators:
         Scenario:
         - Server communication fails with ConnectError (after retries)
         - Display actionable error message
-        - Exit code 1
+        - Raises ScanError with exit code 1
         """
-        from bqaudit.scan.executor import ScanExecutor
+        from bqaudit.scan.executor import ScanExecutor, ScanError
         from bqaudit.api.client import BQAuditAPIClient
 
         # Mock BigQuery and server responses
@@ -368,14 +368,14 @@ class TestScanCommandProgressIndicators:
                             client = BQAuditAPIClient(mock_mode=False)
                             executor = ScanExecutor(client)
 
-                            # Should exit with code 1
-                            with pytest.raises(SystemExit) as exc_info:
+                            # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
+                            with pytest.raises(ScanError) as exc_info:
                                 await executor.execute_real_scan(
                                     project_id="my-project",
                                     ephemeral_token="eph_test_token"
                                 )
 
-                            assert exc_info.value.code == 1
+                            assert exc_info.value.exit_code == 1
 
                             # Verify error message was printed
                             captured = capsys.readouterr()
@@ -389,9 +389,9 @@ class TestScanCommandProgressIndicators:
         Scenario:
         - Server times out (after retries)
         - Display actionable error message
-        - Exit code 1
+        - Raises ScanError with exit code 1
         """
-        from bqaudit.scan.executor import ScanExecutor
+        from bqaudit.scan.executor import ScanExecutor, ScanError
         from bqaudit.api.client import BQAuditAPIClient
 
         # Mock BigQuery and server responses
@@ -413,14 +413,14 @@ class TestScanCommandProgressIndicators:
                             client = BQAuditAPIClient(mock_mode=False)
                             executor = ScanExecutor(client)
 
-                            # Should exit with code 1
-                            with pytest.raises(SystemExit) as exc_info:
+                            # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
+                            with pytest.raises(ScanError) as exc_info:
                                 await executor.execute_real_scan(
                                     project_id="my-project",
                                     ephemeral_token="eph_test_token"
                                 )
 
-                            assert exc_info.value.code == 1
+                            assert exc_info.value.exit_code == 1
 
                             # Verify error message was printed
                             captured = capsys.readouterr()

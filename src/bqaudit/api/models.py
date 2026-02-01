@@ -44,6 +44,33 @@ class TokenRenewalResponse(BaseModel):
 # Audit Request/Response Models (Story 5.1)
 
 
+class AuditMetadata(BaseModel):
+    """
+    Structured metadata for audit request (Story 5.3).
+
+    Validates BigQuery metadata structure to prevent server-side errors.
+
+    Note: Uses list[dict] instead of typed Pydantic models for JSON serialization.
+    Content validation is performed upstream via scanner.models (TableMetadata,
+    QueryMetadata, AccessPattern) which are converted to dicts via model_dump()
+    before being passed here (see executor.py:323-327). This ensures all required
+    fields are present and correctly typed.
+    """
+
+    tables: list[dict] = Field(
+        description="List of table metadata dicts (validated upstream via TableMetadata.model_dump())",
+        default_factory=list,
+    )
+    queries: list[dict] = Field(
+        description="List of query metadata dicts (validated upstream via QueryMetadata.model_dump())",
+        default_factory=list,
+    )
+    access_patterns: list[dict] = Field(
+        description="List of access pattern dicts (validated upstream via AccessPattern.model_dump())",
+        default_factory=list,
+    )
+
+
 class AuditRequest(BaseModel):
     """Request payload for audit execution."""
 
@@ -53,7 +80,7 @@ class AuditRequest(BaseModel):
         pattern="^[a-f0-9]{64}$",
         description="Anonymized GCP project ID (SHA-256 hash)",
     )
-    metadata: dict = Field(
+    metadata: AuditMetadata = Field(
         description="Anonymized BigQuery metadata (tables, queries, access_patterns)"
     )
 

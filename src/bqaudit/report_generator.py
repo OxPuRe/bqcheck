@@ -245,32 +245,115 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
 
         return report
 
-    def save_report(self, output_dir: Path | None = None) -> Path:
+    def save_report(
+        self,
+        output_dir: Path | None = None,
+        output_path: Path | None = None,
+        force: bool = False,
+        interactive: bool = False,
+    ) -> Path | None:
         """
         Generate and save report to file.
 
         Args:
-            output_dir: Directory to save report (defaults to current working directory)
+            output_dir: Directory to save report (deprecated, use output_path instead)
+            output_path: Custom output file path (absolute or relative)
+            force: Force overwrite without prompt
+            interactive: Enable interactive prompts for overwrite
 
         Returns:
-            Absolute path to saved report file
+            Absolute path to saved report file if successfully saved.
+            Returns None in these cases (Story 5.3):
+            - File exists, interactive=True, and user declines overwrite
+            - File exists, interactive=False, force=False
+
+            **IMPORTANT for callers**: Always check for None return value.
+            Example:
+                path = generator.save_report(...)
+                if path is None:
+                    # Handle file not saved (already exists)
+                    print("Warning: Report not saved")
+                else:
+                    print(f"Report saved to {path}")
+
+        Raises:
+            PermissionError: If permission denied creating directory or writing file
+            ValueError: If output_path is a directory instead of a file path
         """
-        # Generate filename with date
-        date_str = self.timestamp.strftime("%Y-%m-%d")
-        filename = f"audit-report-{date_str}.md"
+        # Determine final output path
+        if output_path is not None:
+            # Story 5.3: Detect trailing slash (user might think it's a directory)
+            if str(output_path).endswith('/') or str(output_path).endswith('\\'):
+                raise ValueError(
+                    f"output_path appears to be a directory (ends with slash): {output_path}. "
+                    "Please specify a filename, e.g., 'reports/audit.md' not 'reports/'"
+                )
 
-        # Determine output directory
-        if output_dir is None:
-            output_dir = Path.cwd()
+            # Custom path provided - resolve to absolute
+            if not output_path.is_absolute():
+                # Relative path - resolve against cwd
+                # Story 5.3: Handle case where cwd was deleted (race condition)
+                try:
+                    cwd = Path.cwd()
+                except FileNotFoundError as e:
+                    raise ValueError(
+                        "Current directory no longer exists (was it deleted?). "
+                        "Please specify an absolute path with --output."
+                    ) from e
+                final_path = cwd / output_path
+            else:
+                final_path = output_path
 
-        # Ensure directory exists
-        output_dir.mkdir(parents=True, exist_ok=True)
+            # Story 5.3: Validate that output_path is not a directory
+            if final_path.exists() and final_path.is_dir():
+                raise ValueError(
+                    f"output_path must be a file path, not a directory: {final_path}"
+                )
+        else:
+            # Default behavior - use output_dir (legacy) or cwd
+            date_str = self.timestamp.strftime("%Y-%m-%d")
+            filename = f"audit-report-{date_str}.md"
 
-        # Full path
-        output_path = output_dir / filename
+            if output_dir is None:
+                # Story 5.3: Handle case where cwd was deleted (race condition)
+                try:
+                    output_dir = Path.cwd()
+                except FileNotFoundError as e:
+                    raise ValueError(
+                        "Current directory no longer exists (was it deleted?). "
+                        "Cannot save report without output path. Use --output with absolute path."
+                    ) from e
+
+            final_path = output_dir / filename
+
+        # Ensure parent directory exists
+        try:
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+        except PermissionError as e:
+            raise PermissionError(
+                f"Permission denied creating directory {final_path.parent}"
+            ) from e
+
+        # Check if file exists and handle overwrite
+        # Story 5.3: Return None instead of raising exception for better separation of concerns
+        if final_path.exists() and not force:
+            if interactive:
+                # Prompt user for overwrite
+                response = input(f"File exists: {final_path}. Overwrite? [y/N] ")
+                if response.lower() not in ["y", "yes"]:
+                    # User declined - return None to indicate no action taken
+                    return None
+            else:
+                # Non-interactive and not force - return None to let caller decide
+                return None
 
         # Generate and save report
         report_content = self.generate_report()
-        output_path.write_text(report_content, encoding="utf-8")
+        try:
+            final_path.write_text(report_content, encoding="utf-8")
+        except PermissionError as e:
+            raise PermissionError(
+                f"Permission denied writing to {final_path}"
+            ) from e
 
-        return output_path
+        return final_path

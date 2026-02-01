@@ -5,29 +5,28 @@ Provides user-friendly error messages with actionable guidance for:
 - Network errors (AC7)
 - Timeout errors (AC8)
 
-NOTE: These handlers call sys.exit() directly for CLI convenience.
-This makes them CLI-specific and harder to test/reuse in library contexts.
-For future refactoring: consider separating message formatting from exit behavior,
-allowing callers to decide when to exit. Current design prioritizes simplicity
-for MVP CLI use case.
+Design: Error handlers format/display messages and RETURN exit codes.
+This allows callers to decide when to exit (e.g., sys.exit(code)),
+making the handlers testable and reusable in library contexts.
 """
 
-import sys
+from typing import NoReturn
 
 from rich.console import Console
 
-# Exit codes (from Story 5.1)
-EXIT_SUCCESS = 0
-EXIT_NETWORK_ERROR = 1
-EXIT_FILE_ERROR = 2
-EXIT_AUTH_ERROR = 3
-EXIT_NO_TOKENS = 4
-EXIT_RATE_LIMIT = 5
+from bqaudit.constants import (
+    EXIT_SUCCESS,
+    EXIT_NETWORK_ERROR,
+    EXIT_FILE_ERROR,
+    EXIT_AUTH_ERROR,
+    EXIT_NO_TOKENS,
+    EXIT_RATE_LIMIT,
+)
 
 
 def handle_bigquery_permission_error(
     console: Console, project_id: str, email: str
-) -> None:
+) -> int:
     """
     Handle BigQuery permission denied errors (AC6).
 
@@ -36,7 +35,8 @@ def handle_bigquery_permission_error(
         project_id: GCP project ID
         email: User email for IAM binding
 
-    Exits with code 3 (AUTH_ERROR)
+    Returns:
+        EXIT_AUTH_ERROR code (3)
     """
     console.print("[red]❌ Error: Insufficient BigQuery permissions[/red]")
     console.print("\nRun this command to grant permissions:")
@@ -47,40 +47,42 @@ def handle_bigquery_permission_error(
     console.print(
         "[yellow]  --role=roles/bigquery.metadataViewer[/yellow]"
     )
-    sys.exit(EXIT_AUTH_ERROR)
+    return EXIT_AUTH_ERROR
 
 
-def handle_network_error(console: Console) -> None:
+def handle_network_error(console: Console) -> int:
     """
     Handle network communication errors (AC7).
 
     Args:
         console: Rich console for output
 
-    Exits with code 1 (NETWORK_ERROR)
+    Returns:
+        EXIT_NETWORK_ERROR code (1)
     """
     console.print("[red]❌ Error: Unable to reach audit server. Check your internet connection.[/red]")
     console.print("\nRetry the scan when connection is restored.")
     console.print("[dim]Your token was not consumed.[/dim]")
-    sys.exit(EXIT_NETWORK_ERROR)
+    return EXIT_NETWORK_ERROR
 
 
-def handle_timeout_error(console: Console) -> None:
+def handle_timeout_error(console: Console) -> int:
     """
     Handle server timeout errors (AC8).
 
     Args:
         console: Rich console for output
 
-    Exits with code 1 (NETWORK_ERROR)
+    Returns:
+        EXIT_NETWORK_ERROR code (1)
     """
     console.print("[red]❌ Error: Audit timeout (>15 minutes). This may indicate a very large project.[/red]")
     console.print("\nContact support if the issue persists.")
     console.print("[dim]Your token was not consumed.[/dim]")
-    sys.exit(EXIT_NETWORK_ERROR)
+    return EXIT_NETWORK_ERROR
 
 
-def handle_bigquery_not_found_error(console: Console, project_id: str) -> None:
+def handle_bigquery_not_found_error(console: Console, project_id: str) -> int:
     """
     Handle BigQuery project not found errors.
 
@@ -88,14 +90,15 @@ def handle_bigquery_not_found_error(console: Console, project_id: str) -> None:
         console: Rich console for output
         project_id: GCP project ID that was not found
 
-    Exits with code 2 (FILE_ERROR)
+    Returns:
+        EXIT_FILE_ERROR code (2)
     """
     console.print(f"[red]❌ Error: Project '{project_id}' not found[/red]")
     console.print("\nVerify the project ID is correct.")
-    sys.exit(EXIT_FILE_ERROR)
+    return EXIT_FILE_ERROR
 
 
-def handle_bigquery_forbidden_error(console: Console, project_id: str) -> None:
+def handle_bigquery_forbidden_error(console: Console, project_id: str) -> int:
     """
     Handle BigQuery access forbidden errors.
 
@@ -103,8 +106,9 @@ def handle_bigquery_forbidden_error(console: Console, project_id: str) -> None:
         console: Rich console for output
         project_id: GCP project ID
 
-    Exits with code 3 (AUTH_ERROR)
+    Returns:
+        EXIT_AUTH_ERROR code (3)
     """
     console.print(f"[red]❌ Error: Access denied to project '{project_id}'[/red]")
     console.print("\nEnsure you have access to this project.")
-    sys.exit(EXIT_AUTH_ERROR)
+    return EXIT_AUTH_ERROR

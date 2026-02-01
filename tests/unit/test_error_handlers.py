@@ -30,11 +30,10 @@ class TestBigQueryErrorMessages:
         console = Console(file=io.StringIO())
 
         # When: Handle permission error
-        with pytest.raises(SystemExit) as exc_info:
-            handle_bigquery_permission_error(console, project_id, email)
+        exit_code = handle_bigquery_permission_error(console, project_id, email)
 
         # Then: Exit code is AUTH_ERROR
-        assert exc_info.value.code == EXIT_AUTH_ERROR
+        assert exit_code == EXIT_AUTH_ERROR
 
         # Then: Message includes gcloud command with placeholders filled
         output = console.file.getvalue()
@@ -50,11 +49,10 @@ class TestBigQueryErrorMessages:
         console = Console(file=io.StringIO())
 
         # When: Handle not found error
-        with pytest.raises(SystemExit) as exc_info:
-            handle_bigquery_not_found_error(console, project_id)
+        exit_code = handle_bigquery_not_found_error(console, project_id)
 
         # Then: Exit code is FILE_ERROR
-        assert exc_info.value.code == EXIT_FILE_ERROR
+        assert exit_code == EXIT_FILE_ERROR
 
         # Then: Message includes project ID
         output = console.file.getvalue()
@@ -68,11 +66,10 @@ class TestBigQueryErrorMessages:
         console = Console(file=io.StringIO())
 
         # When: Handle forbidden error
-        with pytest.raises(SystemExit) as exc_info:
-            handle_bigquery_forbidden_error(console, project_id)
+        exit_code = handle_bigquery_forbidden_error(console, project_id)
 
         # Then: Exit code is AUTH_ERROR
-        assert exc_info.value.code == EXIT_AUTH_ERROR
+        assert exit_code == EXIT_AUTH_ERROR
 
         # Then: Message includes project ID
         output = console.file.getvalue()
@@ -89,11 +86,10 @@ class TestNetworkErrorMessages:
         console = Console(file=io.StringIO())
 
         # When: Handle network error
-        with pytest.raises(SystemExit) as exc_info:
-            handle_network_error(console)
+        exit_code = handle_network_error(console)
 
         # Then: Exit code is NETWORK_ERROR
-        assert exc_info.value.code == EXIT_NETWORK_ERROR
+        assert exit_code == EXIT_NETWORK_ERROR
 
         # Then: Message includes troubleshooting guidance
         output = console.file.getvalue()
@@ -108,8 +104,10 @@ class TestNetworkErrorMessages:
         console = Console(file=io.StringIO())
 
         # When: Handle network error
-        with pytest.raises(SystemExit):
-            handle_network_error(console)
+        exit_code = handle_network_error(console)
+
+        # Then: Returns correct exit code
+        assert exit_code == EXIT_NETWORK_ERROR
 
         # Then: Message indicates token not consumed
         output = console.file.getvalue()
@@ -125,11 +123,10 @@ class TestTimeoutErrorMessages:
         console = Console(file=io.StringIO())
 
         # When: Handle timeout error
-        with pytest.raises(SystemExit) as exc_info:
-            handle_timeout_error(console)
+        exit_code = handle_timeout_error(console)
 
         # Then: Exit code is NETWORK_ERROR
-        assert exc_info.value.code == EXIT_NETWORK_ERROR
+        assert exit_code == EXIT_NETWORK_ERROR
 
         # Then: Message includes large project guidance
         output = console.file.getvalue()
@@ -144,8 +141,10 @@ class TestTimeoutErrorMessages:
         console = Console(file=io.StringIO())
 
         # When: Handle timeout error
-        with pytest.raises(SystemExit):
-            handle_timeout_error(console)
+        exit_code = handle_timeout_error(console)
+
+        # Then: Returns correct exit code
+        assert exit_code == EXIT_NETWORK_ERROR
 
         # Then: Message indicates token not consumed
         output = console.file.getvalue()
@@ -156,36 +155,31 @@ class TestExitCodes:
     """Test exit codes are correct (AC6, AC7, AC8)."""
 
     def test_permission_error_exit_code(self):
-        """Test permission error exits with AUTH_ERROR code."""
+        """Test permission error returns AUTH_ERROR code."""
         console = Console(file=io.StringIO())
-        with pytest.raises(SystemExit) as exc_info:
-            handle_bigquery_permission_error(console, "project", "email@example.com")
-        assert exc_info.value.code == 3
+        exit_code = handle_bigquery_permission_error(console, "project", "email@example.com")
+        assert exit_code == 3
 
     def test_not_found_error_exit_code(self):
-        """Test not found error exits with FILE_ERROR code."""
+        """Test not found error returns FILE_ERROR code."""
         console = Console(file=io.StringIO())
-        with pytest.raises(SystemExit) as exc_info:
-            handle_bigquery_not_found_error(console, "project")
-        assert exc_info.value.code == 2
+        exit_code = handle_bigquery_not_found_error(console, "project")
+        assert exit_code == 2
 
     def test_forbidden_error_exit_code(self):
-        """Test forbidden error exits with AUTH_ERROR code."""
+        """Test forbidden error returns AUTH_ERROR code."""
         console = Console(file=io.StringIO())
-        with pytest.raises(SystemExit) as exc_info:
-            handle_bigquery_forbidden_error(console, "project")
-        assert exc_info.value.code == 3
+        exit_code = handle_bigquery_forbidden_error(console, "project")
+        assert exit_code == 3
 
     def test_network_error_exit_code(self):
-        """Test network error exits with NETWORK_ERROR code."""
+        """Test network error returns NETWORK_ERROR code."""
         console = Console(file=io.StringIO())
-        with pytest.raises(SystemExit) as exc_info:
-            handle_network_error(console)
-        assert exc_info.value.code == 1
+        exit_code = handle_network_error(console)
+        assert exit_code == 1
 
     def test_timeout_error_exit_code(self):
-        """Test timeout error exits with NETWORK_ERROR code."""
+        """Test timeout error returns NETWORK_ERROR code."""
         console = Console(file=io.StringIO())
-        with pytest.raises(SystemExit) as exc_info:
-            handle_timeout_error(console)
-        assert exc_info.value.code == 1
+        exit_code = handle_timeout_error(console)
+        assert exit_code == 1
