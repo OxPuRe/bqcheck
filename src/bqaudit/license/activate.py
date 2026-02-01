@@ -69,7 +69,7 @@ def activate_license(master_key: str, mock_mode: bool = True) -> Dict[str, Any]:
         )
 
         # Return success data
-        # Code Review Round 9, Issue #1: Do NOT return master_key to prevent
+        # Do NOT return master_key to prevent
         # exposure in debuggers, stack traces, or memory dumps
         return {
             "token_pool_balance": response.token_pool_balance,

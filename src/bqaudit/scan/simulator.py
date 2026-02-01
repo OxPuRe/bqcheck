@@ -21,8 +21,8 @@ def _get_simulation_delay() -> float:
     """
     Get simulation delay with validation.
 
-    Code Review Round 10, Issue #1 & #5: Validate float from environment variable.
-    Prevents DoS attacks via inf/nan/negative/excessive delay values.
+    Validates float from environment variable to prevent DoS attacks
+    via inf/nan/negative/excessive delay values.
 
     Returns:
         Validated float delay in seconds (0.0 to 3600.0)

@@ -1,34 +1,10 @@
 """
 HTTP client for bqaudit server API communication.
 
-Code Review Round 10, Issue #4 - SECURITY WARNING:
-===============================================
-Current implementation transmits master_key in Authorization header without
-request signing or HMAC. This creates MITM attack vectors:
-
-Vulnerability:
-- Master key sent in every request (activate, renew)
-- No request-specific secrets (nonce, timestamp)
-- If MITM captures Authorization header, they can replay it
-- No message integrity verification (request body could be modified)
-
-Attack Scenario:
-1. Attacker intercepts HTTPS connection (compromised CA, MITM proxy)
-2. Captures: Authorization: Bearer MASTER-KEY-123
-3. Uses captured header for unlimited token renewal
-4. Exhausts token budget on behalf of victim
-
-Current Mitigation:
-- HTTPS enforced (prevents basic MITM)
-- Relies on TLS security only
-
-Future Enhancement (requires server-side support):
-- Implement HMAC-SHA256 request signing
-- Add nonce/timestamp to prevent replay
-- Use ephemeral tokens from renewal, not master key
-- Consider mutual TLS (client certificates)
-
-TODO: Add HMAC signing when server API supports it (Epic 5+)
+Security Note:
+Master key transmitted in Authorization header relies on HTTPS security.
+Future enhancement: HMAC-SHA256 request signing with nonce/timestamp for
+additional protection against replay attacks.
 """
 
 import hashlib
@@ -54,7 +30,7 @@ from bqaudit.api.models import (
 from bqaudit.constants import HTTP_SYNC_TIMEOUT_CHECK, HTTP_SYNC_TIMEOUT_MUTATION
 
 # Mock mode test keys (Epic 3)
-# Code Review Round 10, Issue #2: Use exact keys instead of prefix matching
+# Use exact keys instead of prefix matching
 # to prevent token collision attacks
 MOCK_VALID_TEST_KEYS = {
     "VALID-TEST-KEY",  # Used in unit tests
@@ -73,10 +49,10 @@ MOCK_NETWORK_ERROR_KEY = "NETWORK-ERROR-TEST"
 
 def _validate_json_content_type(response: httpx.Response) -> None:
     """
-    Validate response Content-Type is application/json (Code Review Round 8, Issue #5).
+    Validate response Content-Type is application/json.
 
-    Prevents type confusion attacks where server returns HTML error pages,
-    binary data, or other Content-Types that would fail during JSON parsing.
+    Prevents type confusion attacks where server returns HTML error pages
+    or binary data instead of expected JSON.
 
     Args:
         response: httpx Response object
@@ -100,7 +76,7 @@ def _create_hmac_signature(
     """
     Create HMAC-SHA256 signature for request integrity verification.
 
-    Code Review Round 10, Issue #4: Future enhancement for request signing.
+    Future enhancement for request signing.
     NOT YET USED - requires server-side HMAC verification support.
 
     This function will be used when the server API implements HMAC verification
@@ -139,7 +115,7 @@ def _constant_time_compare(a: str, b: str) -> bool:
     """
     Constant-time string comparison to prevent timing attacks.
 
-    Code Review Round 11, Issue #4: Use hmac.compare_digest for secure comparison
+    Use hmac.compare_digest for secure comparison
     of sensitive strings (keys, tokens). Standard == operator exits early on mismatch,
     leaking key structure via timing side-channel.
 
@@ -157,7 +133,7 @@ def _validate_response_size_and_parse_json(response: httpx.Response) -> Any:
     """
     Validate response size and parse JSON safely.
 
-    Code Review Round 11, Issue #3: Limit response size to prevent OOM DoS.
+    Limit response size to prevent OOM DoS.
     Malicious server could return gigabytes of JSON causing memory exhaustion.
 
     Args:
@@ -173,7 +149,7 @@ def _validate_response_size_and_parse_json(response: httpx.Response) -> Any:
     # Maximum response size: 50MB (plenty for audit responses)
     MAX_RESPONSE_SIZE = 50 * 1024 * 1024  # 50MB
 
-    # Code Review Round 11, Issue #3: Check Content-Length header before parsing
+    # Check Content-Length header before parsing
     content_length_str = response.headers.get("content-length")
     if content_length_str:
         try:
@@ -191,7 +167,7 @@ def _validate_response_size_and_parse_json(response: httpx.Response) -> Any:
             # In production, real HTTP headers are always strings
             pass
 
-    # Code Review Round 11, Issue #3: Check actual response body size
+    # Check actual response body size
     # (Content-Length may be missing or wrong)
     try:
         body_size = len(response.content)
@@ -245,7 +221,7 @@ def check_server_health() -> Dict[str, Any]:
         This endpoint does NOT transmit any user data or project information.
         It only checks server availability and version compatibility.
     """
-    # Code Review Round 8, Issue #2: Validate API URL from environment variable
+    # Validate API URL from environment variable
     from urllib.parse import urlparse
 
     base_url = os.getenv("BQAUDIT_API_URL", "https://api.bqaudit.com")
@@ -267,12 +243,12 @@ def check_server_health() -> Dict[str, Any]:
             response = client.get(health_url)
             response.raise_for_status()
 
-            # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+            # Validate Content-Type before parsing JSON
             _validate_json_content_type(response)
 
-            # Code Review Round 6, Issue #3: Replace cast() with runtime validation
+            # Replace cast() with runtime validation
             # cast() only helps type checkers, provides NO runtime safety
-            # Code Review Round 11, Issue #3: Validate response size before parsing
+            # Validate response size before parsing
             data = _validate_response_size_and_parse_json(response)
             if not isinstance(data, dict):
                 raise NetworkError(
@@ -281,7 +257,7 @@ def check_server_health() -> Dict[str, Any]:
                 )
             return data
     except httpx.ConnectError as e:
-        # Code Review Round 8, Issue #3: Don't expose internal exception details
+        # Don't expose internal exception details
         # Original exception may contain DNS lookup info, IP addresses, etc.
         raise httpx.ConnectError("Cannot reach bqaudit server (network error)")
     except httpx.TimeoutException:
@@ -312,15 +288,10 @@ class BQAuditAPIClient:
     - Master key never transmitted during scans (FR63)
     - Ephemeral tokens auto-renewed after scans (FR49)
 
-    Architecture Note (Code Review Round 3, Issue #2):
-    This class uses BOTH sync (httpx.Client) and async (httpx.AsyncClient):
-    - Sync methods: activate_license(), renew_token(), report_scan(), check_license()
-      Rationale: Called from synchronous CLI commands, low latency requirements
-    - Async method: execute_audit()
-      Rationale: Long-running operation (up to 15 min) with progress indicators,
-      requires concurrent timer task, benefits from async I/O
-    This intentional mixing allows simple sync API for quick operations while
-    leveraging async for complex workflows. Future refactoring could unify to async.
+    Architecture Note:
+    Uses both sync (activate_license, renew_token, report_scan) and async
+    (execute_audit) methods. Sync for quick CLI commands, async for long-running
+    audit operations with progress indicators.
     """
 
     def __init__(self, mock_mode: bool = True):
@@ -333,7 +304,7 @@ class BQAuditAPIClient:
         """
         self.mock_mode = mock_mode
 
-        # Code Review Round 8, Issue #6: Warn if mock mode enabled
+        # Warn if mock mode enabled
         if mock_mode:
             logging.getLogger(__name__).info(
                 "API client initialized in MOCK MODE - using test responses. "
@@ -341,7 +312,7 @@ class BQAuditAPIClient:
             )
         server_url_raw = os.getenv("BQAUDIT_API_URL", "https://api.bqaudit.com")
 
-        # Code Review Round 8, Issue #2: Validate API URL from environment variable
+        # Validate API URL from environment variable
         # Prevents URL injection attacks, path traversal, and credential redirect
         from urllib.parse import urlparse
 
@@ -353,7 +324,6 @@ class BQAuditAPIClient:
                 raise ValueError(f"Invalid URL format: {server_url_raw}")
 
             # Enforce HTTPS in ALL modes (AC8 - FR62)
-            # Code Review Round 8: Removed mock_mode exception - HTTPS always required
             if parsed.scheme != "https":
                 raise HTTPSRequiredError(
                     f"HTTPS required for server communication (got {parsed.scheme}://). "
@@ -397,10 +367,10 @@ class BQAuditAPIClient:
         """
         Mock activation for Epic 3 testing.
 
-        Code Review Round 10, Issue #2: Use exact key matching instead of prefix
+        Use exact key matching instead of prefix
         to prevent token collision attacks where any "VALID-*" key is accepted.
 
-        Code Review Round 11, Issue #4: Use constant-time comparison to prevent
+        Use constant-time comparison to prevent
         timing attacks that could leak key structure.
 
         Test keys:
@@ -463,9 +433,9 @@ class BQAuditAPIClient:
 
                 response.raise_for_status()
 
-                # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+                # Validate Content-Type before parsing JSON
                 _validate_json_content_type(response)
-                # Code Review Round 11, Issue #3: Validate response size before parsing
+                # Validate response size before parsing
                 data = _validate_response_size_and_parse_json(response)
 
                 return ActivationResponse(**data)
@@ -542,11 +512,11 @@ class BQAuditAPIClient:
                 )
                 response.raise_for_status()
 
-                # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+                # Validate Content-Type before parsing JSON
                 _validate_json_content_type(response)
 
-                # Code Review Round 6, Issue #3: Replace cast() with runtime validation
-                # Code Review Round 11, Issue #3: Validate response size before parsing
+                # Replace cast() with runtime validation
+                # Validate response size before parsing
                 data = _validate_response_size_and_parse_json(response)
                 if not isinstance(data, dict):
                     raise NetworkError(
@@ -603,7 +573,7 @@ class BQAuditAPIClient:
             TokenRenewalResponse with new balance decremented by 1
         """
         # Simulate new token (different from original)
-        # Code Review Round 9, Issue #2: Use secrets module for cryptographically
+        # Use secrets module for cryptographically
         # secure random token generation, not random.choices() which is predictable
         import secrets
 
@@ -637,7 +607,7 @@ class BQAuditAPIClient:
 
                 response.raise_for_status()
 
-                # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+                # Validate Content-Type before parsing JSON
                 _validate_json_content_type(response)
                 data = response.json()
 
@@ -733,9 +703,9 @@ class BQAuditAPIClient:
 
                 response.raise_for_status()
 
-                # Code Review Round 8, Issue #5: Validate Content-Type before parsing JSON
+                # Validate Content-Type before parsing JSON
                 _validate_json_content_type(response)
-                # Code Review Round 11, Issue #3: Validate response size before parsing
+                # Validate response size before parsing
                 return _validate_response_size_and_parse_json(response)
 
         try:

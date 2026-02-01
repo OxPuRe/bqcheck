@@ -43,7 +43,7 @@ def authenticate_bigquery(project_id: str) -> bigquery.Client:
 
         # Verify project access with minimal query
         # Note: This will raise NotFound if project doesn't exist or is inaccessible
-        # Code Review Round 7, Issue #9: Add timeout to prevent hanging on slow API calls
+        # Add timeout to prevent hanging on slow API calls
         list(client.list_datasets(max_results=1, timeout=30.0))
 
         return client

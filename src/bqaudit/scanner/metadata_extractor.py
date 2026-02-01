@@ -136,7 +136,7 @@ def extract_table_metadata(
         return tables
 
     except GoogleAPIError as e:
-        # Code Review Round 8, Issue #4: Don't preserve exception chain to avoid
+        # Don't preserve exception chain to avoid
         # stack trace leakage of internal paths and Google API details to CLI users
         raise GoogleAPIError(
             f"Failed to extract table metadata: {str(e)}"

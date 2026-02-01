@@ -85,14 +85,14 @@ async def show_analysis_progress() -> None:
     This is an async coroutine that should be wrapped in an asyncio.Task
     by the caller using asyncio.create_task(), then cancelled when done.
 
-    Code Review Round 3, Issue #6: console.print() is blocking I/O.
+    console.print() is blocking I/O.
     Using run_in_executor() to prevent event loop blocking on slow terminals
     (NFS mounts, SSH lag, pipe redirection).
 
-    Code Review Round 4, Issue #2: Use get_running_loop() instead of deprecated
+    Use get_running_loop() instead of deprecated
     get_event_loop() for correct async context behavior (Python 3.10+).
 
-    Code Review Round 7, Issue #6: Added timeout protection on executor tasks
+    Added timeout protection on executor tasks
     to prevent deadlock if console.print() hangs (slow SSH, NFS mount, etc).
 
     Returns:

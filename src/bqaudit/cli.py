@@ -625,7 +625,7 @@ def scan(
         console.print(f"\n[red]❌ Error: Permission denied writing to {output}[/red]\n")
         raise typer.Exit(ExitCode.FILE_ERROR)
 
-    # Code Review Round 3, Issue #1: FileExistsError handler removed (dead code)
+    # FileExistsError handler removed (dead code)
     # Rationale: report_generator.py returns None when user declines overwrite,
     # it never raises FileExistsError. The None return is handled in executor.py:170
 

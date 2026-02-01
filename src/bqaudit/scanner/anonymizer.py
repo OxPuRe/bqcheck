@@ -269,13 +269,10 @@ def _extract_table_references(query: str) -> List[str]:
     # Regex pattern for table references in FROM/JOIN clauses
     # Matches: FROM/JOIN + optional whitespace + backtick + table ref
     # Table ref format: identifier.identifier[.identifier] (2 or 3 parts)
-    # Code Review Round 11, Issue #6: Use bounded quantifiers to prevent ReDoS
-    # Original: \s* unbounded → can match 1000+ spaces causing catastrophic backtracking
-    # Fixed: \s{0,10} limits to 10 spaces (plenty for real SQL formatting)
-    # Also limit identifier length to 100 chars (BigQuery max is 1024, real tables ~20-100)
+    # Use bounded quantifiers to prevent ReDoS attacks
     pattern = (
         r"(?:FROM|JOIN)"  # Keyword
-        r"\s{0,10}"  # Max 10 spaces (Code Review Round 11, Issue #6)
+        r"\s{0,10}"  # Max 10 spaces (prevents ReDoS)
         r"`?"  # Optional backtick
         r"("  # Capture group
         r"[a-zA-Z0-9_-]{1,100}"  # First identifier (max 100 chars)

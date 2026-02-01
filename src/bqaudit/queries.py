@@ -19,7 +19,7 @@ __all__ = [
 ]
 
 
-# Code Review Round 6, Issue #2: Removed @lru_cache decorator
+# Removed @lru_cache decorator
 # Caching BEFORE validation allows cache poisoning and SQL injection bypass.
 # Query generation is cheap (string formatting), so caching is premature optimization.
 def get_simple_test_query() -> str:
@@ -33,7 +33,7 @@ def get_simple_test_query() -> str:
     return "SELECT 1"
 
 
-# Code Review Round 6, Issue #2: Removed @lru_cache to prevent validation bypass
+# Removed @lru_cache to prevent validation bypass
 def get_tables_query(project_id: str, limit: int = 1) -> str:
     """
     Get query to retrieve table metadata from INFORMATION_SCHEMA.
@@ -61,7 +61,7 @@ def get_tables_query(project_id: str, limit: int = 1) -> str:
     """
 
 
-# Code Review Round 6, Issue #2: Removed @lru_cache to prevent validation bypass
+# Removed @lru_cache to prevent validation bypass
 def get_table_count_query(project_id: str) -> str:
     """
     Get query to count total tables in project.
@@ -83,7 +83,7 @@ def get_table_count_query(project_id: str) -> str:
     """
 
 
-# Code Review Round 6, Issue #2: Removed @lru_cache to prevent validation bypass
+# Removed @lru_cache to prevent validation bypass
 def get_sample_queries_query(project_id: str, limit: int = 3) -> str:
     """
     Get query to retrieve sample SELECT queries from JOBS_BY_PROJECT.

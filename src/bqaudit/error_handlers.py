@@ -43,7 +43,7 @@ def handle_bigquery_permission_error(
     console.print(
         f"[yellow]gcloud projects add-iam-policy-binding {project_id} \\[/yellow]"
     )
-    # Code Review Round 7, Issue #1: Handle None email gracefully
+    # Handle None email gracefully
     if email:
         console.print(f"[yellow]  --member=user:{email} \\[/yellow]")
     else:

@@ -35,21 +35,21 @@ HTTP_RETRY_MAX_WAIT = 4  # Maximum wait time (seconds)
 GLOBAL_AUDIT_TIMEOUT_SECONDS = 1200.0  # 20 minutes global timeout for execute_audit
 TIMER_CANCEL_TIMEOUT_SECONDS = 5.0  # Timeout for timer task cancellation
 
-# HTTP client sync timeouts (Story 5.3 - Code Review Round 3, Issue #5)
+# HTTP client sync timeouts (Story 5.3 -  Issue #5)
 HTTP_SYNC_TIMEOUT_CHECK = 5.0  # Quick operations (license check)
 HTTP_SYNC_TIMEOUT_MUTATION = 10.0  # State-changing operations (activate, renew, report)
 
-# Environment variables for real vs mock mode (Story 5.3 - Code Review Round 3, Issue #3)
+# Environment variables for real vs mock mode (Story 5.3 -  Issue #3)
 ENV_VAR_REAL_MODE = "BQAUDIT_REAL_MODE"  # Controls API client mode (mock vs real server)
 ENV_VAR_REAL_SCAN = "BQAUDIT_REAL_SCAN"  # Controls scan execution (simulated vs real)
 
 
-# Helper functions for environment variable checks (Code Review Round 4, Issue #1 & #4)
+# Helper functions for environment variable checks ( Issue #1 & #4)
 def is_real_mode() -> bool:
     """
     Check if real mode is enabled via BQAUDIT_REAL_MODE environment variable.
 
-    Code Review Round 7, Issue #7: Added validation and warnings for invalid values
+    Added validation and warnings for invalid values
     to prevent silent feature flag failures where users expect real mode but get mock.
 
     Returns:
@@ -60,7 +60,7 @@ def is_real_mode() -> bool:
 
     value = os.getenv(ENV_VAR_REAL_MODE, "").strip().lower()
 
-    # Code Review Round 7, Issue #7: Warn on invalid values
+    # Warn on invalid values
     if value and value not in ("true", "false", ""):
         logger = logging.getLogger(__name__)
         logger.warning(
@@ -76,7 +76,7 @@ def is_real_scan() -> bool:
     """
     Check if real scan is enabled via BQAUDIT_REAL_SCAN environment variable.
 
-    Code Review Round 7, Issue #7: Added validation and warnings for invalid values
+    Added validation and warnings for invalid values
     to prevent silent feature flag failures where users expect real scan but get simulated.
 
     Returns:
@@ -87,7 +87,7 @@ def is_real_scan() -> bool:
 
     value = os.getenv(ENV_VAR_REAL_SCAN, "").strip().lower()
 
-    # Code Review Round 7, Issue #7: Warn on invalid values
+    # Warn on invalid values
     if value and value not in ("true", "false", ""):
         logger = logging.getLogger(__name__)
         logger.warning(

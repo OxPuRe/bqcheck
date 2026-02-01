@@ -1,37 +1,18 @@
 """
-Scan executor with token lifecycle management (Story 3.4, Task 2).
+Scan executor with token lifecycle management.
 
 Manages ephemeral token lifecycle:
 - Load credentials
-- Execute scan (simulated for Epic 3)
+- Execute scan (simulated for Epic 3, real implementation in Epic 4)
 - Renew token after success
 - Atomic token consumption (preserve on failure)
 
-Code Review Round 11, Issue #5 - KNOWN LIMITATION:
-=================================================
+Note on Memory Security:
 Sensitive data (master_key, ephemeral_token) is stored in Python dicts and
-never truly scrubbed from process memory after use. Python's memory management
-doesn't provide secure memory clearing mechanisms:
-
-Limitations:
-- Python strings are immutable (can't overwrite in place)
-- del/gc.collect() mark for deletion but don't zero memory
-- CPython may cache small strings/ints (internment)
-- Process memory accessible via debuggers/core dumps
-
-Mitigation Strategies Attempted:
-- Credentials removed from dict after use (del credentials["master_key"])
-- Explicit variable deletion (del master_key)
-- However, references may persist in stack frames, exception traces
-
-Future Enhancement:
-- Use ctypes/mmap for sensitive data (requires C extension)
-- Use process isolation (separate process per scan)
-- Encrypted memory regions (requires OS-level support)
-
-Current Risk: If attacker gains process memory access (gdb, core dump, cold boot),
-master key may be recoverable. Acceptable risk for CLI tool with short-lived
-processes in typical usage.
+cannot be truly scrubbed from process memory due to Python's immutable strings
+and garbage collection. This is a known limitation acceptable for CLI tools
+with short-lived processes. If attacker gains process memory access (debugger,
+core dump), credentials may be recoverable.
 """
 
 from __future__ import annotations
@@ -239,7 +220,7 @@ class ScanExecutor:
 
             # Step 4: Renew token (AC3)
             # AC5: Master key ONLY for renewal (not during scan)
-            # Code Review Round 8, Issue #8: Token renewal lacks idempotency
+            # Token renewal lacks idempotency
             # If renew_token() fails after scan success, token is decremented server-side
             # but NOT renewed locally → out-of-sync. Server must support idempotent renewal.
             try:
@@ -260,7 +241,7 @@ class ScanExecutor:
             credentials["ephemeral_token"] = new_token_data.ephemeral_token
 
             # Track used tokens (AC8: Single-use enforcement)
-            # Code Review Round 8, Issue #7: Use hash instead of truncation
+            # Use hash instead of truncation
             # Truncation loses entropy and makes tokens guessable. Hash preserves
             # uniqueness while being irreversible.
             import hashlib
@@ -270,7 +251,7 @@ class ScanExecutor:
             if "used_tokens" not in credentials:
                 credentials["used_tokens"] = []
 
-            # Code Review Round 9, Issue #5: Validate used_tokens length before append
+            # Validate used_tokens length before append
             # Prevent unbounded growth and log when truncation occurs
             MAX_USED_TOKENS = 100  # Reasonable limit for audit trail
 
@@ -296,7 +277,7 @@ class ScanExecutor:
             # In mock mode: mock calculates new_balance = current - 1
             # In real mode: server tracks balance and returns new balance
 
-            # Code Review Round 9, Issue #6: Validate balance after renewal
+            # Validate balance after renewal
             # Prevent server bugs/MITM from corrupting token pool
             new_balance = new_token_data.token_pool_balance
             old_balance = credentials["token_pool_balance"]
@@ -437,17 +418,17 @@ class ScanExecutor:
         except PermissionDenied:
             # AC6: BigQuery permission error
             # Get user email for IAM binding command
-            # Code Review Round 7, Issue #1: Add timeout, validation, stderr capture
+            # Add timeout, validation, stderr capture
             try:
                 email = subprocess.check_output(
                     ["gcloud", "config", "get-value", "account"],
                     text=True,
                     timeout=5,  # Prevent hanging if gcloud is stuck
-                    stdin=subprocess.DEVNULL,  # Code Review Round 11, Issue #7: Prevent stdin inheritance
+                    stdin=subprocess.DEVNULL,  # Prevent stdin inheritance
                     stderr=subprocess.DEVNULL,  # Suppress stderr noise
                 ).strip()
-                # Code Review Round 9, Issue #3: Proper email validation with CRLF injection prevention
-                # Code Review Round 10, Issue #6: Improved email validation to reject invalid patterns
+                # Proper email validation with CRLF injection prevention
+                # Improved email validation to reject invalid patterns
 
                 if not email:
                     raise ValueError("gcloud returned empty email")
@@ -555,7 +536,7 @@ class ScanExecutor:
                 # This prevents resource leaks (timer keeps running after error).
                 from bqaudit.constants import TIMER_CANCEL_TIMEOUT_SECONDS
 
-                # Code Review Round 7, Issue #2: Robust task cancellation with exception handling
+                # Robust task cancellation with exception handling
                 if not timer_task.done():
                     timer_task.cancel()
 
@@ -572,7 +553,7 @@ class ScanExecutor:
                         "Possible console.print() blocking (slow terminal/NFS)."
                     )
                 except Exception as e:
-                    # Code Review Round 7, Issue #2: Catch unexpected timer exceptions
+                    # Catch unexpected timer exceptions
                     # Timer task might raise from run_in_executor() or other failures
                     logger.error(f"Unexpected timer task exception during cleanup: {e}")
                     # Don't re-raise - we're in cleanup, audit error takes precedence

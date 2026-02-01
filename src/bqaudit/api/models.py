@@ -57,10 +57,10 @@ class AuditMetadata(BaseModel):
     before being passed here (see executor.py:323-327). This ensures all required
     fields are present and correctly typed.
 
-    Code Review Round 7, Issue #4: Added max_items limits to prevent memory exhaustion
+    Added max_items limits to prevent memory exhaustion
     attacks where malicious payloads contain millions of empty dicts.
 
-    Code Review Round 10, Issue #3: Added per-dict size validation to prevent memory
+    Added per-dict size validation to prevent memory
     exhaustion via large dicts (max_length limits list items but not dict size).
     """
 
@@ -89,7 +89,7 @@ class AuditMetadata(BaseModel):
         """
         Validate individual dict sizes to prevent memory exhaustion.
 
-        Code Review Round 10, Issue #3: max_length limits list items but NOT dict size.
+        max_length limits list items but NOT dict size.
         Attacker could send 10000 dicts × 2MB each = 20GB memory consumption.
 
         Args:
