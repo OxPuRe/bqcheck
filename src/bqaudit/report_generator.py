@@ -353,21 +353,6 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
         report_content = self.generate_report()
         try:
             final_path.write_text(report_content, encoding="utf-8")
-
-            # Verify write succeeded (detect disk full, encoding errors)
-            # Reading back is cheap for text files and prevents silent corruption
-            try:
-                written_size = final_path.stat().st_size
-                expected_size = len(report_content.encode("utf-8"))
-                if written_size != expected_size:
-                    raise IOError(
-                        f"Partial write detected: wrote {written_size} bytes, expected {expected_size}"
-                    )
-            except OSError as e:
-                # Cleanup partial file on verification failure
-                final_path.unlink(missing_ok=True)
-                raise IOError(f"Failed to verify write: {e}") from e
-
         except PermissionError as e:
             raise PermissionError(
                 f"Permission denied writing to {final_path}"

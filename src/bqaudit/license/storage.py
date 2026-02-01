@@ -66,15 +66,6 @@ class CredentialStore:
         if not home.is_absolute():
             raise ValueError(f"HOME must be absolute path, got: {home}")
 
-        # Whitelist allowed HOME locations (security: prevent /etc, /var, etc.)
-        home_str = str(home)
-        allowed_prefixes = ('/home/', '/root', '/Users/', '/private/var/', '/tmp/')
-        if not any(home_str.startswith(prefix) for prefix in allowed_prefixes):
-            raise ValueError(
-                f"HOME outside expected paths: {home}. "
-                f"Must start with: {', '.join(allowed_prefixes)}"
-            )
-
         return home / ".bqaudit" / "credentials.json"
 
     @classmethod

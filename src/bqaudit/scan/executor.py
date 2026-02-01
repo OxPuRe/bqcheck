@@ -427,45 +427,10 @@ class ScanExecutor:
                     stdin=subprocess.DEVNULL,  # Prevent stdin inheritance
                     stderr=subprocess.DEVNULL,  # Suppress stderr noise
                 ).strip()
-                # Proper email validation with CRLF injection prevention
-                # Improved email validation to reject invalid patterns
 
-                if not email:
-                    raise ValueError("gcloud returned empty email")
-
-                # Check for CRLF injection (prevents log poisoning)
-                if '\n' in email or '\r' in email:
-                    raise ValueError(f"Invalid email (contains newline): {email!r}")
-
-                # Validate email structure (basic checks, not full RFC 5322)
-                if '@' not in email:
-                    raise ValueError(f"Invalid email format from gcloud: {email!r}")
-
-                parts = email.split('@')
-                if len(parts) != 2:
-                    raise ValueError(f"Invalid email (multiple @ symbols): {email!r}")
-
-                local, domain = parts
-
-                # Validate local and domain parts not empty
-                if not local or not domain:
-                    raise ValueError(f"Invalid email (empty local or domain): {email!r}")
-
-                # Reject consecutive dots (invalid in RFC 5322)
-                if '..' in email:
-                    raise ValueError(f"Invalid email (consecutive dots): {email!r}")
-
-                # Reject leading/trailing dots in domain
-                if domain.startswith('.') or domain.endswith('.'):
-                    raise ValueError(f"Invalid email (dot at domain boundary): {email!r}")
-
-                # Domain must contain at least one dot (TLD required)
-                if '.' not in domain:
-                    raise ValueError(f"Invalid email (domain missing TLD): {email!r}")
-
-                # Reject leading/trailing dots in local part
-                if local.startswith('.') or local.endswith('.'):
-                    raise ValueError(f"Invalid email (dot at local boundary): {email!r}")
+                # Basic validation (gcloud output is trusted)
+                if not email or '@' not in email:
+                    raise ValueError(f"Invalid email from gcloud: {email!r}")
             except subprocess.TimeoutExpired:
                 # Code Review Round 7: gcloud hung, can't get email
                 logger.warning("gcloud command timed out, cannot retrieve user email")

@@ -6,7 +6,6 @@ INFORMATION_SCHEMA. The real implementation will come in Epic 4.
 """
 
 import logging
-import math
 import os
 import time
 
@@ -18,43 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 def _get_simulation_delay() -> float:
-    """
-    Get simulation delay with validation.
-
-    Validates float from environment variable to prevent DoS attacks
-    via inf/nan/negative/excessive delay values.
-
-    Returns:
-        Validated float delay in seconds (0.0 to 3600.0)
-
-    Raises:
-        ValueError: If delay is invalid (non-numeric, inf, nan, negative, or >1 hour)
-    """
-    default = "2.0"
-    value_str = os.getenv("BQAUDIT_SIMULATED_SCAN_DELAY", default)
-
-    try:
-        value = float(value_str)
-    except ValueError:
-        raise ValueError(
-            f"Invalid BQAUDIT_SIMULATED_SCAN_DELAY: {value_str!r}. Must be numeric."
-        )
-
-    # Reject special float values (inf, -inf, nan)
-    if math.isnan(value) or math.isinf(value):
-        raise ValueError(
-            f"Invalid BQAUDIT_SIMULATED_SCAN_DELAY: {value_str!r}. "
-            "Cannot be NaN or infinity."
-        )
-
-    # Reject negative or excessively large delays
-    if value < 0 or value > 3600.0:
-        raise ValueError(
-            f"Invalid BQAUDIT_SIMULATED_SCAN_DELAY: {value}. "
-            "Must be between 0 and 3600 seconds (1 hour)."
-        )
-
-    return value
+    """Get simulation delay from environment variable."""
+    return float(os.getenv("BQAUDIT_SIMULATED_SCAN_DELAY", "2.0"))
 
 
 # Configurable simulation delay (default 2 seconds for realistic UX, 0.1 for tests)
