@@ -51,7 +51,8 @@ class CredentialStore:
         Returns:
             Path: Path to credentials file (~/.bqaudit/credentials.json)
         """
-        home = Path(os.environ.get("HOME") or str(Path.home()))
+        home_env = os.environ.get("HOME")
+        home = Path(home_env) if home_env else Path.home()
         return home / ".bqaudit" / "credentials.json"
 
     @classmethod

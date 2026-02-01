@@ -5,6 +5,7 @@ import json
 from typer.testing import CliRunner
 
 from bqaudit.cli import app
+from bqaudit.constants import ExitCode
 
 runner = CliRunner()
 
@@ -70,7 +71,7 @@ class TestLicenseStatusCLI:
         result = runner.invoke(app, ["license", "status"])
 
         # AC2: Verify error message and instructions
-        assert result.exit_code == 1
+        assert result.exit_code == ExitCode.FILE_ERROR
         assert "No active license found" in result.stdout
         assert "bqaudit license activate" in result.stdout
         assert "https://bqaudit.com/pricing" in result.stdout
@@ -106,7 +107,7 @@ class TestLicenseStatusCLI:
         result = runner.invoke(app, ["license", "status"])
 
         # AC3: Verify security warning
-        assert result.exit_code == 1
+        assert result.exit_code == ExitCode.FILE_ERROR
         assert "unsafe permissions" in result.stdout.lower()
         assert "chmod 600" in result.stdout
         assert "ABC-XYZ" not in result.stdout  # Credentials not shown
@@ -133,7 +134,7 @@ class TestLicenseStatusCLI:
         result = runner.invoke(app, ["license", "status"])
 
         # AC4: Verify corruption error
-        assert result.exit_code == 1
+        assert result.exit_code == ExitCode.FILE_ERROR
         assert "corrupted" in result.stdout.lower()
         assert "re-activate" in result.stdout.lower()
 
@@ -165,7 +166,7 @@ class TestLicenseStatusCLI:
         result = runner.invoke(app, ["license", "status"])
 
         # AC4: Verify corruption error
-        assert result.exit_code == 1
+        assert result.exit_code == ExitCode.FILE_ERROR
         assert "corrupted" in result.stdout.lower()
         assert "re-activate" in result.stdout.lower()
 

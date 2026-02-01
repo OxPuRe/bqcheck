@@ -7,6 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from bqaudit.cli import app
+from bqaudit.constants import ExitCode
 
 runner = CliRunner()
 
@@ -177,7 +178,7 @@ class TestLicenseRevokeCLI:
         result = runner.invoke(app, ["license", "revoke"])
 
         # AC3: Verify error message
-        assert result.exit_code == 1
+        assert result.exit_code == ExitCode.FILE_ERROR
         assert "no active license" in result.stdout.lower()
 
     def test_revoke_file_deletion_verification(self, tmp_path, monkeypatch):
@@ -323,7 +324,7 @@ class TestLicenseRevokeCLI:
             result = runner.invoke(app, ["license", "revoke", "-y"])
 
             # Should fail with permission error
-            assert result.exit_code == 1
+            assert result.exit_code == ExitCode.FILE_ERROR
             assert "error" in result.stdout.lower()
 
         finally:

@@ -80,6 +80,12 @@ def check_server_health() -> Dict[str, Any]:
             request=e.request,
             response=e.response,
         )
+    except ValueError as e:
+        # JSONDecodeError is a subclass of ValueError
+        # Raised when server returns non-JSON response (HTML error page, plain text, etc.)
+        raise NetworkError(
+            f"Server returned invalid response (expected JSON): {e}"
+        )
 
 
 class BQAuditAPIClient:
@@ -219,6 +225,11 @@ class BQAuditAPIClient:
             raise NetworkError(
                 f"Server error during activation. Status: {e.response.status_code}"
             )
+        except ValueError as e:
+            # JSONDecodeError is a subclass of ValueError
+            raise NetworkError(
+                f"Server returned invalid response during activation (expected JSON): {e}"
+            )
 
     def report_scan_success(
         self, project_id: str, scan_result: Dict[str, Any]
@@ -274,6 +285,11 @@ class BQAuditAPIClient:
         except httpx.HTTPStatusError as e:
             raise NetworkError(
                 f"Server error reporting scan. Status: {e.response.status_code}"
+            )
+        except ValueError as e:
+            # JSONDecodeError is a subclass of ValueError
+            raise NetworkError(
+                f"Server returned invalid response during scan report (expected JSON): {e}"
             )
 
     def renew_token(
@@ -353,6 +369,11 @@ class BQAuditAPIClient:
         except httpx.HTTPStatusError as e:
             raise NetworkError(
                 f"Server error during token renewal. Status: {e.response.status_code}"
+            )
+        except ValueError as e:
+            # JSONDecodeError is a subclass of ValueError
+            raise NetworkError(
+                f"Server returned invalid response during token renewal (expected JSON): {e}"
             )
 
     async def execute_audit(
@@ -449,4 +470,9 @@ class BQAuditAPIClient:
             # After max retries exhausted
             raise NetworkError(
                 f"Network error during audit after {HTTP_MAX_RETRIES} retries: {e}"
+            )
+        except ValueError as e:
+            # JSONDecodeError is a subclass of ValueError
+            raise NetworkError(
+                f"Server returned invalid response during audit (expected JSON): {e}"
             )

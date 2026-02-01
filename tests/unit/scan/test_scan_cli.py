@@ -16,6 +16,7 @@ import pytest
 from typer.testing import CliRunner
 
 from bqaudit.cli import app
+from bqaudit.constants import ExitCode
 
 runner = CliRunner()
 
@@ -61,7 +62,7 @@ class TestScanCommand:
         """AC1: Scan fails if no credentials exist."""
         result = runner.invoke(app, ["scan", "--project", "test-project"])
 
-        assert result.exit_code == 1
+        assert result.exit_code == ExitCode.FILE_ERROR
         assert "No active license found" in result.stdout
         assert "bqaudit license activate" in result.stdout
 

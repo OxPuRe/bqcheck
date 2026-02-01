@@ -4,6 +4,7 @@ import pytest
 from typer.testing import CliRunner
 
 from bqaudit.cli import app
+from bqaudit.constants import ExitCode
 from bqaudit.license.storage import CredentialStore
 
 runner = CliRunner()
@@ -85,7 +86,7 @@ class TestActivationFlowIntegration:
         result = runner.invoke(app, ["license", "activate", "INVALID-KEY-BAD"])
 
         # Should exit with error
-        assert result.exit_code == 1
+        assert result.exit_code == ExitCode.AUTH_ERROR
         assert "invalid license key" in result.stdout.lower()
 
         # Verify NO credentials file created
@@ -103,7 +104,7 @@ class TestActivationFlowIntegration:
         result = runner.invoke(app, ["license", "activate", "NETWORK-ERROR-TEST"])
 
         # Should exit with error
-        assert result.exit_code == 1
+        assert result.exit_code == ExitCode.NETWORK_ERROR
         assert "network" in result.stdout.lower()
 
         # Verify NO credentials file created
@@ -142,7 +143,7 @@ class TestActivationFlowIntegration:
 
         result = runner.invoke(app, ["license", "activate", invalid_key])
 
-        assert result.exit_code == 1
+        assert result.exit_code == ExitCode.AUTH_ERROR
         assert "invalid license key" in result.stdout.lower()
 
         # No credentials file created

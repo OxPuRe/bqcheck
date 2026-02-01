@@ -23,6 +23,7 @@ from typing_extensions import Annotated
 from bqaudit import __version__
 from bqaudit.api.client import check_server_health
 from bqaudit.config import configure_logging
+from bqaudit.constants import ExitCode
 from bqaudit.queries import (
     get_sample_queries_query,
     get_simple_test_query,
@@ -581,7 +582,7 @@ def scan(
         if not CredentialStore.exists():
             console.print("\n[yellow]No active license found.[/yellow]\n")
             console.print("Run: [cyan]bqaudit license activate <key>[/cyan]")
-            raise typer.Exit(1)
+            raise typer.Exit(ExitCode.FILE_ERROR)
 
         # Step 2: Load credentials and check balance (AC1, Story 3.5)
         credentials = CredentialStore.load()
@@ -590,7 +591,7 @@ def scan(
             # AC1, AC5: Token depletion error
             console.print("\n[red]❌ Token pool depleted (0 scans remaining).[/red]\n")
             console.print("💰 Purchase more tokens at https://bqaudit.com/pricing\n")
-            raise typer.Exit(4)  # Exit code 4 for depletion
+            raise typer.Exit(ExitCode.NO_TOKENS)
 
         # Step 3: Check if this is last token (AC2, Story 3.5)
         is_last_token = credentials["token_pool_balance"] == 1
@@ -613,7 +614,7 @@ def scan(
             )
 
         # Success - exit 0
-        raise typer.Exit(0)
+        raise typer.Exit(ExitCode.SUCCESS)
 
     except typer.Exit:
         # Re-raise Exit to preserve exit code
@@ -622,7 +623,7 @@ def scan(
     except PermissionError as e:
         # AC5: Permission denied writing file
         console.print(f"\n[red]❌ Error: Permission denied writing to {output}[/red]\n")
-        raise typer.Exit(2)
+        raise typer.Exit(ExitCode.FILE_ERROR)
 
     # Code Review Round 3, Issue #1: FileExistsError handler removed (dead code)
     # Rationale: report_generator.py returns None when user declines overwrite,
@@ -641,11 +642,11 @@ def scan(
                 "Run: [cyan]bqaudit license revoke && "
                 "bqaudit license activate <key>[/cyan]\n"
             )
-            raise typer.Exit(1)
+            raise typer.Exit(ExitCode.FILE_ERROR)
 
         # General error handler
         console.print(f"\n[red]❌ Scan error: {e}[/red]\n")
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.NETWORK_ERROR)
 
 
 # License management subcommand group
@@ -716,17 +717,17 @@ def license_activate(
     except InvalidLicenseKeyError as e:
         # AC2: Invalid license key
         console.print(f"\n[red]❌ {e}[/red]\n")
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.AUTH_ERROR)
 
     except NetworkError as e:
         # AC3: Network failure
         console.print(f"\n[red]❌ {e}[/red]\n")
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.NETWORK_ERROR)
 
     except Exception as e:
         # Unexpected error
         console.print(f"\n[red]❌ Activation failed: {e}[/red]\n")
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.NETWORK_ERROR)
 
 
 @license_app.command("status")
@@ -800,13 +801,13 @@ def license_status() -> None:
         console.print("To activate your license, run:")
         console.print("  [cyan]bqaudit license activate <your-license-key>[/cyan]")
         console.print("\nDon't have a license key? Visit https://bqaudit.com/pricing\n")
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.FILE_ERROR)
 
     except UnsafePermissionsError:
         # AC3: Wrong file permissions
         console.print("\n[red]Credentials file has unsafe permissions.[/red]\n")
         console.print("Run: [cyan]chmod 600 ~/.bqaudit/credentials.json[/cyan]\n")
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.FILE_ERROR)
 
     except (json.JSONDecodeError, KeyError, ValueError):
         # AC4: Corrupted credentials (invalid JSON or missing fields)
@@ -818,7 +819,7 @@ def license_status() -> None:
             "Run: [cyan]bqaudit license revoke && "
             "bqaudit license activate <key>[/cyan]\n"
         )
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.FILE_ERROR)
 
     except Exception as e:
         # Catch Pydantic ValidationError and other unexpected errors
@@ -834,7 +835,7 @@ def license_status() -> None:
                 "Run: [cyan]bqaudit license revoke && "
                 "bqaudit license activate <key>[/cyan]\n"
             )
-            raise typer.Exit(1)
+            raise typer.Exit(ExitCode.FILE_ERROR)
         # Re-raise unexpected errors
         raise
 
@@ -882,7 +883,7 @@ def license_revoke(
     # AC3: Check if credentials exist
     if not CredentialStore.exists():
         console.print("\n[yellow]No active license to revoke.[/yellow]\n")
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.FILE_ERROR)
 
     # AC1: Confirmation prompt (unless -y flag)
     if not yes:
@@ -916,12 +917,12 @@ def license_revoke(
     except CredentialNotFoundError:
         # Edge case: file was deleted between exists() check and delete()
         console.print("\n[yellow]No active license to revoke.[/yellow]\n")
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.FILE_ERROR)
 
     except (OSError, PermissionError, IOError) as e:
         # File system errors: permission denied, read-only filesystem, etc.
         console.print(f"\n[red]❌ Error revoking license: {e}[/red]\n")
-        raise typer.Exit(1)
+        raise typer.Exit(ExitCode.FILE_ERROR)
 
 
 if __name__ == "__main__":

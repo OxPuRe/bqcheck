@@ -140,7 +140,8 @@ class ScanExecutor:
                     "Run: bqaudit license revoke && bqaudit license activate <key>"
                 )
                 raise
-            # Re-raise other exceptions
+            # Unexpected errors - log and re-raise to preserve stack trace
+            logger.exception("Unexpected error loading credentials")
             raise
 
         # Step 2: Execute scan (SIMULATED for Epic 3, or REAL for Epic 5)
@@ -391,7 +392,7 @@ class ScanExecutor:
             raise ScanError(exit_code, "BigQuery access forbidden")
 
         # Step 2: Anonymize project_id (SHA-256)
-        project_id_hash = hashlib.sha256(project_id.encode()).hexdigest()
+        project_id_hash = hashlib.sha256(project_id.encode("utf-8")).hexdigest()
 
         # Story 5.3: Validate SHA-256 hash format (64 hex characters)
         # Use explicit check instead of assert (assertions disabled with python -O)
@@ -477,7 +478,8 @@ class ScanExecutor:
                     elif isinstance(original_exc, (httpx.ConnectError, httpx.NetworkError)):
                         exit_code = handle_network_error(console)
                         raise ScanError(exit_code, "Network error after retries")
-            # Re-raise if not handled
+            # Unexpected error - log with full traceback before re-raising
+            logger.exception("Unexpected error during audit execution")
             raise
 
         logger.info(f"Audit complete: {response.summary.total_recommendations} recommendations")
