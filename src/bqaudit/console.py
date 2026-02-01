@@ -28,7 +28,9 @@ def show_start_message(project_id: str) -> None:
         >>> show_start_message("my-gcp-project")
         🔍 Starting BigQuery audit for project: my-gcp-project
     """
-    console.print(f"🔍 Starting BigQuery audit for project: [bold cyan]{project_id}[/bold cyan]")
+    console.print(
+        f"🔍 Starting BigQuery audit for project: [bold cyan]{project_id}[/bold cyan]"
+    )
 
 
 def show_extraction_progress() -> Status:
@@ -43,7 +45,9 @@ def show_extraction_progress() -> Status:
         ...     # Perform extraction
         ...     metadata = extract_metadata()
     """
-    return console.status("[blue]📊 Extracting metadata from INFORMATION_SCHEMA...[/blue]")
+    return console.status(
+        "[blue]📊 Extracting metadata from INFORMATION_SCHEMA...[/blue]"
+    )
 
 
 def show_server_upload() -> None:
@@ -121,14 +125,15 @@ async def show_analysis_progress() -> None:
         """Print with timeout protection to prevent executor thread starvation."""
         try:
             await asyncio.wait_for(
-                loop.run_in_executor(None, console.print, msg),
-                timeout=timeout
+                loop.run_in_executor(None, console.print, msg), timeout=timeout
             )
         except asyncio.TimeoutError:
             logger.warning(f"Console print timed out after {timeout}s (slow terminal?)")
 
     # Non-blocking initial message
-    await safe_print("⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)...")
+    await safe_print(
+        "⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)..."
+    )
 
     while True:
         await asyncio.sleep(5)

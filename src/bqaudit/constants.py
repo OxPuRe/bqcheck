@@ -40,7 +40,9 @@ HTTP_SYNC_TIMEOUT_CHECK = 5.0  # Quick operations (license check)
 HTTP_SYNC_TIMEOUT_MUTATION = 10.0  # State-changing operations (activate, renew, report)
 
 # Environment variables for real vs mock mode (Story 5.3 -  Issue #3)
-ENV_VAR_REAL_MODE = "BQAUDIT_REAL_MODE"  # Controls API client mode (mock vs real server)
+ENV_VAR_REAL_MODE = (
+    "BQAUDIT_REAL_MODE"  # Controls API client mode (mock vs real server)
+)
 ENV_VAR_REAL_SCAN = "BQAUDIT_REAL_SCAN"  # Controls scan execution (simulated vs real)
 
 

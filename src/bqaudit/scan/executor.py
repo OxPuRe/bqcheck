@@ -159,19 +159,24 @@ class ScanExecutor:
             # Note: BQAUDIT_REAL_SCAN controls scan execution (simulated vs real)
             # Note: BQAUDIT_REAL_MODE controls API client mode (mock vs real server)
             from bqaudit.constants import is_real_scan
+
             use_real_scan = is_real_scan()
 
             if use_real_scan:
                 # Epic 5: Execute real audit with server
                 from bqaudit.constants import ENV_VAR_REAL_SCAN
-                logger.info(f'Executing REAL audit ({ENV_VAR_REAL_SCAN}=true)')
+
+                logger.info(f"Executing REAL audit ({ENV_VAR_REAL_SCAN}=true)")
                 import asyncio
+
                 # Note: Using asyncio.run() in sync context. This creates a new event loop.
                 # LIMITATION: Cannot be called from existing async context (would raise RuntimeError).
                 # This is acceptable for CLI entry point but limits future async refactoring.
                 try:
                     audit_response = asyncio.run(
-                        self.execute_real_scan(project_id, credentials['ephemeral_token'])
+                        self.execute_real_scan(
+                            project_id, credentials["ephemeral_token"]
+                        )
                     )
                 except ScanError as e:
                     # Story 5.3: Handle errors from async context properly
@@ -181,13 +186,15 @@ class ScanExecutor:
                 # AC5: Display audit results immediately (credentials updated later atomically)
                 show_success_message(
                     audit_response.summary.total_recommendations,
-                    audit_response.summary.total_potential_savings_eur
+                    audit_response.summary.total_potential_savings_eur,
                 )
 
                 # Generate and save Markdown report (Story 5.2, 5.4)
                 from bqaudit.report_generator import MarkdownReportGenerator
 
-                generator = MarkdownReportGenerator(audit_response, project_name=project_id)
+                generator = MarkdownReportGenerator(
+                    audit_response, project_name=project_id
+                )
                 report_path = generator.save_report(
                     output_path=output_path,
                     force=force,
@@ -195,9 +202,13 @@ class ScanExecutor:
                 )
                 if report_path is None:
                     # File exists and user/config declined overwrite
-                    console.print('[yellow]⚠️  Report not saved: file exists (use --force to overwrite)[/yellow]')
+                    console.print(
+                        "[yellow]⚠️  Report not saved: file exists (use --force to overwrite)[/yellow]"
+                    )
                 else:
-                    console.print(f'[green]✅ Audit report saved to:[/green] {report_path}')
+                    console.print(
+                        f"[green]✅ Audit report saved to:[/green] {report_path}"
+                    )
 
                 # Create a ScanResult wrapper for compatibility
                 result = ScanResult(
@@ -208,7 +219,7 @@ class ScanExecutor:
                 )
             else:
                 # Epic 3: Simulated scan (original behavior)
-                logger.info('Executing SIMULATED audit (Epic 3)')
+                logger.info("Executing SIMULATED audit (Epic 3)")
                 result = self._execute_simulated_scan(
                     project_id, credentials["ephemeral_token"]
                 )
@@ -260,7 +271,9 @@ class ScanExecutor:
                     f"used_tokens list at maximum capacity ({max_used_tokens}). "
                     "Keeping only last 5 tokens for recent audit trail."
                 )
-                credentials["used_tokens"] = credentials["used_tokens"][-4:]  # Keep 4, add 1 = 5
+                credentials["used_tokens"] = credentials["used_tokens"][
+                    -4:
+                ]  # Keep 4, add 1 = 5
 
             credentials["used_tokens"].append(
                 {
@@ -400,7 +413,7 @@ class ScanExecutor:
                 query_metadata = extract_query_metadata(client, project_id, days=90)
 
                 logger.info("Extracting access patterns...")
-                access_patterns = extract_access_patterns(client, project_id, days=90)
+                access_patterns = extract_access_patterns(client, project_id)
 
             # Convert Pydantic models to dicts and create validated AuditMetadata
             from bqaudit.api.models import AuditMetadata
@@ -430,13 +443,18 @@ class ScanExecutor:
                 ).strip()
 
                 # Basic validation (gcloud output is trusted)
-                if not email or '@' not in email:
+                if not email or "@" not in email:
                     raise ValueError(f"Invalid email from gcloud: {email!r}")
             except subprocess.TimeoutExpired:
                 # Code Review Round 7: gcloud hung, can't get email
                 logger.warning("gcloud command timed out, cannot retrieve user email")
                 email = None
-            except (subprocess.CalledProcessError, FileNotFoundError, ValueError, OSError):
+            except (
+                subprocess.CalledProcessError,
+                FileNotFoundError,
+                ValueError,
+                OSError,
+            ):
                 # Story 5.3: Narrow exception catching to specific gcloud CLI failures
                 # CalledProcessError: gcloud command failed
                 # FileNotFoundError: gcloud not installed
@@ -494,7 +512,7 @@ class ScanExecutor:
                         audit_request=audit_request,
                         ephemeral_token=ephemeral_token,
                     ),
-                    timeout=GLOBAL_AUDIT_TIMEOUT_SECONDS
+                    timeout=GLOBAL_AUDIT_TIMEOUT_SECONDS,
                 )
             finally:
                 # IMPORTANT: This finally block executes BEFORE exception handlers below.
@@ -508,7 +526,9 @@ class ScanExecutor:
 
                 try:
                     # Story 5.3: Add timeout to prevent race condition where timer doesn't cancel
-                    await asyncio.wait_for(timer_task, timeout=TIMER_CANCEL_TIMEOUT_SECONDS)
+                    await asyncio.wait_for(
+                        timer_task, timeout=TIMER_CANCEL_TIMEOUT_SECONDS
+                    )
                 except asyncio.CancelledError:
                     # Expected: timer was cancelled successfully
                     pass
@@ -542,6 +562,7 @@ class ScanExecutor:
         except Exception as e:
             # Catch RetryError from tenacity and check underlying cause
             from tenacity import RetryError
+
             if isinstance(e, RetryError):
                 # Extract the last exception from the retry history
                 if e.last_attempt and e.last_attempt.exception():
@@ -549,12 +570,16 @@ class ScanExecutor:
                     if isinstance(original_exc, httpx.TimeoutException):
                         exit_code = handle_timeout_error(console)
                         raise ScanError(exit_code, "Timeout after retries")
-                    elif isinstance(original_exc, (httpx.ConnectError, httpx.NetworkError)):
+                    elif isinstance(
+                        original_exc, (httpx.ConnectError, httpx.NetworkError)
+                    ):
                         exit_code = handle_network_error(console)
                         raise ScanError(exit_code, "Network error after retries")
             # Unexpected error - log with full traceback before re-raising
             logger.exception("Unexpected error during audit execution")
             raise
 
-        logger.info(f"Audit complete: {response.summary.total_recommendations} recommendations")
+        logger.info(
+            f"Audit complete: {response.summary.total_recommendations} recommendations"
+        )
         return response

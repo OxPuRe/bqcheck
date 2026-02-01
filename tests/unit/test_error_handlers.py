@@ -154,7 +154,9 @@ class TestExitCodes:
     def test_permission_error_exit_code(self):
         """Test permission error returns AUTH_ERROR code."""
         console = Console(file=io.StringIO())
-        exit_code = handle_bigquery_permission_error(console, "project", "email@example.com")
+        exit_code = handle_bigquery_permission_error(
+            console, "project", "email@example.com"
+        )
         assert exit_code == 3
 
     def test_not_found_error_exit_code(self):

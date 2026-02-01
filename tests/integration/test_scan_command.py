@@ -265,9 +265,15 @@ class TestScanCommandProgressIndicators:
 
         # Mock BigQuery client and metadata extraction
         with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
-            with patch("bqaudit.scanner.metadata_extractor.extract_table_metadata") as mock_tables:
-                with patch("bqaudit.scanner.metadata_extractor.extract_query_metadata") as mock_queries:
-                    with patch("bqaudit.scanner.metadata_extractor.extract_access_patterns") as mock_access:
+            with patch(
+                "bqaudit.scanner.metadata_extractor.extract_table_metadata"
+            ) as mock_tables:
+                with patch(
+                    "bqaudit.scanner.metadata_extractor.extract_query_metadata"
+                ) as mock_queries:
+                    with patch(
+                        "bqaudit.scanner.metadata_extractor.extract_access_patterns"
+                    ) as mock_access:
                         with patch("httpx.AsyncClient.post") as mock_post:
                             with patch("bqaudit.console.console", console):
                                 # Setup mocks
@@ -278,7 +284,9 @@ class TestScanCommandProgressIndicators:
 
                                 mock_response = Mock()
                                 mock_response.status_code = 200
-                                mock_response.json.return_value = mock_audit_response.model_dump()
+                                mock_response.json.return_value = (
+                                    mock_audit_response.model_dump()
+                                )
                                 mock_post.return_value = mock_response
 
                                 # Execute scan
@@ -287,7 +295,7 @@ class TestScanCommandProgressIndicators:
 
                                 await executor.execute_real_scan(
                                     project_id="my-project",
-                                    ephemeral_token="eph_test_token"
+                                    ephemeral_token="eph_test_token",
                                 )
 
                                 # Verify output contains progress messages
@@ -323,15 +331,17 @@ class TestScanCommandProgressIndicators:
                 # Story 5.3: Should raise ScanError with code 3 instead of sys.exit()
                 with pytest.raises(ScanError) as exc_info:
                     await executor.execute_real_scan(
-                        project_id="my-project",
-                        ephemeral_token="eph_test_token"
+                        project_id="my-project", ephemeral_token="eph_test_token"
                     )
 
                 assert exc_info.value.exit_code == 3
 
                 # Verify error message was printed (captured by Rich to stderr)
                 captured = capsys.readouterr()
-                assert "Insufficient BigQuery permissions" in captured.err or "Insufficient BigQuery permissions" in captured.out
+                assert (
+                    "Insufficient BigQuery permissions" in captured.err
+                    or "Insufficient BigQuery permissions" in captured.out
+                )
 
     @pytest.mark.asyncio
     async def test_scan_handles_network_error(self, mock_credentials_file, capsys):
@@ -348,9 +358,15 @@ class TestScanCommandProgressIndicators:
 
         # Mock BigQuery and server responses
         with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
-            with patch("bqaudit.scanner.metadata_extractor.extract_table_metadata") as mock_tables:
-                with patch("bqaudit.scanner.metadata_extractor.extract_query_metadata") as mock_queries:
-                    with patch("bqaudit.scanner.metadata_extractor.extract_access_patterns") as mock_access:
+            with patch(
+                "bqaudit.scanner.metadata_extractor.extract_table_metadata"
+            ) as mock_tables:
+                with patch(
+                    "bqaudit.scanner.metadata_extractor.extract_query_metadata"
+                ) as mock_queries:
+                    with patch(
+                        "bqaudit.scanner.metadata_extractor.extract_access_patterns"
+                    ) as mock_access:
                         with patch("httpx.AsyncClient.post") as mock_post:
                             # Setup mocks
                             mock_auth.return_value = Mock()
@@ -359,7 +375,9 @@ class TestScanCommandProgressIndicators:
                             mock_access.return_value = []
 
                             # Simulate network error
-                            mock_post.side_effect = httpx.ConnectError("Connection refused")
+                            mock_post.side_effect = httpx.ConnectError(
+                                "Connection refused"
+                            )
 
                             # Execute scan
                             client = BQAuditAPIClient(mock_mode=False)
@@ -369,14 +387,17 @@ class TestScanCommandProgressIndicators:
                             with pytest.raises(ScanError) as exc_info:
                                 await executor.execute_real_scan(
                                     project_id="my-project",
-                                    ephemeral_token="eph_test_token"
+                                    ephemeral_token="eph_test_token",
                                 )
 
                             assert exc_info.value.exit_code == 1
 
                             # Verify error message was printed
                             captured = capsys.readouterr()
-                            assert "Unable to reach audit server" in captured.err or "Unable to reach audit server" in captured.out
+                            assert (
+                                "Unable to reach audit server" in captured.err
+                                or "Unable to reach audit server" in captured.out
+                            )
 
     @pytest.mark.asyncio
     async def test_scan_handles_timeout_error(self, mock_credentials_file, capsys):
@@ -393,9 +414,15 @@ class TestScanCommandProgressIndicators:
 
         # Mock BigQuery and server responses
         with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
-            with patch("bqaudit.scanner.metadata_extractor.extract_table_metadata") as mock_tables:
-                with patch("bqaudit.scanner.metadata_extractor.extract_query_metadata") as mock_queries:
-                    with patch("bqaudit.scanner.metadata_extractor.extract_access_patterns") as mock_access:
+            with patch(
+                "bqaudit.scanner.metadata_extractor.extract_table_metadata"
+            ) as mock_tables:
+                with patch(
+                    "bqaudit.scanner.metadata_extractor.extract_query_metadata"
+                ) as mock_queries:
+                    with patch(
+                        "bqaudit.scanner.metadata_extractor.extract_access_patterns"
+                    ) as mock_access:
                         with patch("httpx.AsyncClient.post") as mock_post:
                             # Setup mocks
                             mock_auth.return_value = Mock()
@@ -404,7 +431,9 @@ class TestScanCommandProgressIndicators:
                             mock_access.return_value = []
 
                             # Simulate timeout error
-                            mock_post.side_effect = httpx.TimeoutException("Request timeout")
+                            mock_post.side_effect = httpx.TimeoutException(
+                                "Request timeout"
+                            )
 
                             # Execute scan
                             client = BQAuditAPIClient(mock_mode=False)
@@ -414,11 +443,14 @@ class TestScanCommandProgressIndicators:
                             with pytest.raises(ScanError) as exc_info:
                                 await executor.execute_real_scan(
                                     project_id="my-project",
-                                    ephemeral_token="eph_test_token"
+                                    ephemeral_token="eph_test_token",
                                 )
 
                             assert exc_info.value.exit_code == 1
 
                             # Verify error message was printed
                             captured = capsys.readouterr()
-                            assert "Audit timeout" in captured.err or "Audit timeout" in captured.out
+                            assert (
+                                "Audit timeout" in captured.err
+                                or "Audit timeout" in captured.out
+                            )

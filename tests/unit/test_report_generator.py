@@ -1,6 +1,5 @@
 """Unit tests for Markdown report generator (Story 5.2)."""
 
-
 import pytest
 
 from bqaudit.api.models import AuditResponse, AuditSummary, Recommendation
@@ -140,9 +139,7 @@ class TestExecutiveSummary:
 
         assert "Potential Monthly Savings | €250.00" in summary
 
-    def test_executive_summary_includes_priority_breakdown(
-        self, sample_audit_response
-    ):
+    def test_executive_summary_includes_priority_breakdown(self, sample_audit_response):
         """Test that Executive Summary includes priority counts."""
         generator = MarkdownReportGenerator(sample_audit_response)
 
@@ -444,7 +441,13 @@ class TestEdgeCases:
                 high_priority_count=50,
                 medium_priority_count=70,
                 low_priority_count=30,
-                categories_breakdown={"storage": 30, "queries": 40, "partitioning": 40, "clustering": 30, "temporal": 10},
+                categories_breakdown={
+                    "storage": 30,
+                    "queries": 40,
+                    "partitioning": 40,
+                    "clustering": 30,
+                    "temporal": 10,
+                },
             ),
             audit_id="test",
             new_ephemeral_token="token",

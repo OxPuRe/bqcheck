@@ -5,6 +5,7 @@ Generates well-formatted Markdown reports from AuditResponse data.
 
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from bqaudit.api.models import AuditResponse
 
@@ -95,7 +96,9 @@ class MarkdownReportGenerator:
 """
             for category, count in sorted(summary.categories_breakdown.items()):
                 savings = category_savings.get(category, 0.0)
-                exec_summary += f"| {category.capitalize()} | {count} | €{savings:.2f} |\n"
+                exec_summary += (
+                    f"| {category.capitalize()} | {count} | €{savings:.2f} |\n"
+                )
 
         return exec_summary
 
@@ -247,11 +250,11 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
 
     def save_report(
         self,
-        output_dir: Path | None = None,
-        output_path: Path | None = None,
+        output_dir: Optional[Path] = None,
+        output_path: Optional[Path] = None,
         force: bool = False,
         interactive: bool = False,
-    ) -> Path | None:
+    ) -> Optional[Path]:
         """
         Generate and save report to file.
 
@@ -293,7 +296,7 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
         # Determine final output path
         if output_path is not None:
             # Story 5.3: Detect trailing slash (user might think it's a directory)
-            if str(output_path).endswith('/') or str(output_path).endswith('\\'):
+            if str(output_path).endswith("/") or str(output_path).endswith("\\"):
                 raise ValueError(
                     f"output_path appears to be a directory (ends with slash): {output_path}. "
                     "Please specify a filename, e.g., 'reports/audit.md' not 'reports/'"
@@ -336,7 +339,9 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
                 # Prompt user for overwrite
                 # Validate input, handle non-TTY, limit length
                 try:
-                    response = input(f"File exists: {final_path}. Overwrite? [y/N] ").strip()[:10]
+                    response = input(
+                        f"File exists: {final_path}. Overwrite? [y/N] "
+                    ).strip()[:10]
                     if response.lower() not in ("y", "yes"):
                         # User declined - return None to indicate no action taken
                         return None
@@ -354,9 +359,7 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
         try:
             final_path.write_text(report_content, encoding="utf-8")
         except PermissionError as e:
-            raise PermissionError(
-                f"Permission denied writing to {final_path}"
-            ) from e
+            raise PermissionError(f"Permission denied writing to {final_path}") from e
         except (OSError, IOError, UnicodeEncodeError) as e:
             # Catch all file operation errors
             # OSError: disk full, filesystem errors

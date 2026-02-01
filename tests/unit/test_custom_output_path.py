@@ -305,7 +305,9 @@ class TestFileOverwriteHandling:
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
-        result_path = generator.save_report(output_path=output_path, force=False, interactive=True)
+        result_path = generator.save_report(
+            output_path=output_path, force=False, interactive=True
+        )
 
         # Then: File should be overwritten
         assert "BigQuery Audit Report" in result_path.read_text()
@@ -339,7 +341,9 @@ class TestFileOverwriteHandling:
         # Then: Should return None when user declines
         # (Story 5.3: Changed from raising FileExistsError to returning None)
         # CLI will handle None by exiting with appropriate message
-        result = generator.save_report(output_path=output_path, force=False, interactive=True)
+        result = generator.save_report(
+            output_path=output_path, force=False, interactive=True
+        )
         assert result is None, "Expected None when user declines overwrite"
 
         # Verify original file was not overwritten
@@ -384,7 +388,12 @@ class TestScanCommandWithCustomOutput:
     """Integration tests for scan command with --output and --force flags."""
 
     def test_scan_with_custom_output_absolute_path(
-        self, tmp_path, mock_credentials, mock_creds_path, mock_audit_response, monkeypatch
+        self,
+        tmp_path,
+        mock_credentials,
+        mock_creds_path,
+        mock_audit_response,
+        monkeypatch,
     ):
         """Test scan with custom absolute output path (AC1)."""
         # Setup credentials
@@ -424,7 +433,12 @@ class TestScanCommandWithCustomOutput:
         # Just verify the file was created correctly
 
     def test_scan_with_custom_output_relative_path(
-        self, tmp_path, mock_credentials, mock_creds_path, mock_audit_response, monkeypatch
+        self,
+        tmp_path,
+        mock_credentials,
+        mock_creds_path,
+        mock_audit_response,
+        monkeypatch,
     ):
         """Test scan with relative output path (AC6)."""
         # Setup credentials
@@ -465,7 +479,12 @@ class TestScanCommandWithCustomOutput:
         assert full_path.exists()
 
     def test_scan_with_force_overwrite(
-        self, tmp_path, mock_credentials, mock_creds_path, mock_audit_response, monkeypatch
+        self,
+        tmp_path,
+        mock_credentials,
+        mock_creds_path,
+        mock_audit_response,
+        monkeypatch,
     ):
         """Test scan with --force flag overwrites without prompt (AC4)."""
         # Setup credentials
@@ -511,7 +530,12 @@ class TestScanCommandWithCustomOutput:
         assert "BigQuery Audit Report" in output_path.read_text()
 
     def test_scan_permission_denied_displays_error(
-        self, tmp_path, mock_credentials, mock_creds_path, mock_audit_response, monkeypatch
+        self,
+        tmp_path,
+        mock_credentials,
+        mock_creds_path,
+        mock_audit_response,
+        monkeypatch,
     ):
         """Test scan displays error on permission denied (AC5)."""
         # Setup credentials

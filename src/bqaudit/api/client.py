@@ -684,7 +684,7 @@ class BQAuditAPIClient:
             # Story 5.3: Log retry attempts for debugging
             after=after_log(logging.getLogger(__name__), logging.WARNING),
         )
-        async def _send_request():
+        async def _send_request() -> Any:
             """Send HTTP request with retry logic."""
             timeout = httpx.Timeout(HTTP_TIMEOUT_TOTAL, connect=HTTP_TIMEOUT_CONNECT)
 

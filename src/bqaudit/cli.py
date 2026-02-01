@@ -8,6 +8,7 @@ import json
 import logging
 import time
 from pathlib import Path
+from typing import Optional
 
 import httpx
 import typer
@@ -531,7 +532,7 @@ def scan(
         str, typer.Option("--project", "-p", help="GCP project ID to scan")
     ],
     output: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option(
             "--output",
             "-o",
@@ -598,12 +599,11 @@ def scan(
         # Step 4: Execute scan with token management
         # Mock mode: True (default for Epic 3)
         from bqaudit.constants import is_real_mode
+
         mock_mode = not is_real_mode()
         api_client = BQAuditAPIClient(mock_mode=mock_mode)
         executor = ScanExecutor(api_client)
-        executor.execute_scan_with_tokens(
-            project, output_path=output, force=force
-        )
+        executor.execute_scan_with_tokens(project, output_path=output, force=force)
 
         # Step 5: Show warning if was last token (AC2, Story 3.5)
         if is_last_token:
@@ -686,6 +686,7 @@ def license_activate(
         # activate_license will raise FileExistsError if already activated
         # Mock mode: True (default for Epic 3), False if BQAUDIT_REAL_MODE=true
         from bqaudit.constants import is_real_mode
+
         mock_mode = not is_real_mode()
         result = activate_license(master_key, mock_mode=mock_mode)
 

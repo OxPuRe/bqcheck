@@ -10,6 +10,7 @@ This allows callers to decide when to exit (e.g., sys.exit(code)),
 making the handlers testable and reusable in library contexts.
 """
 
+from typing import Optional
 
 from rich.console import Console
 
@@ -21,7 +22,7 @@ from bqaudit.constants import (
 
 
 def handle_bigquery_permission_error(
-    console: Console, project_id: str, email: str | None
+    console: Console, project_id: str, email: Optional[str]
 ) -> int:
     """
     Handle BigQuery permission denied errors (AC6).
@@ -44,9 +45,7 @@ def handle_bigquery_permission_error(
         console.print(f"[yellow]  --member=user:{email} \\[/yellow]")
     else:
         console.print("[yellow]  --member=user:YOUR-EMAIL@example.com \\[/yellow]")
-    console.print(
-        "[yellow]  --role=roles/bigquery.metadataViewer[/yellow]"
-    )
+    console.print("[yellow]  --role=roles/bigquery.metadataViewer[/yellow]")
     return EXIT_AUTH_ERROR
 
 
@@ -60,7 +59,9 @@ def handle_network_error(console: Console) -> int:
     Returns:
         EXIT_NETWORK_ERROR code (1)
     """
-    console.print("[red]❌ Error: Unable to reach audit server. Check your internet connection.[/red]")
+    console.print(
+        "[red]❌ Error: Unable to reach audit server. Check your internet connection.[/red]"
+    )
     console.print("\nRetry the scan when connection is restored.")
     console.print("[dim]Your token was not consumed.[/dim]")
     return EXIT_NETWORK_ERROR
@@ -76,7 +77,9 @@ def handle_timeout_error(console: Console) -> int:
     Returns:
         EXIT_NETWORK_ERROR code (1)
     """
-    console.print("[red]❌ Error: Audit timeout (>15 minutes). This may indicate a very large project.[/red]")
+    console.print(
+        "[red]❌ Error: Audit timeout (>15 minutes). This may indicate a very large project.[/red]"
+    )
     console.print("\nContact support if the issue persists.")
     console.print("[dim]Your token was not consumed.[/dim]")
     return EXIT_NETWORK_ERROR

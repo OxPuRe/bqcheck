@@ -110,7 +110,9 @@ class CredentialStore:
             # Verify permissions are safe (owner only)
             mode = dir_path.stat().st_mode
             if mode & 0o077:  # Group/other have permissions
-                logger.warning(f"Credentials directory has unsafe permissions: {oct(mode)}")
+                logger.warning(
+                    f"Credentials directory has unsafe permissions: {oct(mode)}"
+                )
                 try:
                     dir_path.chmod(0o700)
                 except (PermissionError, OSError) as e:
@@ -134,15 +136,13 @@ class CredentialStore:
         try:
             # Create file with 0o600 from the start (prevents race condition)
             fd = os.open(
-                str(temp_path),
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                mode=0o600
+                str(temp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode=0o600
             )
 
             try:
-                with os.fdopen(fd, 'w') as f:
+                with os.fdopen(fd, "w") as f:
                     f.write(json.dumps(validated.model_dump(mode="json"), indent=2))
-                    f.write('\n')
+                    f.write("\n")
             except Exception:
                 try:
                     os.close(fd)
@@ -169,7 +169,9 @@ class CredentialStore:
             except FileNotFoundError:
                 pass
             except OSError as cleanup_err:
-                logger.warning(f"Failed to cleanup temp file {temp_path}: {cleanup_err}")
+                logger.warning(
+                    f"Failed to cleanup temp file {temp_path}: {cleanup_err}"
+                )
             raise
 
     @classmethod

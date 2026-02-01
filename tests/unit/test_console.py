@@ -26,7 +26,7 @@ class TestProgressMessages:
 
         # When: Display start message
         console = Console(file=io.StringIO())
-        with patch('bqaudit.console.console', console):
+        with patch("bqaudit.console.console", console):
             show_start_message(project_id)
 
         # Then: Message includes emoji and project ID
@@ -41,12 +41,12 @@ class TestProgressMessages:
         console = Console(file=io.StringIO())
 
         # When: Get extraction progress context
-        with patch('bqaudit.console.console', console):
+        with patch("bqaudit.console.console", console):
             context = show_extraction_progress()
 
         # Then: Context is a status manager
-        assert hasattr(context, '__enter__')
-        assert hasattr(context, '__exit__')
+        assert hasattr(context, "__enter__")
+        assert hasattr(context, "__exit__")
 
     def test_server_upload_message(self):
         """Test server upload message (AC3)."""
@@ -54,7 +54,7 @@ class TestProgressMessages:
         console = Console(file=io.StringIO())
 
         # When: Display server upload message
-        with patch('bqaudit.console.console', console):
+        with patch("bqaudit.console.console", console):
             show_server_upload()
 
         # Then: Message includes emoji and text
@@ -70,7 +70,7 @@ class TestProgressMessages:
 
         # When: Display success message
         console = Console(file=io.StringIO())
-        with patch('bqaudit.console.console', console):
+        with patch("bqaudit.console.console", console):
             show_success_message(count, savings)
 
         # Then: Message includes count and formatted savings
@@ -87,7 +87,7 @@ class TestProgressMessages:
 
         # When: Display success message
         console = Console(file=io.StringIO())
-        with patch('bqaudit.console.console', console):
+        with patch("bqaudit.console.console", console):
             show_success_message(count, savings)
 
         # Then: Message handles zero correctly
@@ -103,14 +103,14 @@ class TestProgressMessages:
 
         # When: Display success message
         console = Console(file=io.StringIO())
-        with patch('bqaudit.console.console', console):
+        with patch("bqaudit.console.console", console):
             show_success_message(count, savings)
 
         # Then: Message includes thousand separator
         output = console.file.getvalue()
         assert "150 recommendations" in output
         # Rich may format with comma or space as thousands separator
-        assert ("€123,456.78" in output or "€123456.78" in output)
+        assert "€123,456.78" in output or "€123456.78" in output
 
 
 class TestElapsedTimer:
@@ -125,8 +125,11 @@ class TestElapsedTimer:
         async def mock_analysis_progress():
             """Mock version with controlled timing."""
             from datetime import datetime, timezone
+
             datetime.now(timezone.utc)
-            console.print("⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)...")
+            console.print(
+                "⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)..."
+            )
 
             # Simulate 2 updates (5s, 10s)
             for elapsed_seconds in [5, 10]:
@@ -136,7 +139,7 @@ class TestElapsedTimer:
                 console.print(f"⏱️  Elapsed: {minutes}m {seconds}s")
 
         # When: Run timer task
-        with patch('bqaudit.console.console', console):
+        with patch("bqaudit.console.console", console):
             timer_task = asyncio.create_task(mock_analysis_progress())
             await timer_task
 
@@ -155,8 +158,11 @@ class TestElapsedTimer:
         async def mock_long_analysis():
             """Mock version simulating 2 minutes."""
             from datetime import datetime, timezone
+
             datetime.now(timezone.utc)
-            console.print("⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)...")
+            console.print(
+                "⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)..."
+            )
 
             # Simulate 2 minutes (120 seconds)
             elapsed_seconds = 125  # 2m 5s
@@ -166,7 +172,7 @@ class TestElapsedTimer:
             console.print(f"⏱️  Elapsed: {minutes}m {seconds}s")
 
         # When: Run timer
-        with patch('bqaudit.console.console', console):
+        with patch("bqaudit.console.console", console):
             timer_task = asyncio.create_task(mock_long_analysis())
             await timer_task
 
@@ -192,7 +198,7 @@ class TestElapsedTimer:
         console = Console(file=io.StringIO())
 
         # When: Start timer, let it run briefly, then cancel
-        with patch('bqaudit.console.console', console):
+        with patch("bqaudit.console.console", console):
             timer_task = asyncio.create_task(show_analysis_progress())
 
             # Let timer start
