@@ -42,3 +42,26 @@ HTTP_SYNC_TIMEOUT_MUTATION = 10.0  # State-changing operations (activate, renew,
 # Environment variables for real vs mock mode (Story 5.3 - Code Review Round 3, Issue #3)
 ENV_VAR_REAL_MODE = "BQAUDIT_REAL_MODE"  # Controls API client mode (mock vs real server)
 ENV_VAR_REAL_SCAN = "BQAUDIT_REAL_SCAN"  # Controls scan execution (simulated vs real)
+
+
+# Helper functions for environment variable checks (Code Review Round 4, Issue #1 & #4)
+def is_real_mode() -> bool:
+    """
+    Check if real mode is enabled via BQAUDIT_REAL_MODE environment variable.
+
+    Returns:
+        True if BQAUDIT_REAL_MODE=true, False otherwise (default: mock mode)
+    """
+    import os
+    return os.getenv(ENV_VAR_REAL_MODE, "").lower() == "true"
+
+
+def is_real_scan() -> bool:
+    """
+    Check if real scan is enabled via BQAUDIT_REAL_SCAN environment variable.
+
+    Returns:
+        True if BQAUDIT_REAL_SCAN=true, False otherwise (default: simulated scan)
+    """
+    import os
+    return os.getenv(ENV_VAR_REAL_SCAN, "").lower() == "true"

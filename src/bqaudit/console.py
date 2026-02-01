@@ -89,6 +89,9 @@ async def show_analysis_progress() -> None:
     Using run_in_executor() to prevent event loop blocking on slow terminals
     (NFS mounts, SSH lag, pipe redirection).
 
+    Code Review Round 4, Issue #2: Use get_running_loop() instead of deprecated
+    get_event_loop() for correct async context behavior (Python 3.10+).
+
     Returns:
         None (runs until cancelled, never returns normally)
 
@@ -106,7 +109,7 @@ async def show_analysis_progress() -> None:
     from bqaudit.constants import GLOBAL_AUDIT_TIMEOUT_SECONDS
 
     start_time = datetime.now(timezone.utc)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()  # Correct for async context (not deprecated)
 
     # Non-blocking initial message
     await loop.run_in_executor(

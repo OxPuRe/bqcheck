@@ -1,5 +1,6 @@
 """HTTP client for bqaudit server API communication."""
 
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, TypedDict, cast
@@ -391,7 +392,6 @@ class BQAuditAPIClient:
             retry_if_exception_type,
             after_log,
         )
-        import logging
         from bqaudit.constants import (
             HTTP_TIMEOUT_TOTAL,
             HTTP_TIMEOUT_CONNECT,

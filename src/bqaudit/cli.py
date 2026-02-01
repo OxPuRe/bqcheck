@@ -597,7 +597,8 @@ def scan(
 
         # Step 4: Execute scan with token management
         # Mock mode: True (default for Epic 3)
-        mock_mode = os.getenv("BQAUDIT_REAL_MODE", "").lower() != "true"
+        from bqaudit.constants import is_real_mode
+        mock_mode = not is_real_mode()
         api_client = BQAuditAPIClient(mock_mode=mock_mode)
         executor = ScanExecutor(api_client)
         executor.execute_scan_with_tokens(
@@ -684,7 +685,8 @@ def license_activate(
         # AC4: Check for existing credentials
         # activate_license will raise FileExistsError if already activated
         # Mock mode: True (default for Epic 3), False if BQAUDIT_REAL_MODE=true
-        mock_mode = os.getenv("BQAUDIT_REAL_MODE", "").lower() != "true"
+        from bqaudit.constants import is_real_mode
+        mock_mode = not is_real_mode()
         result = activate_license(master_key, mock_mode=mock_mode)
 
         # AC1: Success message with balance

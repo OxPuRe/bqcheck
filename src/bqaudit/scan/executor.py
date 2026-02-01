@@ -150,11 +150,13 @@ class ScanExecutor:
             # Choose scan mode based on environment variable
             # Note: BQAUDIT_REAL_SCAN controls scan execution (simulated vs real)
             # Note: BQAUDIT_REAL_MODE controls API client mode (mock vs real server)
-            use_real_scan = os.getenv('BQAUDIT_REAL_SCAN', '').lower() == 'true'
-            
+            from bqaudit.constants import is_real_scan
+            use_real_scan = is_real_scan()
+
             if use_real_scan:
                 # Epic 5: Execute real audit with server
-                logger.info('Executing REAL audit (BQAUDIT_REAL_SCAN=true)')
+                from bqaudit.constants import ENV_VAR_REAL_SCAN
+                logger.info(f'Executing REAL audit ({ENV_VAR_REAL_SCAN}=true)')
                 import asyncio
                 # Note: Using asyncio.run() in sync context. This creates a new event loop.
                 # LIMITATION: Cannot be called from existing async context (would raise RuntimeError).
@@ -181,7 +183,7 @@ class ScanExecutor:
                 report_path = generator.save_report(
                     output_path=output_path,
                     force=force,
-                    interactive=False,  # CLI handles prompts at higher level
+                    interactive=False,  # Never prompt user; return None if file exists without force
                 )
                 if report_path is None:
                     # File exists and user/config declined overwrite
