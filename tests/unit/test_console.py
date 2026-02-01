@@ -125,7 +125,7 @@ class TestElapsedTimer:
         async def mock_analysis_progress():
             """Mock version with controlled timing."""
             from datetime import datetime, timezone
-            start_time = datetime.now(timezone.utc)
+            datetime.now(timezone.utc)
             console.print("⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)...")
 
             # Simulate 2 updates (5s, 10s)
@@ -155,7 +155,7 @@ class TestElapsedTimer:
         async def mock_long_analysis():
             """Mock version simulating 2 minutes."""
             from datetime import datetime, timezone
-            start_time = datetime.now(timezone.utc)
+            datetime.now(timezone.utc)
             console.print("⚙️  Analyzing BigQuery patterns (this may take up to 15 minutes)...")
 
             # Simulate 2 minutes (120 seconds)

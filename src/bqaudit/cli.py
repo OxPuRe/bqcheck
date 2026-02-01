@@ -6,7 +6,6 @@ Provides commands: validate, scan, license (activate, status, revoke).
 
 import json
 import logging
-import os
 import time
 from pathlib import Path
 
@@ -620,7 +619,7 @@ def scan(
         # Re-raise Exit to preserve exit code
         raise
 
-    except PermissionError as e:
+    except PermissionError:
         # AC5: Permission denied writing file
         console.print(f"\n[red]❌ Error: Permission denied writing to {output}[/red]\n")
         raise typer.Exit(ExitCode.FILE_ERROR)

@@ -12,7 +12,7 @@ import hmac
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, TypedDict, cast
+from typing import Any, Dict, TypedDict
 
 import httpx
 
@@ -23,9 +23,9 @@ from bqaudit.api.exceptions import (
 )
 from bqaudit.api.models import (
     ActivationResponse,
-    TokenRenewalResponse,
     AuditRequest,
     AuditResponse,
+    TokenRenewalResponse,
 )
 from bqaudit.constants import HTTP_SYNC_TIMEOUT_CHECK, HTTP_SYNC_TIMEOUT_MUTATION
 
@@ -70,9 +70,7 @@ def _validate_json_content_type(response: httpx.Response) -> None:
         )
 
 
-def _create_hmac_signature(
-    request_body: str, master_key: str, timestamp: str
-) -> str:
+def _create_hmac_signature(request_body: str, master_key: str, timestamp: str) -> str:
     """
     Create HMAC-SHA256 signature for request integrity verification.
 
@@ -147,17 +145,18 @@ def _validate_response_size_and_parse_json(response: httpx.Response) -> Any:
         NetworkError: If Content-Length is invalid
     """
     # Maximum response size: 50MB (plenty for audit responses)
-    MAX_RESPONSE_SIZE = 50 * 1024 * 1024  # 50MB
+    max_response_size = 50 * 1024 * 1024  # 50MB
 
     # Check Content-Length header before parsing
     content_length_str = response.headers.get("content-length")
     if content_length_str:
         try:
             content_length = int(content_length_str)
-            if content_length > MAX_RESPONSE_SIZE:
+            if content_length > max_response_size:
                 raise ValueError(
-                    f"Response too large: {content_length} bytes > {MAX_RESPONSE_SIZE} limit (50MB). "
-                    "This may indicate a memory exhaustion attack."
+                    f"Response too large: {content_length} bytes "
+                    f"> {max_response_size} (50MB). "
+                    "Possible memory exhaustion attack."
                 )
         except (ValueError, TypeError) as e:
             if isinstance(e, ValueError) and "Response too large" in str(e):
@@ -171,10 +170,11 @@ def _validate_response_size_and_parse_json(response: httpx.Response) -> Any:
     # (Content-Length may be missing or wrong)
     try:
         body_size = len(response.content)
-        if body_size > MAX_RESPONSE_SIZE:
+        if body_size > max_response_size:
             raise ValueError(
-                f"Response body too large: {body_size} bytes > {MAX_RESPONSE_SIZE} limit (50MB). "
-                "This may indicate a memory exhaustion attack."
+                f"Response body too large: {body_size} bytes "
+                f"> {max_response_size} (50MB). "
+                "Possible memory exhaustion attack."
             )
     except TypeError:
         # Skip validation for test mocks (Mock objects don't support len())
@@ -256,7 +256,7 @@ def check_server_health() -> Dict[str, Any]:
                     f"expected dict, got {type(data).__name__}"
                 )
             return data
-    except httpx.ConnectError as e:
+    except httpx.ConnectError:
         # Don't expose internal exception details
         # Original exception may contain DNS lookup info, IP addresses, etc.
         raise httpx.ConnectError("Cannot reach bqaudit server (network error)")
@@ -270,10 +270,8 @@ def check_server_health() -> Dict[str, Any]:
         )
     except ValueError as e:
         # JSONDecodeError is a subclass of ValueError
-        # Raised when server returns non-JSON response (HTML error page, plain text, etc.)
-        raise NetworkError(
-            f"Server returned invalid response (expected JSON): {e}"
-        )
+        # Raised when server returns non-JSON (HTML, plain text, etc.)
+        raise NetworkError(f"Server returned invalid response (expected JSON): {e}")
 
 
 class BQAuditAPIClient:
@@ -326,13 +324,15 @@ class BQAuditAPIClient:
             # Enforce HTTPS in ALL modes (AC8 - FR62)
             if parsed.scheme != "https":
                 raise HTTPSRequiredError(
-                    f"HTTPS required for server communication (got {parsed.scheme}://). "
+                    f"HTTPS required (got {parsed.scheme}://). "
                     f"Set BQAUDIT_API_URL to https:// URL"
                 )
 
             # Validate no path traversal attempts
             if ".." in parsed.netloc or ".." in parsed.path:
-                raise ValueError(f"Invalid URL (path traversal detected): {server_url_raw}")
+                raise ValueError(
+                    f"Invalid URL (path traversal detected): {server_url_raw}"
+                )
 
             self.server_url = server_url_raw
         except (ValueError, AttributeError) as e:
@@ -460,7 +460,7 @@ class BQAuditAPIClient:
         except ValueError as e:
             # JSONDecodeError is a subclass of ValueError
             raise NetworkError(
-                f"Server returned invalid response during activation (expected JSON): {e}"
+                f"Invalid response during activation (expected JSON): {e}"
             )
 
     def report_scan_success(
@@ -534,7 +534,7 @@ class BQAuditAPIClient:
         except ValueError as e:
             # JSONDecodeError is a subclass of ValueError
             raise NetworkError(
-                f"Server returned invalid response during scan report (expected JSON): {e}"
+                f"Invalid response during scan report (expected JSON): {e}"
             )
 
     def renew_token(
@@ -622,7 +622,7 @@ class BQAuditAPIClient:
         except ValueError as e:
             # JSONDecodeError is a subclass of ValueError
             raise NetworkError(
-                f"Server returned invalid response during token renewal (expected JSON): {e}"
+                f"Invalid response during token renewal (expected JSON): {e}"
             )
 
     async def execute_audit(
@@ -656,18 +656,19 @@ class BQAuditAPIClient:
         """
         # Import here to avoid circular imports
         from tenacity import (
+            after_log,
             retry,
+            retry_if_exception_type,
             stop_after_attempt,
             wait_exponential,
-            retry_if_exception_type,
-            after_log,
         )
+
         from bqaudit.constants import (
-            HTTP_TIMEOUT_TOTAL,
-            HTTP_TIMEOUT_CONNECT,
             HTTP_MAX_RETRIES,
-            HTTP_RETRY_MIN_WAIT,
             HTTP_RETRY_MAX_WAIT,
+            HTTP_RETRY_MIN_WAIT,
+            HTTP_TIMEOUT_CONNECT,
+            HTTP_TIMEOUT_TOTAL,
         )
 
         @retry(
@@ -679,9 +680,7 @@ class BQAuditAPIClient:
             # ConnectError: connection failures (DNS, refused connection) - transient
             # TimeoutException: request timeout - transient
             # NOT NetworkError: too broad, includes permanent errors (SSL, certificates)
-            retry=retry_if_exception_type(
-                (httpx.ConnectError, httpx.TimeoutException)
-            ),
+            retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
             # Story 5.3: Log retry attempts for debugging
             after=after_log(logging.getLogger(__name__), logging.WARNING),
         )

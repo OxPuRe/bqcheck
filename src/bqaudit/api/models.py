@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime
-from typing import Any, ClassVar, Optional
+from typing import ClassVar, Optional
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 

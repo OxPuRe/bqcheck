@@ -1,10 +1,7 @@
 """Unit tests for error message formatters (Story 5.3, Task 7.3)."""
 
 import io
-import sys
-from unittest.mock import patch
 
-import pytest
 from rich.console import Console
 
 from bqaudit.error_handlers import (

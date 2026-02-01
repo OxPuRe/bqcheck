@@ -110,6 +110,7 @@ async def show_analysis_progress() -> None:
         ...         pass
     """
     import logging
+
     from bqaudit.constants import GLOBAL_AUDIT_TIMEOUT_SECONDS
 
     logger = logging.getLogger(__name__)

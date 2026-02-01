@@ -1,19 +1,13 @@
 """Integration tests for scan command (Story 5.1)."""
 
 import json
-from pathlib import Path
 from unittest.mock import Mock, patch
 
-import pytest
 import httpx
+import pytest
 
 from bqaudit.api.client import BQAuditAPIClient
 from bqaudit.api.models import AuditRequest, AuditResponse, AuditSummary, Recommendation
-from bqaudit.constants import (
-    EXIT_SUCCESS,
-    EXIT_NETWORK_ERROR,
-    EXIT_NO_TOKENS,
-)
 
 
 @pytest.fixture
@@ -259,10 +253,12 @@ class TestScanCommandProgressIndicators:
         - Verify success message with recommendations count and savings
         """
         # Mock BigQuery and server responses
-        from bqaudit.scan.executor import ScanExecutor
-        from bqaudit.api.client import BQAuditAPIClient
         import io
+
         from rich.console import Console
+
+        from bqaudit.api.client import BQAuditAPIClient
+        from bqaudit.scan.executor import ScanExecutor
 
         # Create mock console to capture output
         console = Console(file=io.StringIO())
@@ -289,7 +285,7 @@ class TestScanCommandProgressIndicators:
                                 client = BQAuditAPIClient(mock_mode=False)
                                 executor = ScanExecutor(client)
 
-                                result = await executor.execute_real_scan(
+                                await executor.execute_real_scan(
                                     project_id="my-project",
                                     ephemeral_token="eph_test_token"
                                 )
@@ -309,9 +305,10 @@ class TestScanCommandProgressIndicators:
         - Display actionable error message
         - Raises ScanError with exit code 3
         """
-        from bqaudit.scan.executor import ScanExecutor, ScanError
-        from bqaudit.api.client import BQAuditAPIClient
         from google.api_core.exceptions import PermissionDenied
+
+        from bqaudit.api.client import BQAuditAPIClient
+        from bqaudit.scan.executor import ScanError, ScanExecutor
 
         # Mock BigQuery to raise PermissionDenied
         with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
@@ -346,8 +343,8 @@ class TestScanCommandProgressIndicators:
         - Display actionable error message
         - Raises ScanError with exit code 1
         """
-        from bqaudit.scan.executor import ScanExecutor, ScanError
         from bqaudit.api.client import BQAuditAPIClient
+        from bqaudit.scan.executor import ScanError, ScanExecutor
 
         # Mock BigQuery and server responses
         with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
@@ -391,8 +388,8 @@ class TestScanCommandProgressIndicators:
         - Display actionable error message
         - Raises ScanError with exit code 1
         """
-        from bqaudit.scan.executor import ScanExecutor, ScanError
         from bqaudit.api.client import BQAuditAPIClient
+        from bqaudit.scan.executor import ScanError, ScanExecutor
 
         # Mock BigQuery and server responses
         with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:

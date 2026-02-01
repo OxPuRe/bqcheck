@@ -7,7 +7,6 @@ import pytest
 from bqaudit.license.storage import (
     CredentialNotFoundError,
     CredentialStore,
-    UnsafePermissionsError,
 )
 
 

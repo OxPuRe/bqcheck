@@ -10,17 +10,13 @@ This allows callers to decide when to exit (e.g., sys.exit(code)),
 making the handlers testable and reusable in library contexts.
 """
 
-from typing import NoReturn
 
 from rich.console import Console
 
 from bqaudit.constants import (
-    EXIT_SUCCESS,
-    EXIT_NETWORK_ERROR,
-    EXIT_FILE_ERROR,
     EXIT_AUTH_ERROR,
-    EXIT_NO_TOKENS,
-    EXIT_RATE_LIMIT,
+    EXIT_FILE_ERROR,
+    EXIT_NETWORK_ERROR,
 )
 
 

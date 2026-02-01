@@ -62,7 +62,9 @@ select = [
     "N",    # pep8-naming
     "W",    # pycodestyle warnings
 ]
-ignore = []
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["bqaudit"]

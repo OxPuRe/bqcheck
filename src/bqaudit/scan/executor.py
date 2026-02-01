@@ -18,10 +18,10 @@ core dump), credentials may be recoverable.
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 import typer
@@ -253,11 +253,11 @@ class ScanExecutor:
 
             # Validate used_tokens length before append
             # Prevent unbounded growth and log when truncation occurs
-            MAX_USED_TOKENS = 100  # Reasonable limit for audit trail
+            max_used_tokens = 100  # Reasonable limit for audit trail
 
-            if len(credentials["used_tokens"]) >= MAX_USED_TOKENS:
+            if len(credentials["used_tokens"]) >= max_used_tokens:
                 logger.warning(
-                    f"used_tokens list at maximum capacity ({MAX_USED_TOKENS}). "
+                    f"used_tokens list at maximum capacity ({max_used_tokens}). "
                     "Keeping only last 5 tokens for recent audit trail."
                 )
                 credentials["used_tokens"] = credentials["used_tokens"][-4:]  # Keep 4, add 1 = 5
@@ -370,6 +370,7 @@ class ScanExecutor:
         """
         import asyncio
         import hashlib
+
         from bqaudit.api.models import AuditRequest
         from bqaudit.scanner import authenticate_bigquery
 
@@ -386,9 +387,9 @@ class ScanExecutor:
 
                 # Epic 2 Integration: Extract real metadata
                 from bqaudit.scanner.metadata_extractor import (
-                    extract_table_metadata,
-                    extract_query_metadata,
                     extract_access_patterns,
+                    extract_query_metadata,
+                    extract_table_metadata,
                 )
 
                 # Extract all metadata types

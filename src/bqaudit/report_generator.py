@@ -6,7 +6,7 @@ Generates well-formatted Markdown reports from AuditResponse data.
 from datetime import datetime, timezone
 from pathlib import Path
 
-from bqaudit.api.models import AuditResponse, Recommendation
+from bqaudit.api.models import AuditResponse
 
 
 class MarkdownReportGenerator:

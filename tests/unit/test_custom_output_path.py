@@ -11,14 +11,13 @@ Tests cover:
 
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 
+from bqaudit.api.models import AuditResponse, AuditSummary
 from bqaudit.cli import app
 from bqaudit.report_generator import MarkdownReportGenerator
-from bqaudit.api.models import AuditResponse, AuditSummary
 
 runner = CliRunner()
 
@@ -80,13 +79,11 @@ class TestPathResolution:
 
     def test_resolve_default_path_none(self, tmp_path, monkeypatch):
         """Test default path when no custom path provided."""
-        from datetime import datetime, timezone
 
         # Change to tmp_path to avoid conflicts with existing files
         monkeypatch.chdir(tmp_path)
 
         # When: No custom path (None)
-        custom_path = None
 
         # We'll test this via the MarkdownReportGenerator
         response = AuditResponse(
