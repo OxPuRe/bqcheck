@@ -454,6 +454,7 @@ def anonymize_metadata(metadata_dict: Dict[str, Any], salt: str) -> Dict[str, An
         "table_id",  # Will be anonymized since it contains table_catalog/schema/name
         "schema",
         "query_stats",
+        "filtered_columns",  # Sub-field of query_stats (column filtering patterns)
         # Aggregated query fields (from aggregate_query_metadata)
         "query_hash",
         "query_text",
@@ -514,7 +515,7 @@ def merge_table_metadata(
     - table_id: "dataset.table" format
     - last_modified_time: from access_patterns
     - schema: column definitions
-    - query_stats: aggregated query statistics
+    - query_stats: aggregated query statistics (bytes, count, filtered_columns)
 
     Args:
         tables: List of TableMetadata
@@ -527,23 +528,38 @@ def merge_table_metadata(
     """
     import re
 
+    from bqaudit.scanner.query_analyzer import aggregate_filtered_columns_by_table
+
     # Build lookup maps
     access_map = {}
     for pattern in access_patterns:
         key = f"{pattern.table_schema}.{pattern.table_name}"
         access_map[key] = pattern.last_modified_time
 
+    # Convert queries to list of dicts for query_analyzer
+    query_dicts = [q.model_dump() for q in queries]
+
     # Aggregate queries by table
-    query_stats_map: Dict[str, Dict[str, int]] = {}
+    query_stats_map: Dict[str, Dict[str, Any]] = {}
     for query in queries:
         # Extract table references from query (simplified - match dataset.table patterns)
         table_refs = re.findall(r"`?([a-z0-9_-]+)\.([a-z0-9_]+)`?", query.query.lower())
         for dataset, table in table_refs:
             key = f"{dataset}.{table}"
             if key not in query_stats_map:
-                query_stats_map[key] = {"total_bytes_processed": 0, "query_count": 0}
+                query_stats_map[key] = {
+                    "total_bytes_processed": 0,
+                    "query_count": 0,
+                    "filtered_columns": {}
+                }
             query_stats_map[key]["total_bytes_processed"] += query.total_bytes_processed
             query_stats_map[key]["query_count"] += 1
+
+    # Extract filtered columns for each table that has queries
+    for table_key in query_stats_map.keys():
+        filtered_cols = aggregate_filtered_columns_by_table(query_dicts, table_key)
+        if filtered_cols:
+            query_stats_map[table_key]["filtered_columns"] = filtered_cols
 
     # Merge everything
     enriched_tables = []
