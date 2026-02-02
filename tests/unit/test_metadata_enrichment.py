@@ -2,8 +2,6 @@
 
 from unittest.mock import Mock
 
-import pytest
-
 from bqaudit.scanner.anonymizer import merge_table_metadata
 from bqaudit.scanner.metadata_extractor import extract_table_schemas
 from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
