@@ -89,6 +89,61 @@ def extract_filtered_columns(query: str) -> List[str]:
     return filtered_columns
 
 
+def aggregate_filtered_columns_all_tables(
+    queries: List[Dict[str, any]]
+) -> Dict[str, Dict[str, int]]:
+    """
+    Aggregate filtered columns for all tables in a single pass.
+
+    More efficient than calling aggregate_filtered_columns_by_table() for each table
+    individually. Processes all queries once and builds a complete map.
+
+    Args:
+        queries: List of query metadata dicts with 'query' field
+
+    Returns:
+        Dict mapping table_key to column counts
+        e.g., {"dataset.users": {"user_id": 150, "status": 80}}
+
+    Example:
+        >>> queries = [
+        ...     {"query": "SELECT * FROM dataset.users WHERE user_id = 1"},
+        ...     {"query": "SELECT * FROM dataset.orders WHERE order_id = 123"}
+        ... ]
+        >>> aggregate_filtered_columns_all_tables(queries)
+        {'dataset.users': {'user_id': 1}, 'dataset.orders': {'order_id': 1}}
+    """
+    # Map of table_key -> column_name -> count
+    table_column_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+    for query_meta in queries:
+        query = query_meta.get('query', '')
+        if not query:
+            continue
+
+        query_lower = query.lower()
+
+        # Extract all table references from the query
+        # Matches dataset.table patterns (with optional backticks)
+        table_pattern = r'(?:from|join)\s+[`"]?([a-z0-9_-]+\.[a-z0-9_]+)[`"]?'
+        table_refs = re.findall(table_pattern, query_lower)
+
+        # Extract filtered columns once for this query
+        filtered_columns = extract_filtered_columns(query)
+
+        # Attribute filtered columns to all referenced tables
+        for table_ref in table_refs:
+            if filtered_columns:
+                for column in filtered_columns:
+                    table_column_counts[table_ref][column] += 1
+
+    # Convert defaultdict to regular dict
+    return {
+        table: dict(columns)
+        for table, columns in table_column_counts.items()
+    }
+
+
 def aggregate_filtered_columns_by_table(
     queries: List[Dict[str, any]],
     table_key: str
@@ -98,6 +153,9 @@ def aggregate_filtered_columns_by_table(
 
     Counts how many times each column appears in WHERE clauses of queries
     that reference the given table.
+
+    Note: For better performance when processing multiple tables, use
+    aggregate_filtered_columns_all_tables() instead.
 
     Args:
         queries: List of query metadata dicts with 'query' field

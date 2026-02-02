@@ -528,7 +528,7 @@ def merge_table_metadata(
     """
     import re
 
-    from bqaudit.scanner.query_analyzer import aggregate_filtered_columns_by_table
+    from bqaudit.scanner.query_analyzer import aggregate_filtered_columns_all_tables
 
     # Build lookup maps
     access_map = {}
@@ -555,10 +555,10 @@ def merge_table_metadata(
             query_stats_map[key]["total_bytes_processed"] += query.total_bytes_processed
             query_stats_map[key]["query_count"] += 1
 
-    # Extract filtered columns for each table that has queries
-    for table_key in query_stats_map.keys():
-        filtered_cols = aggregate_filtered_columns_by_table(query_dicts, table_key)
-        if filtered_cols:
+    # Extract filtered columns for all tables in a single pass (much more efficient)
+    all_filtered_columns = aggregate_filtered_columns_all_tables(query_dicts)
+    for table_key, filtered_cols in all_filtered_columns.items():
+        if table_key in query_stats_map and filtered_cols:
             query_stats_map[table_key]["filtered_columns"] = filtered_cols
 
     # Merge everything
