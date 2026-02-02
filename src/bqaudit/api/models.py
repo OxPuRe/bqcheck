@@ -140,7 +140,10 @@ class Recommendation(BaseModel):
 
     type: str = Field(description="Recommendation category")
     priority: str = Field(description="Priority level (HIGH, MEDIUM, LOW)")
-    title: Optional[str] = Field(default=None, description="Brief recommendation title (optional, server may not provide)")
+    title: Optional[str] = Field(
+        default=None,
+        description="Brief recommendation title (optional, server may not provide)",
+    )
     description: str = Field(description="Detailed recommendation description")
     savings_eur: float = Field(ge=0, description="Estimated monthly savings in EUR")
     implementation_steps: List[str] = Field(description="Steps to implement")
@@ -169,4 +172,6 @@ class AuditResponse(BaseModel):
     )
     summary: AuditSummary = Field(description="Audit summary statistics")
     audit_id: str = Field(description="Unique audit identifier")
-    new_ephemeral_token: Optional[str] = Field(default=None, description="New ephemeral token for next scan")
+    new_ephemeral_token: Optional[str] = Field(
+        default=None, description="New ephemeral token for next scan"
+    )

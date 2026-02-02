@@ -93,7 +93,9 @@ def _parse_clustering_from_ddl(ddl: str) -> list:
     # Look for CLUSTER BY clause
     # Example: CLUSTER BY customer_id, order_date
     # Stop at OPTIONS, semicolon, or end of DDL
-    cluster_match = re.search(r"CLUSTER\s+BY\s+([^;]+?)(?:OPTIONS|;|$)", ddl, re.IGNORECASE)
+    cluster_match = re.search(
+        r"CLUSTER\s+BY\s+([^;]+?)(?:OPTIONS|;|$)", ddl, re.IGNORECASE
+    )
     if cluster_match:
         fields_str = cluster_match.group(1).strip()
         # Split by comma and clean up whitespace
@@ -179,7 +181,9 @@ def extract_table_metadata(
             dataset_ref = client.get_dataset(f"{project_id}.{dataset.dataset_id}")
             locations.add(dataset_ref.location)
 
-        logger.info(f"Found {len(datasets)} datasets across {len(locations)} region(s): {locations}")
+        logger.info(
+            f"Found {len(datasets)} datasets across {len(locations)} region(s): {locations}"
+        )
 
         # Collect tables from all regions using project-wide INFORMATION_SCHEMA
         all_tables = []
@@ -462,10 +466,9 @@ def extract_table_schemas(
                 table_key = f"{row.table_schema}.{row.table_name}"
                 if table_key not in schemas:
                     schemas[table_key] = []
-                schemas[table_key].append({
-                    "name": row.column_name,
-                    "type": row.data_type
-                })
+                schemas[table_key].append(
+                    {"name": row.column_name, "type": row.data_type}
+                )
 
             logger.info(f"Extracted schemas for {len(schemas)} tables from {location}")
             return schemas
@@ -556,7 +559,9 @@ def extract_access_patterns(
                 patterns.append(access_pattern)
 
             # Success - log and return
-            logger.info(f"Extracted {len(patterns)} access patterns from location {location}")
+            logger.info(
+                f"Extracted {len(patterns)} access patterns from location {location}"
+            )
             return patterns
 
         except GoogleAPIError as e:

@@ -228,4 +228,3 @@ class TestScanExecutor:
         expected_hash = hashlib.sha256(original_token.encode("utf-8")).hexdigest()
         used_token_hashes = [ut["token_hash"] for ut in updated_creds["used_tokens"]]
         assert expected_hash in used_token_hashes
-

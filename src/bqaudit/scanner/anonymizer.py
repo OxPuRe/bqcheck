@@ -518,7 +518,7 @@ def merge_table_metadata(
     query_stats_map: dict[str, dict] = {}
     for query in queries:
         # Extract table references from query (simplified - match dataset.table patterns)
-        table_refs = re.findall(r'`?([a-z0-9_-]+)\.([a-z0-9_]+)`?', query.query.lower())
+        table_refs = re.findall(r"`?([a-z0-9_-]+)\.([a-z0-9_]+)`?", query.query.lower())
         for dataset, table in table_refs:
             key = f"{dataset}.{table}"
             if key not in query_stats_map:
