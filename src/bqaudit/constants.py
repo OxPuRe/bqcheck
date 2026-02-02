@@ -55,23 +55,27 @@ def is_real_mode() -> bool:
     to prevent silent feature flag failures where users expect real mode but get mock.
 
     Returns:
-        True if BQAUDIT_REAL_MODE=true, False otherwise (default: mock mode)
+        True if BQAUDIT_REAL_MODE is not set or =true, False if =false (default: real mode)
     """
     import logging
     import os
 
     value = os.getenv(ENV_VAR_REAL_MODE, "").strip().lower()
 
+    # Default to real mode if not set
+    if not value:
+        return True
+
     # Warn on invalid values
-    if value and value not in ("true", "false", ""):
+    if value not in ("true", "false"):
         logger = logging.getLogger(__name__)
         logger.warning(
             f"{ENV_VAR_REAL_MODE}={value!r} is invalid. "
-            "Use 'true' or 'false'. Defaulting to mock mode."
+            "Use 'true' or 'false'. Defaulting to real mode."
         )
-        return False
+        return True
 
-    return value == "true"
+    return value != "false"
 
 
 def is_real_scan() -> bool:
@@ -82,20 +86,24 @@ def is_real_scan() -> bool:
     to prevent silent feature flag failures where users expect real scan but get simulated.
 
     Returns:
-        True if BQAUDIT_REAL_SCAN=true, False otherwise (default: simulated scan)
+        True if BQAUDIT_REAL_SCAN is not set or =true, False if =false (default: real scan)
     """
     import logging
     import os
 
     value = os.getenv(ENV_VAR_REAL_SCAN, "").strip().lower()
 
+    # Default to real scan if not set
+    if not value:
+        return True
+
     # Warn on invalid values
-    if value and value not in ("true", "false", ""):
+    if value not in ("true", "false"):
         logger = logging.getLogger(__name__)
         logger.warning(
             f"{ENV_VAR_REAL_SCAN}={value!r} is invalid. "
-            "Use 'true' or 'false'. Defaulting to simulated scan."
+            "Use 'true' or 'false'. Defaulting to real scan."
         )
-        return False
+        return True
 
-    return value == "true"
+    return value != "false"
