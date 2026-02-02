@@ -450,10 +450,16 @@ def anonymize_metadata(metadata_dict: Dict[str, Any], salt: str) -> Dict[str, An
         "state",
         # AccessPattern non-sensitive fields
         "last_modified_time",
-        # Merged/enriched fields
-        "table_id",
+        # Merged/enriched table fields (from merge_table_metadata)
+        "table_id",  # Will be anonymized since it contains table_catalog/schema/name
         "schema",
         "query_stats",
+        # Aggregated query fields (from aggregate_query_metadata)
+        "query_hash",
+        "query_text",
+        "executions_per_day",
+        "bytes_per_execution",
+        "has_materialized_view",
     }
 
     anonymized: Dict[str, Any] = {}
@@ -474,9 +480,22 @@ def anonymize_metadata(metadata_dict: Dict[str, Any], salt: str) -> Dict[str, An
             metadata_dict["table_name"], salt
         )
 
+    # Anonymize table_id field (format: "dataset.table") if present
+    if "table_id" in metadata_dict:
+        table_id = metadata_dict["table_id"]
+        if table_id and "." in table_id:
+            # Split "dataset.table" and anonymize each part
+            parts = table_id.split(".", 1)  # Split on first dot only
+            dataset_hash = anonymize_dataset_name(parts[0], salt)
+            table_hash = anonymize_table_name(parts[1], salt)
+            anonymized["table_id"] = f"{dataset_hash}.{table_hash}"
+        else:
+            # If table_id doesn't have expected format, keep as-is (shouldn't happen)
+            anonymized["table_id"] = table_id
+
     # Copy known safe (non-sensitive) fields
     for field, value in metadata_dict.items():
-        if field in known_safe_fields:
+        if field in known_safe_fields and field != "table_id":  # Skip table_id (handled above)
             anonymized[field] = value
 
     return anonymized

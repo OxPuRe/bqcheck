@@ -392,7 +392,13 @@ class ScanExecutor:
                 client = authenticate_bigquery(project_id)
 
                 # Epic 2 Integration: Extract real metadata
-                from bqaudit.scanner.anonymizer import merge_table_metadata
+                from bqaudit.scanner.aggregator import aggregate_query_metadata
+                from bqaudit.scanner.anonymizer import (
+                    anonymize_access_patterns,
+                    anonymize_metadata,
+                    generate_salt,
+                    merge_table_metadata,
+                )
                 from bqaudit.scanner.metadata_extractor import (
                     extract_access_patterns,
                     extract_query_metadata,
@@ -418,18 +424,36 @@ class ScanExecutor:
                 table_metadata, access_patterns, query_metadata, table_schemas
             )
 
+            # Generate cryptographic salt for anonymization (privacy-critical)
+            logger.info("Anonymizing metadata...")
+            salt = generate_salt()
+
+            # Anonymize enriched tables (apply anonymize_metadata to each dict)
+            anonymized_tables = [
+                anonymize_metadata(table_dict, salt) for table_dict in enriched_tables
+            ]
+
+            # Aggregate and anonymize queries (groups by pattern, calculates stats)
+            aggregated_queries = aggregate_query_metadata(
+                query_metadata, salt, scan_days=90
+            )
+
+            # Anonymize access patterns
+            anonymized_patterns = anonymize_access_patterns(access_patterns, salt)
+
             # Convert Pydantic models to dicts and create validated AuditMetadata
             from bqaudit.api.models import AuditMetadata
 
             metadata = AuditMetadata(
-                tables=enriched_tables,
-                queries=[query.model_dump() for query in query_metadata],
-                access_patterns=[pattern.model_dump() for pattern in access_patterns],
+                tables=anonymized_tables,
+                queries=aggregated_queries,
+                access_patterns=anonymized_patterns,
             )
 
             logger.info(
-                f"Extracted metadata: {len(table_metadata)} tables, "
-                f"{len(query_metadata)} queries, {len(access_patterns)} access patterns"
+                f"Extracted and anonymized metadata: {len(table_metadata)} tables, "
+                f"{len(aggregated_queries)} query patterns (from {len(query_metadata)} queries), "
+                f"{len(access_patterns)} access patterns"
             )
 
         except PermissionDenied:
