@@ -140,7 +140,7 @@ class Recommendation(BaseModel):
 
     type: str = Field(description="Recommendation category")
     priority: str = Field(description="Priority level (HIGH, MEDIUM, LOW)")
-    title: str = Field(description="Brief recommendation title")
+    title: Optional[str] = Field(default=None, description="Brief recommendation title (optional, server may not provide)")
     description: str = Field(description="Detailed recommendation description")
     savings_eur: float = Field(ge=0, description="Estimated monthly savings in EUR")
     implementation_steps: List[str] = Field(description="Steps to implement")
