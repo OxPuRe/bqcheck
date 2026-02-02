@@ -515,7 +515,7 @@ def merge_table_metadata(
         access_map[key] = pattern.last_modified_time
 
     # Aggregate queries by table
-    query_stats_map: dict[str, dict] = {}
+    query_stats_map: Dict[str, Dict[str, int]] = {}
     for query in queries:
         # Extract table references from query (simplified - match dataset.table patterns)
         table_refs = re.findall(r"`?([a-z0-9_-]+)\.([a-z0-9_]+)`?", query.query.lower())

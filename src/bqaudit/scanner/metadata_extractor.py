@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import List
+from typing import Any, Dict, List
 
 from google.api_core.exceptions import GoogleAPIError
 from google.cloud import bigquery
@@ -12,7 +12,7 @@ from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 logger = logging.getLogger(__name__)
 
 
-def _parse_partitioning_from_ddl(ddl: str) -> dict:
+def _parse_partitioning_from_ddl(ddl: str) -> Dict[str, Any]:
     """
     Parse partitioning information from DDL statement.
 
@@ -25,7 +25,7 @@ def _parse_partitioning_from_ddl(ddl: str) -> dict:
     if not ddl:
         return {}
 
-    partition_info = {}
+    partition_info: Dict[str, Any] = {}
 
     # Look for PARTITION BY clause
     # Examples:
@@ -77,7 +77,7 @@ def _parse_partitioning_from_ddl(ddl: str) -> dict:
     return partition_info
 
 
-def _parse_clustering_from_ddl(ddl: str) -> list:
+def _parse_clustering_from_ddl(ddl: str) -> List[str]:
     """
     Parse clustering fields from DDL statement.
 
