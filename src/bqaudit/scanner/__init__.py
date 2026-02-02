@@ -10,6 +10,7 @@ from bqaudit.scanner.anonymizer import (
     anonymize_table_list,
     anonymize_table_name,
     generate_salt,
+    merge_table_metadata,
 )
 from bqaudit.scanner.bigquery_client import (
     AuthenticationError,
@@ -20,6 +21,7 @@ from bqaudit.scanner.metadata_extractor import (
     extract_access_patterns,
     extract_query_metadata,
     extract_table_metadata,
+    extract_table_schemas,
 )
 from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 
@@ -33,6 +35,7 @@ __all__ = [
     "extract_table_metadata",
     "extract_query_metadata",
     "extract_access_patterns",
+    "extract_table_schemas",
     "generate_salt",
     "anonymize_table_name",
     "anonymize_dataset_name",
@@ -42,4 +45,5 @@ __all__ = [
     "anonymize_table_list",
     "anonymize_query_list",
     "anonymize_access_patterns",
+    "merge_table_metadata",
 ]

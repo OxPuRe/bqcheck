@@ -438,6 +438,7 @@ def anonymize_metadata(metadata_dict: Dict[str, Any], salt: str) -> Dict[str, An
         "creation_time",
         "size_bytes",
         "row_count",
+        "partition_expiration_days",
         "clustering_fields",
         "time_partitioning_type",
         "time_partitioning_field",
@@ -449,6 +450,10 @@ def anonymize_metadata(metadata_dict: Dict[str, Any], salt: str) -> Dict[str, An
         "state",
         # AccessPattern non-sensitive fields
         "last_modified_time",
+        # Merged/enriched fields
+        "table_id",
+        "schema",
+        "query_stats",
     }
 
     anonymized: Dict[str, Any] = {}
@@ -475,6 +480,83 @@ def anonymize_metadata(metadata_dict: Dict[str, Any], salt: str) -> Dict[str, An
             anonymized[field] = value
 
     return anonymized
+
+
+def merge_table_metadata(
+    tables: List[TableMetadata],
+    access_patterns: List[AccessPattern],
+    queries: List[QueryMetadata],
+    schemas: dict[str, list[dict[str, str]]],
+) -> List[Dict[str, Any]]:
+    """
+    Merge tables, access patterns, queries, and schemas into server format.
+
+    Creates enriched table metadata with:
+    - table_id: "dataset.table" format
+    - last_modified_time: from access_patterns
+    - schema: column definitions
+    - query_stats: aggregated query statistics
+
+    Args:
+        tables: List of TableMetadata
+        access_patterns: List of AccessPattern (for last_modified_time)
+        queries: List of QueryMetadata (for query_stats)
+        schemas: Dict mapping "dataset.table" to column list
+
+    Returns:
+        List of enriched table dictionaries ready for anonymization
+    """
+    import re
+
+    # Build lookup maps
+    access_map = {}
+    for pattern in access_patterns:
+        key = f"{pattern.table_schema}.{pattern.table_name}"
+        access_map[key] = pattern.last_modified_time
+
+    # Aggregate queries by table
+    query_stats_map: dict[str, dict] = {}
+    for query in queries:
+        # Extract table references from query (simplified - match dataset.table patterns)
+        table_refs = re.findall(r'`?([a-z0-9_-]+)\.([a-z0-9_]+)`?', query.query.lower())
+        for dataset, table in table_refs:
+            key = f"{dataset}.{table}"
+            if key not in query_stats_map:
+                query_stats_map[key] = {"total_bytes_processed": 0, "query_count": 0}
+            query_stats_map[key]["total_bytes_processed"] += query.total_bytes_processed
+            query_stats_map[key]["query_count"] += 1
+
+    # Merge everything
+    enriched_tables = []
+    for table in tables:
+        table_dict = table.model_dump()
+        table_key = f"{table.table_schema}.{table.table_name}"
+
+        # Add table_id
+        table_dict["table_id"] = table_key
+
+        # Add last_modified_time
+        if table_key in access_map:
+            table_dict["last_modified_time"] = access_map[table_key]
+        else:
+            # Fallback to creation_time if no access pattern
+            table_dict["last_modified_time"] = table.creation_time
+
+        # Add schema
+        if table_key in schemas:
+            table_dict["schema"] = schemas[table_key]
+        else:
+            table_dict["schema"] = []
+
+        # Add query_stats
+        if table_key in query_stats_map:
+            table_dict["query_stats"] = query_stats_map[table_key]
+        else:
+            table_dict["query_stats"] = {"total_bytes_processed": 0, "query_count": 0}
+
+        enriched_tables.append(table_dict)
+
+    return enriched_tables
 
 
 def anonymize_table_list(

@@ -409,6 +409,75 @@ def extract_query_metadata(
     return []
 
 
+def extract_table_schemas(
+    client: bigquery.Client, project_id: str
+) -> dict[str, list[dict[str, str]]]:
+    """
+    Extract table schemas (column names and types) from INFORMATION_SCHEMA.
+
+    Args:
+        client: Authenticated BigQuery client
+        project_id: GCP project ID to scan
+
+    Returns:
+        Dict mapping "dataset.table" to list of {"name": str, "type": str}
+
+    Example:
+        >>> schemas = extract_table_schemas(client, "my-project")
+        >>> schemas["analytics.events"]
+        [{"name": "user_id", "type": "STRING"}, {"name": "timestamp", "type": "TIMESTAMP"}]
+    """
+    _validate_project_id(project_id)
+
+    schemas: dict[str, list[dict[str, str]]] = {}
+
+    try:
+        # List datasets to detect regions
+        datasets = list(client.list_datasets(project=project_id))
+        locations = set()
+        for dataset in datasets:
+            dataset_ref = client.get_dataset(f"{project_id}.{dataset.dataset_id}")
+            locations.add(dataset_ref.location)
+    except GoogleAPIError:
+        # Fallback to common regions
+        locations = {"US", "EU"}
+
+    # Try each location
+    for location in locations:
+        query = f"""
+        SELECT
+            table_schema,
+            table_name,
+            column_name,
+            data_type
+        FROM `{project_id}.region-{location.lower()}.INFORMATION_SCHEMA.COLUMNS`
+        WHERE table_catalog = '{project_id}'
+        ORDER BY table_schema, table_name, ordinal_position
+        """
+
+        try:
+            query_job = client.query(query, location=location)
+
+            for row in query_job.result():
+                table_key = f"{row.table_schema}.{row.table_name}"
+                if table_key not in schemas:
+                    schemas[table_key] = []
+                schemas[table_key].append({
+                    "name": row.column_name,
+                    "type": row.data_type
+                })
+
+            logger.info(f"Extracted schemas for {len(schemas)} tables from {location}")
+            return schemas
+
+        except GoogleAPIError as e:
+            logger.debug(f"Location {location} failed for schema extraction: {e}")
+            continue
+
+    logger.warning(f"Could not extract table schemas from {project_id}")
+    return schemas
+
+
 def extract_access_patterns(
     client: bigquery.Client,
     project_id: str,

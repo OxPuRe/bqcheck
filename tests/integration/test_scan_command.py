@@ -274,13 +274,17 @@ class TestScanCommandProgressIndicators:
                     with patch(
                         "bqaudit.scanner.metadata_extractor.extract_access_patterns"
                     ) as mock_access:
-                        with patch("httpx.AsyncClient.post") as mock_post:
-                            with patch("bqaudit.console.console", console):
-                                # Setup mocks
-                                mock_auth.return_value = Mock()
-                                mock_tables.return_value = []
-                                mock_queries.return_value = []
-                                mock_access.return_value = []
+                        with patch(
+                            "bqaudit.scanner.metadata_extractor.extract_table_schemas"
+                        ) as mock_schemas:
+                            with patch("httpx.AsyncClient.post") as mock_post:
+                                with patch("bqaudit.console.console", console):
+                                    # Setup mocks
+                                    mock_auth.return_value = Mock()
+                                    mock_tables.return_value = []
+                                    mock_queries.return_value = []
+                                    mock_access.return_value = []
+                                    mock_schemas.return_value = {}
 
                                 mock_response = Mock()
                                 mock_response.status_code = 200
@@ -367,17 +371,21 @@ class TestScanCommandProgressIndicators:
                     with patch(
                         "bqaudit.scanner.metadata_extractor.extract_access_patterns"
                     ) as mock_access:
-                        with patch("httpx.AsyncClient.post") as mock_post:
-                            # Setup mocks
-                            mock_auth.return_value = Mock()
-                            mock_tables.return_value = []
-                            mock_queries.return_value = []
-                            mock_access.return_value = []
+                        with patch(
+                            "bqaudit.scanner.metadata_extractor.extract_table_schemas"
+                        ) as mock_schemas:
+                            with patch("httpx.AsyncClient.post") as mock_post:
+                                # Setup mocks
+                                mock_auth.return_value = Mock()
+                                mock_tables.return_value = []
+                                mock_queries.return_value = []
+                                mock_access.return_value = []
+                                mock_schemas.return_value = {}
 
-                            # Simulate network error
-                            mock_post.side_effect = httpx.ConnectError(
-                                "Connection refused"
-                            )
+                                # Simulate network error
+                                mock_post.side_effect = httpx.ConnectError(
+                                    "Connection refused"
+                                )
 
                             # Execute scan
                             client = BQAuditAPIClient(mock_mode=False)
@@ -423,17 +431,21 @@ class TestScanCommandProgressIndicators:
                     with patch(
                         "bqaudit.scanner.metadata_extractor.extract_access_patterns"
                     ) as mock_access:
-                        with patch("httpx.AsyncClient.post") as mock_post:
-                            # Setup mocks
-                            mock_auth.return_value = Mock()
-                            mock_tables.return_value = []
-                            mock_queries.return_value = []
-                            mock_access.return_value = []
+                        with patch(
+                            "bqaudit.scanner.metadata_extractor.extract_table_schemas"
+                        ) as mock_schemas:
+                            with patch("httpx.AsyncClient.post") as mock_post:
+                                # Setup mocks
+                                mock_auth.return_value = Mock()
+                                mock_tables.return_value = []
+                                mock_queries.return_value = []
+                                mock_access.return_value = []
+                                mock_schemas.return_value = {}
 
-                            # Simulate timeout error
-                            mock_post.side_effect = httpx.TimeoutException(
-                                "Request timeout"
-                            )
+                                # Simulate timeout error
+                                mock_post.side_effect = httpx.TimeoutException(
+                                    "Request timeout"
+                                )
 
                             # Execute scan
                             client = BQAuditAPIClient(mock_mode=False)

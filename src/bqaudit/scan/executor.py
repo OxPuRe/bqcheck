@@ -396,7 +396,9 @@ class ScanExecutor:
                     extract_access_patterns,
                     extract_query_metadata,
                     extract_table_metadata,
+                    extract_table_schemas,
                 )
+                from bqaudit.scanner.anonymizer import merge_table_metadata
 
                 # Extract all metadata types
                 logger.info("Extracting table metadata...")
@@ -408,11 +410,19 @@ class ScanExecutor:
                 logger.info("Extracting access patterns...")
                 access_patterns = extract_access_patterns(client, project_id)
 
+                logger.info("Extracting table schemas...")
+                table_schemas = extract_table_schemas(client, project_id)
+
+            # Merge metadata into enriched format with table_id, last_modified_time, schema, query_stats
+            enriched_tables = merge_table_metadata(
+                table_metadata, access_patterns, query_metadata, table_schemas
+            )
+
             # Convert Pydantic models to dicts and create validated AuditMetadata
             from bqaudit.api.models import AuditMetadata
 
             metadata = AuditMetadata(
-                tables=[table.model_dump() for table in table_metadata],
+                tables=enriched_tables,
                 queries=[query.model_dump() for query in query_metadata],
                 access_patterns=[pattern.model_dump() for pattern in access_patterns],
             )
