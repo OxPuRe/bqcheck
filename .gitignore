@@ -93,3 +93,4 @@ audit-report-*.md  # Story 5.3: Generated audit reports from tests/CLI
 # OS
 Thumbs.db
 .DS_Store
+audit-report-*.md
