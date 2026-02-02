@@ -486,7 +486,7 @@ def merge_table_metadata(
     tables: List[TableMetadata],
     access_patterns: List[AccessPattern],
     queries: List[QueryMetadata],
-    schemas: dict[str, list[dict[str, str]]],
+    schemas: Dict[str, List[Dict[str, str]]],
 ) -> List[Dict[str, Any]]:
     """
     Merge tables, access patterns, queries, and schemas into server format.
