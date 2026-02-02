@@ -224,27 +224,29 @@ class ScanExecutor:
                     project_id, credentials["ephemeral_token"]
                 )
 
-            # Step 3: Renew token (AC3)
-            # AC5: Master key ONLY for renewal (not during scan)
-            # Token renewal lacks idempotency
-            # If renew_token() fails after scan success, token is decremented server-side
-            # but NOT renewed locally → out-of-sync. Server must support idempotent renewal.
-            try:
-                new_token_data = self.api_client.renew_token(
+            # Step 3: Get renewed token from audit response
+            # Server should return new_ephemeral_token in /v1/audit response
+            # If not available (server not implemented yet), use mock renewal
+            if result.audit_response and result.audit_response.new_ephemeral_token:
+                new_ephemeral_token = result.audit_response.new_ephemeral_token
+                new_balance = credentials["token_pool_balance"] - 1
+            else:
+                # Fallback: Mock renewal until server implements token rotation
+                # TODO: Remove when server populates new_ephemeral_token in /v1/audit
+                logger.warning(
+                    "Server did not return new_ephemeral_token. Using mock renewal."
+                )
+                mock_renewal = self.api_client._mock_renew(
                     credentials["master_key"],
                     current_balance=credentials["token_pool_balance"],
                 )
-            except Exception as e:
-                logger.error(
-                    f"Token renewal failed after successful scan. "
-                    f"Credentials may be out of sync. Please re-activate license. Error: {e}"
-                )
-                raise  # Re-raise to prevent saving invalid credentials
+                new_ephemeral_token = mock_renewal.ephemeral_token
+                new_balance = mock_renewal.token_pool_balance
 
             # Step 4: Update credentials atomically (AC6, AC8)
             # AC8: Mark old token as used (client-side tracking)
             old_token = credentials["ephemeral_token"]
-            credentials["ephemeral_token"] = new_token_data.ephemeral_token
+            credentials["ephemeral_token"] = new_ephemeral_token
 
             # Track used tokens (AC8: Single-use enforcement)
             # Use hash instead of truncation
@@ -282,12 +284,8 @@ class ScanExecutor:
                 credentials["used_tokens"] = credentials["used_tokens"][-5:]
 
             # Use server-provided balance (server decrements on its side)
-            # In mock mode: mock calculates new_balance = current - 1
-            # In real mode: server tracks balance and returns new balance
-
             # Validate balance after renewal
             # Prevent server bugs/MITM from corrupting token pool
-            new_balance = new_token_data.token_pool_balance
             old_balance = credentials["token_pool_balance"]
 
             if new_balance < 0:
