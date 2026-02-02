@@ -6,8 +6,10 @@ Thank you for your interest in contributing to bqaudit! 🎉
 
 ### Reporting Bugs
 
-1. Check if the bug has already been reported in [Issues](https://github.com/OxPuRe/bqaudit/issues)
-2. If not, create a new issue with:
+**Note:** All issues (client and server) are tracked in the [bqaudit-server repository](https://github.com/OxPuRe/bqaudit-server/issues).
+
+1. Check if the bug has already been reported
+2. If not, [create a new issue](https://github.com/OxPuRe/bqaudit-server/issues/new/choose) with:
    - Clear title and description
    - Steps to reproduce
    - Expected vs actual behavior
@@ -17,8 +19,8 @@ Thank you for your interest in contributing to bqaudit! 🎉
 ### Suggesting Features
 
 We welcome feature suggestions! Please:
-1. Check existing issues first
-2. Create a new issue with the `enhancement` label
+1. Check [existing issues](https://github.com/OxPuRe/bqaudit-server/issues) first
+2. [Create a new feature request](https://github.com/OxPuRe/bqaudit-server/issues/new/choose)
 3. Describe the use case and expected behavior
 4. Explain why this would be useful to other users
 
@@ -51,15 +53,16 @@ We welcome feature suggestions! Please:
 git clone https://github.com/YOUR_USERNAME/bqaudit.git
 cd bqaudit
 
-# Install dependencies
-cd cli
-uv venv
-uv pip install -e ".[dev]"
+# Install dependencies with UV
+uv sync
 
-# Install shared module
-cd ../shared
-uv venv
-uv pip install -e ".[dev]"
+# Activate virtual environment
+source .venv/bin/activate  # Linux/macOS
+# or
+.venv\Scripts\activate  # Windows
+
+# Run tests to verify setup
+uv run pytest
 ```
 
 ## 📝 Code Style
@@ -80,38 +83,45 @@ uv run pytest
 
 ```
 bqaudit/
-├── cli/               # CLI application
-│   ├── src/bqaudit/   # Source code
-│   └── tests/         # Tests
-├── shared/            # Shared schemas
-│   ├── src/bqaudit_shared/
-│   └── tests/
-└── docs/              # Documentation
+├── src/bqaudit/       # Source code
+│   ├── api/           # Server API client
+│   ├── cli/           # CLI commands
+│   ├── scanner/       # BigQuery metadata extraction
+│   ├── license/       # License management
+│   └── constants.py   # Configuration constants
+├── tests/             # Test suite
+│   ├── unit/          # Unit tests
+│   └── integration/   # Integration tests
+├── pyproject.toml     # Project configuration (UV)
+└── uv.lock            # Dependency lock file
 ```
 
 ## ✅ What We're Looking For
 
 **High Priority:**
-- Additional audit rules (e.g., unused tables, inefficient queries)
-- Improved metadata extraction logic
+- Improved metadata extraction logic (more INFORMATION_SCHEMA queries)
 - Better error handling and user messages
 - Documentation improvements
+- Test coverage improvements
+- Bug fixes
 
 **Medium Priority:**
-- Performance optimizations
-- Support for more BigQuery features
-- Additional export formats
+- Performance optimizations (parallel extraction, caching)
+- Support for more BigQuery features (views, UDFs, etc.)
+- Additional report formats (JSON, CSV, HTML)
+- CLI UX improvements
 
 **Low Priority:**
-- New CLI commands (discuss first)
-- Breaking changes (discuss first)
+- New CLI commands (discuss first in an issue)
+- Breaking changes (requires discussion and deprecation period)
 
 ## 🚫 What We Won't Accept
 
-- Changes to the credit/pricing system (server-side only)
-- Features that require accessing actual table data
+- Changes to licensing/token system (server-side only)
+- Features that access actual table data (privacy violation)
+- Features that bypass server audit engine
 - Dependencies on closed-source libraries
-- Breaking changes without discussion
+- Breaking changes without prior discussion
 
 ## 📜 License
 
