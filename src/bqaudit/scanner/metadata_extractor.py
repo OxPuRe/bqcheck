@@ -415,7 +415,7 @@ def extract_query_metadata(
 
 def extract_table_schemas(
     client: bigquery.Client, project_id: str
-) -> dict[str, list[dict[str, str]]]:
+) -> Dict[str, List[Dict[str, str]]]:
     """
     Extract table schemas (column names and types) from INFORMATION_SCHEMA.
 
@@ -433,7 +433,7 @@ def extract_table_schemas(
     """
     _validate_project_id(project_id)
 
-    schemas: dict[str, list[dict[str, str]]] = {}
+    schemas: Dict[str, List[Dict[str, str]]] = {}
 
     try:
         # List datasets to detect regions
