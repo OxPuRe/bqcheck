@@ -53,5 +53,8 @@ jobs:
           uv run mypy src/
 
       - name: Run tests with coverage
+        env:
+          BQAUDIT_REAL_MODE: "false"
+          BQAUDIT_REAL_SCAN: "false"
         run: |
           uv run pytest --cov --cov-report=xml --cov-report=term
