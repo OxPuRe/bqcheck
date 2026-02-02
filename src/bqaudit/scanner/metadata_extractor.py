@@ -218,9 +218,38 @@ def extract_table_metadata(
 
                 # Collect results for this region
                 for row in query_job.result():
-                    # Parse DDL to extract partitioning and clustering info
+                    # Parse DDL to extract partitioning and clustering info as fallback
                     partition_info = _parse_partitioning_from_ddl(row.ddl)
                     clustering_fields = _parse_clustering_from_ddl(row.ddl)
+
+                    # Use row fields if available, otherwise use DDL-parsed values
+                    row_partition_exp = getattr(row, "partition_expiration_days", None)
+                    row_partition_type = getattr(row, "time_partitioning_type", None)
+                    row_partition_field = getattr(row, "time_partitioning_field", None)
+                    row_clustering = getattr(row, "clustering_fields", None)
+
+                    partition_expiration = (
+                        row_partition_exp
+                        if row_partition_exp is not None
+                        else partition_info.get("expiration_days")
+                    )
+                    partitioning_type = (
+                        row_partition_type
+                        if row_partition_type is not None
+                        else partition_info.get("type")
+                    )
+                    partitioning_field = (
+                        row_partition_field
+                        if row_partition_field is not None
+                        else partition_info.get("field")
+                    )
+                    # For clustering, prefer row field. If None, use DDL if non-empty, else None
+                    if row_clustering is not None:
+                        clusters = row_clustering
+                    elif clustering_fields:
+                        clusters = clustering_fields
+                    else:
+                        clusters = None
 
                     table_dict = {
                         "table_catalog": row.table_catalog,
@@ -230,10 +259,10 @@ def extract_table_metadata(
                         "creation_time": row.creation_time,
                         "size_bytes": row.size_bytes,
                         "row_count": row.row_count,
-                        "partition_expiration_days": partition_info.get("expiration_days"),
-                        "time_partitioning_type": partition_info.get("type"),
-                        "time_partitioning_field": partition_info.get("field"),
-                        "clustering_fields": clustering_fields,
+                        "partition_expiration_days": partition_expiration,
+                        "time_partitioning_type": partitioning_type,
+                        "time_partitioning_field": partitioning_field,
+                        "clustering_fields": clusters,
                     }
 
                     # Validate and create Pydantic model

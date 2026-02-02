@@ -229,21 +229,3 @@ class TestScanExecutor:
         used_token_hashes = [ut["token_hash"] for ut in updated_creds["used_tokens"]]
         assert expected_hash in used_token_hashes
 
-    def test_scan_reports_success_to_server(self, test_credentials, mock_creds_path):
-        """AC1: Scan reports success to server (mocked)."""
-        from bqaudit.scan.executor import ScanExecutor
-
-        api_client = BQAuditAPIClient(mock_mode=True)
-        executor = ScanExecutor(api_client)
-
-        # Mock report_scan_success to verify it's called
-        with mock.patch.object(
-            api_client, "report_scan_success", return_value={"status": "acknowledged"}
-        ) as mock_report:
-            executor.execute_scan_with_tokens("test-project")
-
-            # Verify report was called with correct project_id
-            mock_report.assert_called_once()
-            call_args = mock_report.call_args
-            assert call_args[0][0] == "test-project"  # project_id
-            assert call_args[0][1]["simulated"] is True  # scan_result

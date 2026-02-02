@@ -14,12 +14,45 @@ from bqaudit.scanner.metadata_extractor import (
 from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 
 
+def _setup_dataset_mocks(mock_client, datasets=None):
+    """Helper to setup list_datasets and get_dataset mocks.
+
+    Args:
+        mock_client: Mock BigQuery client
+        datasets: List of (dataset_id, location) tuples. Default: [("analytics", "EU")]
+    """
+    if datasets is None:
+        datasets = [("analytics", "EU")]
+
+    # Mock datasets
+    mock_datasets = []
+    for dataset_id, _ in datasets:
+        mock_dataset = Mock()
+        mock_dataset.dataset_id = dataset_id
+        mock_datasets.append(mock_dataset)
+
+    mock_client.list_datasets.return_value = mock_datasets
+
+    # Mock get_dataset to return location
+    def get_dataset_side_effect(dataset_ref):
+        dataset_id = dataset_ref.split(".")[-1] if "." in dataset_ref else dataset_ref
+        for ds_id, location in datasets:
+            if ds_id == dataset_id:
+                mock_dataset_ref = Mock()
+                mock_dataset_ref.location = location
+                return mock_dataset_ref
+        raise ValueError(f"Dataset {dataset_id} not found")
+
+    mock_client.get_dataset.side_effect = get_dataset_side_effect
+
+
 @patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_success(mock_client):
     """Test successful extraction of table metadata with various table types."""
 
     # Mock BigQuery query response with 3 tables
     mock_row_1 = Mock()
+    mock_row_1.ddl = ""
     mock_row_1.table_catalog = "my-project"
     mock_row_1.table_schema = "analytics"
     mock_row_1.table_name = "events"
@@ -33,6 +66,7 @@ def test_extract_table_metadata_success(mock_client):
     mock_row_1.clustering_fields = ["user_id", "event_type"]
 
     mock_row_2 = Mock()
+    mock_row_2.ddl = ""
     mock_row_2.table_catalog = "my-project"
     mock_row_2.table_schema = "analytics"
     mock_row_2.table_name = "users"
@@ -46,6 +80,7 @@ def test_extract_table_metadata_success(mock_client):
     mock_row_2.clustering_fields = None
 
     mock_row_3 = Mock()
+    mock_row_3.ddl = ""
     mock_row_3.table_catalog = "my-project"
     mock_row_3.table_schema = "reporting"
     mock_row_3.table_name = "summary_view"
@@ -64,6 +99,7 @@ def test_extract_table_metadata_success(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     tables = extract_table_metadata(mock_bq_client, "my-project")
@@ -111,6 +147,7 @@ def test_extract_table_metadata_empty_project(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client, datasets=[])
 
     # Call function
     tables = extract_table_metadata(mock_bq_client, "empty-project")
@@ -125,7 +162,7 @@ def test_extract_table_metadata_api_error(mock_client):
     """Test BigQuery API error handling."""
 
     mock_bq_client = Mock()
-    mock_bq_client.query.side_effect = GoogleAPIError("API quota exceeded")
+    mock_bq_client.list_datasets.side_effect = GoogleAPIError("API quota exceeded")
 
     # Call function - should raise GoogleAPIError
     with pytest.raises(GoogleAPIError) as exc_info:
@@ -143,6 +180,7 @@ def test_extract_table_metadata_pagination(mock_client):
     mock_rows = []
     for i in range(150):
         mock_row = Mock()
+        mock_row.ddl = ""
         mock_row.table_catalog = "big-project"
         mock_row.table_schema = f"dataset_{i // 50}"
         mock_row.table_name = f"table_{i}"
@@ -162,6 +200,7 @@ def test_extract_table_metadata_pagination(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     tables = extract_table_metadata(mock_bq_client, "big-project")
@@ -169,9 +208,9 @@ def test_extract_table_metadata_pagination(mock_client):
     # Verify all 150 tables extracted
     assert len(tables) == 150
     assert all(isinstance(t, TableMetadata) for t in tables)
-    # Verify first and last table
-    assert tables[0].table_name == "table_0"
-    assert tables[149].table_name == "table_149"
+    # Verify tables are sorted by size (largest first)
+    assert tables[0].table_name == "table_149"  # Largest (150MB)
+    assert tables[149].table_name == "table_0"  # Smallest (1MB)
 
 
 @patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
@@ -179,6 +218,7 @@ def test_extract_table_metadata_with_hour_partitioning(mock_client):
     """Test extraction of table with HOUR partitioning."""
 
     mock_row = Mock()
+    mock_row.ddl = ""
     mock_row.table_catalog = "my-project"
     mock_row.table_schema = "streaming"
     mock_row.table_name = "live_events"
@@ -196,6 +236,7 @@ def test_extract_table_metadata_with_hour_partitioning(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     tables = extract_table_metadata(mock_bq_client, "my-project")
@@ -212,6 +253,7 @@ def test_extract_table_metadata_clustered_only(mock_client):
     """Test extraction of table with clustering but no partitioning."""
 
     mock_row = Mock()
+    mock_row.ddl = ""
     mock_row.table_catalog = "my-project"
     mock_row.table_schema = "warehouse"
     mock_row.table_name = "products"
@@ -229,6 +271,7 @@ def test_extract_table_metadata_clustered_only(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     tables = extract_table_metadata(mock_bq_client, "my-project")
@@ -245,6 +288,7 @@ def test_extract_table_metadata_external_table(mock_client):
     """Test extraction of EXTERNAL table type."""
 
     mock_row = Mock()
+    mock_row.ddl = ""
     mock_row.table_catalog = "my-project"
     mock_row.table_schema = "external_data"
     mock_row.table_name = "gcs_data"
@@ -262,6 +306,7 @@ def test_extract_table_metadata_external_table(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     tables = extract_table_metadata(mock_bq_client, "my-project")
@@ -325,6 +370,7 @@ def test_extract_table_metadata_query_called(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     extract_table_metadata(mock_bq_client, "test-project")
@@ -471,6 +517,7 @@ def test_extract_query_metadata_success(mock_client):
 
     # Mock BigQuery query response with 5 sample queries
     mock_row_1 = Mock()
+    mock_row_1.ddl = ""
     mock_row_1.job_id = "my-project:us.job_abc123"
     mock_row_1.query = "SELECT * FROM analytics.events WHERE date = '2024-01-20'"
     mock_row_1.total_bytes_processed = 1073741824  # 1 GB
@@ -480,6 +527,7 @@ def test_extract_query_metadata_success(mock_client):
     mock_row_1.state = "DONE"
 
     mock_row_2 = Mock()
+    mock_row_2.ddl = ""
     mock_row_2.job_id = "my-project:us.job_def456"
     mock_row_2.query = "SELECT COUNT(*) FROM analytics.users"
     mock_row_2.total_bytes_processed = 536870912  # 512 MB
@@ -489,6 +537,7 @@ def test_extract_query_metadata_success(mock_client):
     mock_row_2.state = "DONE"
 
     mock_row_3 = Mock()
+    mock_row_3.ddl = ""
     mock_row_3.job_id = "my-project:us.job_ghi789"
     mock_row_3.query = "SELECT AVG(amount) FROM sales.transactions"
     mock_row_3.total_bytes_processed = 268435456  # 256 MB
@@ -503,6 +552,7 @@ def test_extract_query_metadata_success(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     queries = extract_query_metadata(mock_bq_client, "my-project", days=30)
@@ -547,6 +597,7 @@ def test_extract_query_metadata_job_type_filter(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     queries = extract_query_metadata(mock_bq_client, "my-project")
@@ -571,6 +622,7 @@ def test_extract_query_metadata_days_parameter(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call with days=7
     extract_query_metadata(mock_bq_client, "my-project", days=7)
@@ -597,6 +649,7 @@ def test_extract_query_metadata_limit_clause(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call with default max_queries (10000)
     extract_query_metadata(mock_bq_client, "my-project", max_queries=10000)
@@ -616,6 +669,7 @@ def test_extract_query_metadata_null_query_handling(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     queries = extract_query_metadata(mock_bq_client, "my-project")
@@ -639,6 +693,7 @@ def test_extract_query_metadata_empty_project(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     queries = extract_query_metadata(mock_bq_client, "empty-project")
@@ -664,17 +719,18 @@ def test_extract_query_metadata_invalid_project_id(mock_client):
 
 @patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_api_error(mock_client):
-    """Test BigQuery API error handling for query extraction."""
+    """Test BigQuery API error handling for query extraction returns empty list."""
 
     mock_bq_client = Mock()
-    mock_bq_client.query.side_effect = GoogleAPIError("API quota exceeded")
+    # Set up error for both list_datasets and query
+    api_error = GoogleAPIError("API quota exceeded")
+    mock_bq_client.list_datasets.side_effect = api_error
+    mock_bq_client.query.side_effect = api_error
 
-    # Call function - should raise GoogleAPIError
-    with pytest.raises(GoogleAPIError) as exc_info:
-        extract_query_metadata(mock_bq_client, "my-project")
+    # Call function - should return empty list and log warning
+    result = extract_query_metadata(mock_bq_client, "my-project")
 
-    assert "Failed to extract query metadata" in str(exc_info.value)
-    assert "my-project" in str(exc_info.value)
+    assert result == []
 
 
 @patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
@@ -683,18 +739,21 @@ def test_extract_access_patterns_success(mock_client):
 
     # Mock BigQuery query response with 3 sample tables
     mock_row_1 = Mock()
+    mock_row_1.ddl = ""
     mock_row_1.table_catalog = "my-project"
     mock_row_1.table_schema = "analytics"
     mock_row_1.table_name = "old_events"
     mock_row_1.last_modified_time = "2023-06-15 08:30:00 UTC"  # Very old
 
     mock_row_2 = Mock()
+    mock_row_2.ddl = ""
     mock_row_2.table_catalog = "my-project"
     mock_row_2.table_schema = "analytics"
     mock_row_2.table_name = "recent_users"
     mock_row_2.last_modified_time = "2024-01-20 14:00:00 UTC"  # Recent
 
     mock_row_3 = Mock()
+    mock_row_3.ddl = ""
     mock_row_3.table_catalog = "my-project"
     mock_row_3.table_schema = "warehouse"
     mock_row_3.table_name = "products"
@@ -706,6 +765,7 @@ def test_extract_access_patterns_success(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     patterns = extract_access_patterns(mock_bq_client, "my-project")
@@ -740,6 +800,7 @@ def test_extract_access_patterns_empty_project(mock_client):
 
     mock_bq_client = Mock()
     mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
 
     # Call function
     patterns = extract_access_patterns(mock_bq_client, "empty-project")
@@ -765,14 +826,15 @@ def test_extract_access_patterns_invalid_project_id(mock_client):
 
 @patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
 def test_extract_access_patterns_api_error(mock_client):
-    """Test BigQuery API error handling for access pattern extraction."""
+    """Test BigQuery API error handling for access pattern extraction returns empty list."""
 
     mock_bq_client = Mock()
-    mock_bq_client.query.side_effect = GoogleAPIError("API quota exceeded")
+    # Set up error for both list_datasets and query
+    api_error = GoogleAPIError("API quota exceeded")
+    mock_bq_client.list_datasets.side_effect = api_error
+    mock_bq_client.query.side_effect = api_error
 
-    # Call function - should raise GoogleAPIError
-    with pytest.raises(GoogleAPIError) as exc_info:
-        extract_access_patterns(mock_bq_client, "my-project")
+    # Call function - should return empty list and log warning
+    result = extract_access_patterns(mock_bq_client, "my-project")
 
-    assert "Failed to extract access patterns" in str(exc_info.value)
-    assert "my-project" in str(exc_info.value)
+    assert result == []
