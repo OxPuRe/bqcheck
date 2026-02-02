@@ -169,4 +169,4 @@ class AuditResponse(BaseModel):
     )
     summary: AuditSummary = Field(description="Audit summary statistics")
     audit_id: str = Field(description="Unique audit identifier")
-    new_ephemeral_token: str = Field(description="New ephemeral token for next scan")
+    new_ephemeral_token: Optional[str] = Field(default=None, description="New ephemeral token for next scan")

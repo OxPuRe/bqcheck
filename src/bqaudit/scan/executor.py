@@ -224,12 +224,7 @@ class ScanExecutor:
                     project_id, credentials["ephemeral_token"]
                 )
 
-            # Step 3: Report success to server (AC1)
-            self.api_client.report_scan_success(
-                project_id, {"simulated": result.simulated, "success": result.success}
-            )
-
-            # Step 4: Renew token (AC3)
+            # Step 3: Renew token (AC3)
             # AC5: Master key ONLY for renewal (not during scan)
             # Token renewal lacks idempotency
             # If renew_token() fails after scan success, token is decremented server-side
@@ -246,7 +241,7 @@ class ScanExecutor:
                 )
                 raise  # Re-raise to prevent saving invalid credentials
 
-            # Step 5: Update credentials atomically (AC6, AC8)
+            # Step 4: Update credentials atomically (AC6, AC8)
             # AC8: Mark old token as used (client-side tracking)
             old_token = credentials["ephemeral_token"]
             credentials["ephemeral_token"] = new_token_data.ephemeral_token
