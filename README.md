@@ -6,14 +6,25 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
 
-BigQuery cost optimization audit tool with privacy-first architecture.
+**Open-source CLI client** for BigQuery cost optimization audits with privacy-first architecture.
 
 ## Features
 
-- Privacy-first metadata-only analysis (no raw data access)
-- Client-side SHA-256 anonymization
-- Token-based licensing system
-- Actionable cost optimization recommendations
+- 🔒 **Privacy-first**: Metadata-only analysis (no raw data access)
+- 🔐 **Client-side anonymization**: SHA-256 hashing of project/table IDs
+- 🎫 **Token-based licensing**: Pay-per-scan model
+- 💰 **Actionable recommendations**: Storage, partitioning, clustering, query optimizations
+- 📊 **Markdown reports**: Well-formatted audit reports with savings breakdown
+- ✅ **Free validation**: Check BigQuery access before purchasing tokens
+
+## Architecture
+
+bqaudit is a client-server architecture:
+
+- **Client** (this repo): Open-source CLI tool that extracts BigQuery metadata locally
+- **Server** ([bqaudit-server](https://github.com/OxPuRe/bqaudit-server)): Proprietary audit engine that analyzes metadata and generates recommendations
+
+The client anonymizes all project and table identifiers before sending metadata to the server, ensuring your data stays private.
 
 ## Installation
 
@@ -53,15 +64,57 @@ bqaudit scan --project my-gcp-project
 
 ### License Management
 
+**Get a license:**
+- Contact [sales@bqaudit.com](mailto:sales@bqaudit.com) to purchase scan tokens
+- Receive a master license key via email (format: `sk_live_...`)
+
+**Activate your license:**
 ```bash
-# Activate license
-bqaudit license activate <master-license-key>
+bqaudit license activate sk_live_...
+```
 
-# Check token balance
+**Check your token balance:**
+```bash
 bqaudit license status
+```
 
-# Revoke credentials
+**Revoke credentials:**
+```bash
 bqaudit license revoke
+```
+
+Credentials are stored locally in `~/.bqaudit/credentials.json`
+
+### Custom Output Path
+
+Save audit reports to a custom location:
+
+```bash
+# Save to specific file
+bqaudit scan --project my-gcp-project --output reports/audit.md
+
+# Save to specific directory (auto-generates filename)
+bqaudit scan --project my-gcp-project --output-dir ./reports/
+
+# Force overwrite existing file
+bqaudit scan --project my-gcp-project --output report.md --force
+```
+
+## Configuration
+
+### Environment Variables
+
+Optional environment variables for advanced users:
+
+- `BQAUDIT_API_URL`: Override default server URL (default: production Cloud Run endpoint)
+- `BQAUDIT_REAL_MODE`: Set to `"false"` for mock server mode (testing only, default: `"true"`)
+- `BQAUDIT_REAL_SCAN`: Set to `"false"` for simulated BigQuery scan (testing only, default: `"true"`)
+
+**Example (development/testing):**
+```bash
+export BQAUDIT_REAL_MODE="false"
+export BQAUDIT_REAL_SCAN="false"
+bqaudit scan --project test-project
 ```
 
 ## Development
@@ -137,11 +190,30 @@ Run all quality checks:
 uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv run pytest --cov
 ```
 
+## How It Works
+
+1. **Extract metadata** - Client queries BigQuery INFORMATION_SCHEMA for table/query metadata
+2. **Anonymize locally** - SHA-256 hash all project and table identifiers
+3. **Send to server** - Encrypted HTTPS request with ephemeral token
+4. **Analyze** - Server runs 6 detection algorithms (storage, partitioning, clustering, queries, temporal)
+5. **Receive recommendations** - Markdown report with prioritized optimizations and EUR savings
+6. **Auto-renew token** - Server returns fresh ephemeral token for next scan
+
+**Privacy guarantee:** Only metadata and statistics are sent. No table data, query results, or business logic ever leaves your GCP project.
+
 ## Related Repositories
 
-- [bqaudit-server](https://github.com/OxPuRe/bqaudit-server) (Private) - Server API
+- [bqaudit-server](https://github.com/OxPuRe/bqaudit-server) - Proprietary audit engine and API server
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/OxPuRe/bqaudit-server/issues) (tracked in server repo)
+- **Sales**: sales@bqaudit.com
+- **Documentation**: See [server README](https://github.com/OxPuRe/bqaudit-server#license--token-management) for license system details
 
 ## License
 
-MIT License (or proprietary - TBD)
+MIT License - Client CLI tool is open source
+
+Note: The server-side audit engine is proprietary. See [bqaudit-server](https://github.com/OxPuRe/bqaudit-server) for details.
 
