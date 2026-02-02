@@ -392,13 +392,13 @@ class ScanExecutor:
                 client = authenticate_bigquery(project_id)
 
                 # Epic 2 Integration: Extract real metadata
+                from bqaudit.scanner.anonymizer import merge_table_metadata
                 from bqaudit.scanner.metadata_extractor import (
                     extract_access_patterns,
                     extract_query_metadata,
                     extract_table_metadata,
                     extract_table_schemas,
                 )
-                from bqaudit.scanner.anonymizer import merge_table_metadata
 
                 # Extract all metadata types
                 logger.info("Extracting table metadata...")
