@@ -308,7 +308,9 @@ class BQAuditAPIClient:
                 "API client initialized in MOCK MODE - using test responses. "
                 "Set BQAUDIT_REAL_MODE=true for production use."
             )
-        server_url_raw = os.getenv("BQAUDIT_API_URL", "https://api.bqaudit.com")
+        server_url_raw = os.getenv(
+            "BQAUDIT_API_URL", "https://bqaudit-server-evyc2k5v5a-ew.a.run.app"
+        )
 
         # Validate API URL from environment variable
         # Prevents URL injection attacks, path traversal, and credential redirect
