@@ -65,8 +65,7 @@ bqaudit scan --project my-gcp-project
 ### License Management
 
 **Get a license:**
-- Contact [sales@bqaudit.com](mailto:sales@bqaudit.com) to purchase scan tokens
-- Receive a master license key via email (format: `sk_live_...`)
+- 🚧 **WIP** - License distribution system coming soon
 
 **Activate your license:**
 ```bash
@@ -208,7 +207,6 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv ru
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/OxPuRe/bqaudit-server/issues) (tracked in server repo)
-- **Sales**: sales@bqaudit.com
 - **Documentation**: See [server README](https://github.com/OxPuRe/bqaudit-server#license--token-management) for license system details
 
 ## License
