@@ -64,6 +64,63 @@ def mock_real_scan_mode(monkeypatch):
     )
 
 
+@pytest.fixture
+def mock_bigquery_and_server():
+    """Mock BigQuery authentication and server responses for scan tests."""
+    mock_bq_client = mock.Mock()
+    mock_bq_client.list_datasets.return_value = []
+
+    mock_http_response = mock.Mock()
+    mock_http_response.status_code = 200
+    mock_http_response.json.return_value = {
+        "status": "success",
+        "token_pool_balance": 49,
+        "recommendations": [],
+        "summary": {
+            "total_recommendations": 0,
+            "total_potential_savings_eur": 0.0,
+            "high_priority_count": 0,
+            "medium_priority_count": 0,
+            "low_priority_count": 0,
+            "categories_breakdown": {},
+        },
+        "audit_id": "test-audit-id-123",
+        "new_ephemeral_token": "new-token-456",
+    }
+
+    patches = [
+        mock.patch(
+            "bqaudit.scanner.bigquery_client.authenticate_bigquery",
+            return_value=mock_bq_client,
+        ),
+        mock.patch(
+            "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
+        ),
+        mock.patch(
+            "bqaudit.scanner.metadata_extractor.extract_table_metadata",
+            return_value=[],
+        ),
+        mock.patch(
+            "bqaudit.scanner.metadata_extractor.extract_query_metadata",
+            return_value=[],
+        ),
+        mock.patch(
+            "bqaudit.scanner.metadata_extractor.extract_access_patterns",
+            return_value=[],
+        ),
+        mock.patch(
+            "bqaudit.scanner.metadata_extractor.extract_table_schemas",
+            return_value={},
+        ),
+        mock.patch("httpx.AsyncClient.post", return_value=mock_http_response),
+    ]
+
+    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[
+        6
+    ]:
+        yield mock_http_response
+
+
 class TestScanExecutor:
     """Test ScanExecutor token lifecycle management."""
 
@@ -74,7 +131,7 @@ class TestScanExecutor:
         assert ScanExecutor is not None
 
     def test_execute_scan_with_valid_credentials(
-        self, test_credentials, mock_creds_path
+        self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC1: Execute scan loads credentials and runs simulated scan."""
         from bqaudit.scan.executor import ScanExecutor
@@ -87,9 +144,11 @@ class TestScanExecutor:
         # Should succeed
         assert result.success is True
         assert result.project_id == "test-project"
-        assert result.simulated is True
+        assert result.simulated is False  # Real scan with mocked dependencies
 
-    def test_scan_success_renews_token(self, test_credentials, mock_creds_path):
+    def test_scan_success_renews_token(
+        self, test_credentials, mock_creds_path, mock_bigquery_and_server
+    ):
         """AC3: Successful scan renews ephemeral token."""
         from bqaudit.scan.executor import ScanExecutor
 
@@ -105,9 +164,11 @@ class TestScanExecutor:
 
         # Token should be renewed (different from original)
         assert updated_creds["ephemeral_token"] != original_token
-        assert updated_creds["ephemeral_token"].startswith("mock-renewed-token-")
+        assert updated_creds["ephemeral_token"] == "new-token-456"
 
-    def test_scan_success_decrements_balance(self, test_credentials, mock_creds_path):
+    def test_scan_success_decrements_balance(
+        self, test_credentials, mock_creds_path, mock_bigquery_and_server
+    ):
         """AC1: Successful scan decrements token pool balance by 1."""
         from bqaudit.scan.executor import ScanExecutor
 
@@ -122,7 +183,9 @@ class TestScanExecutor:
         # Balance decremented by 1
         assert updated_creds["token_pool_balance"] == 9
 
-    def test_scan_failure_preserves_token(self, test_credentials, mock_creds_path):
+    def test_scan_failure_preserves_token(
+        self, test_credentials, mock_creds_path, mock_bigquery_and_server
+    ):
         """AC2: CRITICAL - Scan failure preserves token and balance."""
         from bqaudit.scan.executor import ScanExecutor
 
@@ -132,14 +195,17 @@ class TestScanExecutor:
         api_client = BQAuditAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
-        # Mock executor to simulate scan failure
+        # Mock the execute_real_scan method to simulate failure
         with mock.patch.object(
             executor,
-            "_execute_simulated_scan",
+            "execute_real_scan",
             side_effect=RuntimeError("Simulated scan failure"),
         ):
-            with pytest.raises(RuntimeError, match="Simulated scan failure"):
-                executor.execute_scan_with_tokens("test-project")
+            # Execute scan and expect it to catch the error and return ScanResult
+            result = executor.execute_scan_with_tokens("test-project")
+
+            # Scan should fail and return a result with success=False
+            assert result.success is False
 
         # Load credentials - should be UNCHANGED
         updated_creds = CredentialStore.load()
@@ -151,7 +217,7 @@ class TestScanExecutor:
         assert updated_creds["token_pool_balance"] == original_balance
 
     def test_atomic_credential_update_on_failure(
-        self, test_credentials, mock_creds_path
+        self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC6: Credential update failure preserves original credentials."""
         from bqaudit.scan.executor import ScanExecutor
@@ -175,9 +241,45 @@ class TestScanExecutor:
         assert preserved_creds["ephemeral_token"] == original_token
         assert preserved_creds["token_pool_balance"] == original_balance
 
-    def test_token_renewal_after_scan(self, test_credentials, mock_creds_path):
+    def test_token_renewal_after_scan(
+        self, test_credentials, mock_creds_path, mock_bigquery_and_server
+    ):
         """AC3: Token renewal returns new token different from old."""
         from bqaudit.scan.executor import ScanExecutor
+
+        # Mock different responses for each scan
+        mock_bigquery_and_server.json.side_effect = [
+            {
+                "status": "success",
+                "token_pool_balance": 49,
+                "recommendations": [],
+                "summary": {
+                    "total_recommendations": 0,
+                    "total_potential_savings_eur": 0.0,
+                    "high_priority_count": 0,
+                    "medium_priority_count": 0,
+                    "low_priority_count": 0,
+                    "categories_breakdown": {},
+                },
+                "audit_id": "test-audit-id-1",
+                "new_ephemeral_token": "token-1",
+            },
+            {
+                "status": "success",
+                "token_pool_balance": 48,
+                "recommendations": [],
+                "summary": {
+                    "total_recommendations": 0,
+                    "total_potential_savings_eur": 0.0,
+                    "high_priority_count": 0,
+                    "medium_priority_count": 0,
+                    "low_priority_count": 0,
+                    "categories_breakdown": {},
+                },
+                "audit_id": "test-audit-id-2",
+                "new_ephemeral_token": "token-2",
+            },
+        ]
 
         api_client = BQAuditAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
@@ -197,7 +299,7 @@ class TestScanExecutor:
         assert token2 != test_credentials["ephemeral_token"]
 
     def test_credentials_file_permissions_preserved(
-        self, test_credentials, mock_creds_path
+        self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC6: Credentials file maintains chmod 600 after update."""
         from bqaudit.scan.executor import ScanExecutor
@@ -217,7 +319,9 @@ class TestScanExecutor:
         # Should be -rw------- (owner read/write only)
         assert permissions == "-rw-------"
 
-    def test_single_use_token_tracking(self, test_credentials, mock_creds_path):
+    def test_single_use_token_tracking(
+        self, test_credentials, mock_creds_path, mock_bigquery_and_server
+    ):
         """AC8: Old tokens marked as used (client-side tracking)."""
         from bqaudit.scan.executor import ScanExecutor
 

@@ -9,6 +9,7 @@ Tests the complete lifecycle:
 
 import json
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -62,48 +63,81 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
 
     This tests the complete token depletion lifecycle across multiple commands.
     """
+    monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
+
     # Arrange: Create credentials with balance = 1
     mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
     mock_creds_path.write_text(json.dumps(mock_credentials))
     mock_creds_path.chmod(0o600)
 
-    # Act 1: Use last token
-    result1 = runner.invoke(app, ["scan", "--project", "test-project"])
+    # Mock BigQuery authentication and server communication
+    with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
+        with patch(
+            "bqaudit.scanner.metadata_extractor.extract_table_metadata"
+        ) as mock_tables:
+            with patch(
+                "bqaudit.scanner.metadata_extractor.extract_query_metadata"
+            ) as mock_queries:
+                with patch(
+                    "bqaudit.scanner.metadata_extractor.extract_access_patterns"
+                ) as mock_access:
+                    with patch(
+                        "bqaudit.scanner.metadata_extractor.extract_table_schemas"
+                    ) as mock_schemas:
+                        with patch("httpx.AsyncClient.post") as mock_post:
+                            # Setup mocks
+                            mock_auth.return_value = Mock()
+                            mock_tables.return_value = []
+                            mock_queries.return_value = []
+                            mock_access.return_value = []
+                            mock_schemas.return_value = {}
 
-    # Assert 1: Scan succeeded with warning
-    assert result1.exit_code == 0
-    assert "This was your last token" in result1.stdout
-    assert "Purchase more tokens" in result1.stdout
+                            # Mock server response
+                            mock_response = Mock()
+                            mock_response.status_code = 200
+                            mock_response.json.return_value = {
+                                "status": "success",
+                                "token_pool_balance": 0,  # Will be 0 after using last token
+                            }
+                            mock_post.return_value = mock_response
 
-    # Verify balance is now 0
-    updated_creds = json.loads(mock_creds_path.read_text())
-    assert updated_creds["token_pool_balance"] == 0
+                            # Act 1: Use last token
+                            result1 = runner.invoke(app, ["scan", "--project", "test-project"])
 
-    # Act 2: Try to scan again
-    result2 = runner.invoke(app, ["scan", "--project", "test-project"])
+                            # Assert 1: Scan succeeded with warning
+                            assert result1.exit_code == 0
+                            assert "This was your last token" in result1.stdout
+                            assert "Purchase more tokens" in result1.stdout
 
-    # Assert 2: Scan prevented with exit code 4
-    assert result2.exit_code == 4
-    assert "Token pool depleted" in result2.stdout
-    assert "0 scans remaining" in result2.stdout
-    assert "bqaudit.com/pricing" in result2.stdout
+                            # Verify balance is now 0
+                            updated_creds = json.loads(mock_creds_path.read_text())
+                            assert updated_creds["token_pool_balance"] == 0
 
-    # Act 3: Validate still attempts to run (doesn't check token balance)
-    # Note: validate will likely fail due to actual BigQuery API calls,
-    # but the key is that it doesn't fail with exit code 4 (token depletion)
-    result3 = runner.invoke(app, ["validate", "--project", "test-project"])
+                            # Act 2: Try to scan again
+                            result2 = runner.invoke(app, ["scan", "--project", "test-project"])
 
-    # Assert 3: Validation doesn't fail due to token balance check
-    # The critical test is that it doesn't show "Token pool depleted" error
-    assert "Token pool depleted" not in result3.stdout
-    # Validation attempts to run (doesn't get blocked by token check)
-    assert "Starting BigQuery Validation" in result3.stdout
+                            # Assert 2: Scan prevented with exit code 4
+                            assert result2.exit_code == 4
+                            assert "Token pool depleted" in result2.stdout
+                            assert "0 scans remaining" in result2.stdout
+                            assert "bqaudit.com/pricing" in result2.stdout
 
-    # Verify balance still 0 (validate doesn't consume tokens even when it fails)
-    final_creds = json.loads(mock_creds_path.read_text())
-    assert final_creds["token_pool_balance"] == 0
+                            # Act 3: Validate still attempts to run (doesn't check token balance)
+                            # Note: validate will likely fail due to actual BigQuery API calls,
+                            # but the key is that it doesn't fail with exit code 4 (token depletion)
+                            result3 = runner.invoke(app, ["validate", "--project", "test-project"])
 
-    # Act 4: Check license status shows depletion
+                            # Assert 3: Validation doesn't fail due to token balance check
+                            # The critical test is that it doesn't show "Token pool depleted" error
+                            assert "Token pool depleted" not in result3.stdout
+                            # Validation attempts to run (doesn't get blocked by token check)
+                            assert "Starting BigQuery Validation" in result3.stdout
+
+                            # Verify balance still 0 (validate doesn't consume tokens even when it fails)
+                            final_creds = json.loads(mock_creds_path.read_text())
+                            assert final_creds["token_pool_balance"] == 0
+
+    # Act 4: Check license status shows depletion (outside BigQuery mock context)
     result4 = runner.invoke(app, ["license", "status"])
 
     # Assert 4: Status shows DEPLETED

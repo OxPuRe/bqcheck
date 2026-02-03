@@ -395,25 +395,25 @@ class TestScanCommandProgressIndicators:
                                     "Connection refused"
                                 )
 
-                            # Execute scan
-                            client = BQAuditAPIClient(mock_mode=False)
-                            executor = ScanExecutor(client)
+                                # Execute scan
+                                client = BQAuditAPIClient(mock_mode=False)
+                                executor = ScanExecutor(client)
 
-                            # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
-                            with pytest.raises(ScanError) as exc_info:
-                                await executor.execute_real_scan(
-                                    project_id="my-project",
-                                    ephemeral_token="eph_test_token",
+                                # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
+                                with pytest.raises(ScanError) as exc_info:
+                                    await executor.execute_real_scan(
+                                        project_id="my-project",
+                                        ephemeral_token="eph_test_token",
+                                    )
+
+                                assert exc_info.value.exit_code == 1
+
+                                # Verify error message was printed
+                                captured = capsys.readouterr()
+                                assert (
+                                    "Unable to reach audit server" in captured.err
+                                    or "Unable to reach audit server" in captured.out
                                 )
-
-                            assert exc_info.value.exit_code == 1
-
-                            # Verify error message was printed
-                            captured = capsys.readouterr()
-                            assert (
-                                "Unable to reach audit server" in captured.err
-                                or "Unable to reach audit server" in captured.out
-                            )
 
     @pytest.mark.skip(reason="Flaky test - timeout error message inconsistent")
     @pytest.mark.asyncio

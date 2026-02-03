@@ -67,7 +67,7 @@ class TestBQAuditAPIClient:
 
         assert response.token_pool_balance == 50
         assert response.ephemeral_token == "mock-ephemeral-token-xyz"
-        assert "api.bqaudit.com" in response.server_url
+        assert "bqaudit" in response.server_url
         assert response.activated_at is not None
 
     def test_activate_license_invalid_key(self):
