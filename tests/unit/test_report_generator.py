@@ -1,5 +1,7 @@
 """Unit tests for Markdown report generator (Story 5.2)."""
 
+from datetime import date, datetime, timezone
+
 import pytest
 
 from bqaudit.api.models import AuditResponse, AuditSummary, Recommendation
@@ -652,3 +654,56 @@ class TestEdgeCases:
 
         # Verify all 150 recommendations are in detailed section
         assert report.count("### Recommendation") == 150
+
+
+class TestJobIdHandling:
+    """Test suite for BigQuery job ID handling in recommendations."""
+
+    def test_job_id_decryption_failure_handled_gracefully(self):
+        """Test that corrupted/invalid encrypted job_id doesn't break report generation."""
+        from bqaudit.scanner.encryption import IdentifierEncryptor
+
+        # Create a recommendation with an encrypted job_id in implementation steps
+        # Use a corrupted/invalid encrypted string to trigger decryption failure
+        rec = Recommendation(
+            type="queries",
+            priority="MEDIUM",
+            title="Test query recommendation",
+            savings_eur=100.0,
+            description="Test description",
+            implementation_steps=[
+                "Review query pattern abc123",
+                "Find query in BigQuery Console using job ID: CORRUPTED_INVALID_BASE64_STRING",
+                "Create materialized view",
+            ],
+        )
+
+        response = AuditResponse(
+            project_id="test-project",
+            audit_date=date.today(),
+            generated_at=datetime.now(timezone.utc),
+            summary=AuditSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=100.0,
+                high_priority_count=0,
+                medium_priority_count=1,
+                low_priority_count=0,
+                category_breakdown={"queries": {"count": 1, "savings": 100.0}},
+            ),
+            recommendations=[rec],
+            audit_id="test",
+            new_ephemeral_token="token",
+        )
+
+        # Create generator with encryption key
+        encryption_key = IdentifierEncryptor.generate_key()
+        generator = MarkdownReportGenerator(response, encryption_key=encryption_key)
+
+        # Generate report - should not raise exception despite invalid job_id
+        report = generator.generate_report()
+
+        # Verify report was generated successfully
+        assert "# BigQuery Audit Report" in report
+        assert "Test query recommendation" in report
+        # Job ID link should be skipped (not included) due to decryption failure
+        assert "CORRUPTED_INVALID_BASE64_STRING" not in report

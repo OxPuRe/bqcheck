@@ -346,3 +346,25 @@ class TestQueryAggregation:
         )
         result = aggregate_query_metadata([create_query], salt)
         assert result[0]["query_type"] == "CREATE"
+
+    def test_aggregate_handles_invalid_timestamp_gracefully(self):
+        """Test that aggregator handles invalid timestamps with fallback."""
+        salt = IdentifierEncryptor.generate_key()
+
+        # Create query with malformed timestamp that will fail parsing
+        query_with_bad_timestamp = QueryMetadata(
+            job_id="project:us.job1",
+            query="SELECT * FROM dataset.table",
+            total_bytes_processed=1099511627776,
+            creation_time="INVALID-TIMESTAMP",  # This will trigger ValueError in parsing
+            job_type="QUERY",
+            state="DONE",
+        )
+
+        # Should not raise error, should use fallback
+        result = aggregate_query_metadata([query_with_bad_timestamp], salt)
+
+        # Verify result is still generated (fallback worked)
+        assert len(result) == 1
+        assert result[0]["query_type"] == "SELECT"
+        assert "last_execution_time" in result[0]
