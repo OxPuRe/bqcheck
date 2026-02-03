@@ -717,6 +717,18 @@ class BQAuditAPIClient:
                 raise InvalidLicenseKeyError(
                     "Ephemeral token invalid or expired. Please re-activate license."
                 )
+            elif e.response.status_code == 422:
+                # Validation error - provide helpful context
+                try:
+                    error_detail = e.response.json()
+                    detail_msg = error_detail.get("detail", "Unknown validation error")
+                except Exception:
+                    detail_msg = "Request validation failed"
+                raise NetworkError(
+                    f"Server rejected audit request (validation error). "
+                    f"This may indicate the payload is too large or malformed. "
+                    f"Details: {detail_msg}"
+                )
             raise NetworkError(
                 f"Server error during audit. Status: {e.response.status_code}"
             )

@@ -581,6 +581,16 @@ class ScanExecutor:
             metadata=metadata,
         )
 
+        # Log payload size for debugging (helps diagnose 422 validation errors)
+        import json
+        payload_json = json.dumps(audit_request.model_dump())
+        payload_size_mb = len(payload_json.encode('utf-8')) / (1024 * 1024)
+        logger.info(
+            f"Audit request payload size: {payload_size_mb:.2f} MB "
+            f"({len(metadata.tables)} tables, {len(metadata.queries)} queries, "
+            f"{len(metadata.access_patterns)} access patterns)"
+        )
+
         # Step 4: Send to server with progress indicators (AC3, AC4) and error handling (AC7, AC8)
         try:
             # AC3: Display server upload message
