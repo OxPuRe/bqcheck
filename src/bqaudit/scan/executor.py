@@ -157,6 +157,29 @@ class ScanExecutor:
             logger.exception("Unexpected error loading credentials")
             raise
 
+        # Step 1.5: Validate BigQuery permissions BEFORE consuming token
+        # This ensures we fail fast if permissions are missing
+        try:
+            from bqaudit.scanner.bigquery_client import (
+                PermissionError as BQPermissionError,
+                ProjectNotFoundError,
+                validate_multi_project_permissions,
+            )
+
+            logger.info("Validating BigQuery permissions...")
+            validate_multi_project_permissions(project_id, query_project)
+            logger.info("✓ Permissions validated")
+
+        except ProjectNotFoundError as e:
+            typer.echo(f"\n❌ {e.message}")
+            typer.echo("\n💡 Tip: Verify project ID and check your GCP access")
+            sys.exit(2)
+
+        except BQPermissionError as e:
+            typer.echo(f"\n❌ {e.message}")
+            typer.echo("\n💡 Tip: Run 'bqaudit validate' to check permissions")
+            sys.exit(3)
+
         # Step 2: Execute scan (SIMULATED for Epic 3, or REAL for Epic 5)
         try:
             # AC1, AC7: Simulated scan

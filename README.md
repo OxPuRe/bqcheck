@@ -50,6 +50,12 @@ Check BigQuery access and permissions without consuming tokens:
 bqaudit validate --project my-gcp-project
 ```
 
+Validate multi-project setup:
+
+```bash
+bqaudit validate --project storage-project --query-project processing-project
+```
+
 Show detailed validation steps:
 
 ```bash
@@ -58,9 +64,17 @@ bqaudit validate --project my-gcp-project --verbose
 
 ### Run Audit (Consumes 1 Token)
 
+**Single-project scan:**
 ```bash
 bqaudit scan --project my-gcp-project
 ```
+
+**Multi-project scan** (for separated storage/processing architectures):
+```bash
+bqaudit scan --project storage-project --query-project processing-project
+```
+
+Use `--query-project` when your tables are stored in one project but queries run in another. This dramatically improves query-based recommendations (materialized views, clustering opportunities).
 
 ### License Management
 
