@@ -143,6 +143,37 @@ class MarkdownReportGenerator:
         return text
 
     @staticmethod
+    def _truncate_query_hash(text: str) -> str:
+        """
+        Truncate long query pattern hashes for readability.
+
+        Replaces 64-character SHA-256 hashes with shortened version (first 8 + last 4 chars).
+
+        Args:
+            text: Text containing query pattern hashes
+
+        Returns:
+            Text with truncated hashes
+
+        Example:
+            >>> _truncate_query_hash("Query pattern e2a46e6117ae58453f6fcf9c747fa74329873e38cd68b426ae14eab0e3ec4f2e executes")
+            "Query pattern e2a46e61...4f2e executes"
+        """
+        import re
+
+        # Match SHA-256 hashes (64 hex characters)
+        def truncate_hash(match: re.Match[str]) -> str:
+            hash_value = match.group(1)
+            # Only truncate if it's a full 64-char hash
+            if len(hash_value) == 64:
+                return f"{hash_value[:8]}...{hash_value[-4:]}"
+            return hash_value
+
+        # Pattern: "Query pattern" followed by 64-character hex hash
+        pattern = r"Query pattern ([a-f0-9]{64})\b"
+        return re.sub(pattern, lambda m: f"Query pattern {truncate_hash(m)}", text)
+
+    @staticmethod
     def _format_size_human_readable(text: str) -> str:
         """
         Convert large GB values to TB for better readability.
@@ -405,6 +436,8 @@ Top high-priority optimizations for immediate impact:
             decrypted_description = self._decrypt_identifiers_in_text(rec.description)
             # Convert large GB values to TB for readability
             decrypted_description = self._format_size_human_readable(decrypted_description)
+            # Truncate long query hashes for readability
+            decrypted_description = self._truncate_query_hash(decrypted_description)
             quick_wins += f"""{i}. **{clean_title}** - €{rec.savings_eur:.2f}/month
    - {decrypted_description}
 
@@ -473,6 +506,8 @@ Top high-priority optimizations for immediate impact:
             decrypted_description = self._decrypt_identifiers_in_text(rec.description)
             # Convert large GB values to TB for readability
             decrypted_description = self._format_size_human_readable(decrypted_description)
+            # Truncate long query hashes for readability
+            decrypted_description = self._truncate_query_hash(decrypted_description)
 
             detailed += f"""**Description:**
 {decrypted_description}
