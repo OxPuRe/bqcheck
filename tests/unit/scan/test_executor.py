@@ -16,6 +16,7 @@ import pytest
 
 from bqaudit.api.client import BQAuditAPIClient
 from bqaudit.license.storage import CredentialStore
+from bqaudit.scanner.encryption import IdentifierEncryptor
 
 
 @pytest.fixture
@@ -40,6 +41,9 @@ def test_credentials(mock_creds_path):
         "token_pool_balance": 10,
         "server_url": "https://api.bqaudit.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
+        "encryption_key": IdentifierEncryptor.key_to_base64(
+            IdentifierEncryptor.generate_key()
+        ),
     }
 
     # Save credentials

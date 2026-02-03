@@ -8,6 +8,21 @@ from bqaudit.license.storage import (
     CredentialNotFoundError,
     CredentialStore,
 )
+from bqaudit.scanner.encryption import IdentifierEncryptor
+
+
+def _create_test_credentials():
+    """Helper to create valid test credentials with encryption_key."""
+    return {
+        "master_key": "TEST-KEY",
+        "token_pool_balance": 50,
+        "ephemeral_token": "token123",
+        "server_url": "https://api.bqaudit.com",
+        "activated_at": "2026-01-30T10:00:00+00:00",
+        "encryption_key": IdentifierEncryptor.key_to_base64(
+            IdentifierEncryptor.generate_key()
+        ),
+    }
 
 
 class TestCredentialStore:
@@ -17,13 +32,7 @@ class TestCredentialStore:
         """Test that save() creates ~/.bqaudit directory if needed."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        credentials = {
-            "master_key": "TEST-KEY",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token123",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        credentials = _create_test_credentials()
 
         CredentialStore.save(credentials)
 
@@ -35,13 +44,7 @@ class TestCredentialStore:
         """AC5: Verify credentials file created with chmod 600."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        credentials = {
-            "master_key": "TEST-KEY",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token123",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        credentials = _create_test_credentials()
 
         CredentialStore.save(credentials)
 
@@ -57,34 +60,23 @@ class TestCredentialStore:
         """AC6: Verify credential file contains valid JSON."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        credentials = {
-            "master_key": "TEST-KEY",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token123",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        credentials = _create_test_credentials()
 
         CredentialStore.save(credentials)
 
         cred_file = tmp_path / ".bqaudit" / "credentials.json"
         loaded = json.loads(cred_file.read_text())
 
-        assert loaded["master_key"] == "TEST-KEY"
-        assert loaded["token_pool_balance"] == 50
-        assert loaded["ephemeral_token"] == "token123"
+        assert loaded["master_key"] == credentials["master_key"]
+        assert loaded["token_pool_balance"] == credentials["token_pool_balance"]
+        assert loaded["ephemeral_token"] == credentials["ephemeral_token"]
+        assert loaded["encryption_key"] == credentials["encryption_key"]
 
     def test_save_atomic_write(self, tmp_path, monkeypatch):
         """Test that save uses atomic write pattern (temp file + rename)."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        credentials = {
-            "master_key": "TEST",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token123",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        credentials = _create_test_credentials()
         CredentialStore.save(credentials)
 
         # After successful save, temp file should not exist
@@ -99,25 +91,20 @@ class TestCredentialStore:
         """Test that load() returns stored credentials."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        credentials = {
-            "master_key": "TEST-KEY",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token123",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        credentials = _create_test_credentials()
 
         CredentialStore.save(credentials)
         loaded = CredentialStore.load()
 
         # Story 3.4 added used_tokens field with default=[]
         # Note: activated_at is serialized to 'Z' format by field_serializer
-        expected = {
-            **credentials,
-            "activated_at": "2026-01-30T10:00:00Z",  # Serialized to Z format
-            "used_tokens": [],
-        }
-        assert loaded == expected
+        assert loaded["master_key"] == credentials["master_key"]
+        assert loaded["token_pool_balance"] == credentials["token_pool_balance"]
+        assert loaded["ephemeral_token"] == credentials["ephemeral_token"]
+        assert loaded["server_url"] == credentials["server_url"]
+        assert loaded["encryption_key"] == credentials["encryption_key"]
+        assert loaded["activated_at"] == "2026-01-30T10:00:00Z"  # Serialized to Z format
+        assert loaded["used_tokens"] == []
 
     def test_load_raises_if_file_not_exists(self, tmp_path, monkeypatch):
         """Test that load() raises CredentialNotFoundError if no file."""
@@ -136,13 +123,8 @@ class TestCredentialStore:
         cred_file = cred_dir / "credentials.json"
 
         # Need complete credentials to avoid ValidationError after auto-fix
-        credentials = {
-            "master_key": "TEST-KEY-123",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token123",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        credentials = _create_test_credentials()
+        credentials["master_key"] = "TEST-KEY-123"  # Override for test verification
         cred_file.write_text(json.dumps(credentials, indent=2))
         cred_file.chmod(0o644)  # Unsafe: group/other can read
 
@@ -157,13 +139,7 @@ class TestCredentialStore:
         """Test exists() returns True when credentials file exists."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        credentials = {
-            "master_key": "TEST",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token123",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        credentials = _create_test_credentials()
         CredentialStore.save(credentials)
 
         assert CredentialStore.exists() is True
@@ -178,13 +154,7 @@ class TestCredentialStore:
         """Test delete() removes credentials file."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        credentials = {
-            "master_key": "TEST",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token123",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        credentials = _create_test_credentials()
         CredentialStore.save(credentials)
 
         assert CredentialStore.exists() is True
@@ -197,22 +167,12 @@ class TestCredentialStore:
         """Test update() modifies existing credentials."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        initial = {
-            "master_key": "TEST",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token123",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        initial = _create_test_credentials()
         CredentialStore.save(initial)
 
-        updated = {
-            "master_key": "TEST",
-            "token_pool_balance": 49,
-            "ephemeral_token": "token456",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-30T10:00:00+00:00",
-        }
+        updated = _create_test_credentials()
+        updated["token_pool_balance"] = 49
+        updated["ephemeral_token"] = "token456"
         CredentialStore.update(updated)
 
         loaded = CredentialStore.load()

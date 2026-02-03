@@ -17,6 +17,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from bqaudit.cli import app
+from bqaudit.scanner.encryption import IdentifierEncryptor
 
 runner = CliRunner()
 
@@ -39,6 +40,9 @@ def test_validate_succeeds_but_scan_fails_when_token_depleted(tmp_path: Path):
         "server_url": "https://api.bqaudit.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
         "used_tokens": [],
+        "encryption_key": IdentifierEncryptor.key_to_base64(
+            IdentifierEncryptor.generate_key()
+        ),
     }
 
     mock_creds_path.write_text(json.dumps(mock_credentials))
@@ -106,6 +110,9 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
         "server_url": "https://api.bqaudit.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
         "used_tokens": [],
+        "encryption_key": IdentifierEncryptor.key_to_base64(
+            IdentifierEncryptor.generate_key()
+        ),
     }
 
     mock_creds_path.write_text(json.dumps(mock_credentials))

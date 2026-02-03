@@ -34,6 +34,7 @@ class TestLicenseActivateCommand:
         """Test that activate command with key calls activation logic."""
         # Set credentials path to temp location
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
 
         # Use VALID- prefix for mock success
         result = runner.invoke(app, ["license", "activate", "VALID-TEST-KEY-123"])

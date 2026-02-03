@@ -8,6 +8,7 @@ import pytest
 
 from bqaudit.api.client import BQAuditAPIClient
 from bqaudit.api.models import AuditRequest, AuditResponse, AuditSummary, Recommendation
+from bqaudit.scanner.encryption import IdentifierEncryptor
 
 
 @pytest.fixture
@@ -22,6 +23,9 @@ def mock_credentials_file(tmp_path):
         "ephemeral_token": "eph_test_token",
         "token_pool_balance": 5,
         "server_url": "https://api.bqaudit.test",
+        "encryption_key": IdentifierEncryptor.key_to_base64(
+            IdentifierEncryptor.generate_key()
+        ),
     }
 
     creds_file.write_text(json.dumps(credentials, indent=2))
@@ -182,6 +186,9 @@ class TestScanCommandIntegration:
             "ephemeral_token": "eph_test_token",
             "token_pool_balance": 0,  # DEPLETED
             "server_url": "https://api.bqaudit.test",
+            "encryption_key": IdentifierEncryptor.key_to_base64(
+                IdentifierEncryptor.generate_key()
+            ),
         }
 
         creds_file.write_text(json.dumps(credentials, indent=2))

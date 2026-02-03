@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 
 from bqaudit.cli import app
 from bqaudit.constants import ExitCode
+from tests.conftest import create_test_credentials
 
 runner = CliRunner()
 
@@ -32,13 +33,12 @@ class TestLicenseStatusCLI:
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
-        credentials = {
-            "master_key": "ABC-XYZ-123-DEF-456",
-            "token_pool_balance": 47,
-            "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00+00:00",
-        }
+        credentials = create_test_credentials(
+            master_key="ABC-XYZ-123-DEF-456",
+            token_pool_balance=47,
+            ephemeral_token="token-xyz",
+            activated_at="2026-01-28T10:30:00+00:00",
+        )
 
         cred_file.write_text(json.dumps(credentials, indent=2))
         cred_file.chmod(0o600)
@@ -92,13 +92,10 @@ class TestLicenseStatusCLI:
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
-        credentials = {
-            "master_key": "ABC-XYZ-123",
-            "token_pool_balance": 50,
-            "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
-            "activated_at": "2026-01-28T10:30:00+00:00",
-        }
+        credentials = create_test_credentials(
+            master_key="ABC-XYZ-123",
+            activated_at="2026-01-28T10:30:00+00:00",
+        )
 
         cred_file.write_text(json.dumps(credentials, indent=2))
         cred_file.chmod(0o644)  # Wrong permissions!
@@ -190,13 +187,10 @@ class TestLicenseStatusCLI:
             cred_dir.mkdir(mode=0o700, exist_ok=True)
             cred_file = cred_dir / "credentials.json"
 
-            credentials = {
-                "master_key": full_key,
-                "token_pool_balance": 50,
-                "ephemeral_token": "token-xyz",
-                "server_url": "https://api.bqaudit.com",
-                "activated_at": "2026-01-28T10:30:00+00:00",
-            }
+            credentials = create_test_credentials(
+                master_key=full_key,
+                activated_at="2026-01-28T10:30:00+00:00",
+            )
 
             cred_file.write_text(json.dumps(credentials, indent=2))
             cred_file.chmod(0o600)
