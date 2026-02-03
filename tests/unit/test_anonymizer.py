@@ -492,7 +492,6 @@ class TestValidationAndSecurity:
             anonymize_dataset_name,
             anonymize_project_id,
             anonymize_table_name,
-            generate_salt,
         )
 
         salt = _generate_test_key()
