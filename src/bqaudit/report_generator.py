@@ -393,8 +393,11 @@ Top high-priority optimizations for immediate impact:
             detailed += f"""### Recommendation {i}: {clean_title}
 
 **Type:** {rec.type}
+
 **Priority:** {rec.priority}
+
 **Estimated Monthly Savings:** €{rec.savings_eur:.2f}
+
 """
 
             # Add source file reference if found (for query recommendations)
