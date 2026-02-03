@@ -12,11 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Groups raw query metadata by anonymized pattern hash
   - Calculates executions per day and average bytes per execution
   - Enables repeated query detection and materialized view recommendations
+- Filtered columns extraction for clustering recommendations (Story 4.4)
+  - Regex-based WHERE clause parser to identify frequently filtered columns
+  - Single-pass aggregation across all tables (O(n) vs O(n*m) complexity)
+  - Enables server-side clustering column recommendations
+- BigQuery `referenced_tables` metadata integration
+  - Uses native BigQuery table resolution instead of regex parsing
+  - More reliable handling of complex queries (subqueries, CTEs, temp tables)
+  - Backwards compatible fallback to regex when metadata unavailable
 - Privacy enhancements:
   - Cryptographic salt generation for all anonymization operations
   - Full anonymization of tables, queries, and access patterns before server transmission
   - SHA-256 hashing of table_id field (dataset.table format)
-- Comprehensive test suite for query aggregation (17 tests, 100% pass rate)
+- Comprehensive test suites:
+  - Query aggregation: 17 tests (100% pass rate)
+  - Filtered columns: 24 tests (100% pass rate)
+  - Referenced tables: 6 additional tests (100% pass rate)
 - Support for BigQuery timezone offset format (`+00` suffix)
 
 ### Changed
