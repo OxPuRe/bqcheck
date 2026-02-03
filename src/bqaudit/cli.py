@@ -531,6 +531,14 @@ def scan(
     project: Annotated[
         str, typer.Option("--project", "-p", help="GCP project ID to scan")
     ],
+    query_project: Annotated[
+        Optional[str],
+        typer.Option(
+            "--query-project",
+            "-q",
+            help="GCP project ID for query metadata (defaults to --project)",
+        ),
+    ] = None,
     output: Annotated[
         Optional[Path],
         typer.Option(
@@ -556,6 +564,17 @@ def scan(
     Executes complete BigQuery audit with server integration (Epic 5).
     Extracts metadata from INFORMATION_SCHEMA, sends to audit server,
     and generates Markdown report with cost-saving recommendations.
+
+    Multi-Project Support:
+        For separated storage/processing architectures:
+        - --project: Project with tables (e.g., *-dt-cur-0)
+        - --query-project: Project running queries (e.g., *-dt-prc-0)
+
+        If --query-project is omitted, queries are extracted from --project.
+
+        Example:
+            bqaudit scan --project roam-staging-dt-cur-0 \\
+                         --query-project roam-staging-dt-prc-0
 
     Mode Selection:
         - Default: Simulated scan (Epic 3 compatibility)
@@ -603,7 +622,12 @@ def scan(
         mock_mode = not is_real_mode()
         api_client = BQAuditAPIClient(mock_mode=mock_mode)
         executor = ScanExecutor(api_client)
-        executor.execute_scan_with_tokens(project, output_path=output, force=force)
+        executor.execute_scan_with_tokens(
+            project,
+            query_project=query_project,
+            output_path=output,
+            force=force
+        )
 
         # Step 5: Show warning if was last token (AC2, Story 3.5)
         if is_last_token:

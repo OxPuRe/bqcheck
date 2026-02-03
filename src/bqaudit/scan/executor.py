@@ -94,6 +94,7 @@ class ScanExecutor:
     def execute_scan_with_tokens(
         self,
         project_id: str,
+        query_project: "str | None" = None,
         output_path: "Path | None" = None,
         force: bool = False,
     ) -> ScanResult:
@@ -107,7 +108,12 @@ class ScanExecutor:
         4. On failure: preserve token (atomic consumption)
 
         Args:
-            project_id: GCP project ID to scan
+            project_id: GCP project ID to scan for table metadata
+            query_project: Optional GCP project ID for query metadata.
+                          If None, uses project_id for both tables and queries.
+                          Use this for separated storage/processing architectures.
+            output_path: Optional custom output file path
+            force: Force overwrite existing file without prompt
 
         Returns:
             ScanResult with scan results
@@ -175,7 +181,7 @@ class ScanExecutor:
                 try:
                     audit_response = asyncio.run(
                         self.execute_real_scan(
-                            project_id, credentials["ephemeral_token"]
+                            project_id, credentials["ephemeral_token"], query_project
                         )
                     )
                 except ScanError as e:
@@ -344,7 +350,7 @@ class ScanExecutor:
         return simulate_scan(project_id, ephemeral_token)
 
     async def execute_real_scan(
-        self, project_id: str, ephemeral_token: str
+        self, project_id: str, ephemeral_token: str, query_project: "str | None" = None
     ) -> AuditResponse:
         """
         Execute REAL BigQuery scan with server integration (Story 5.1 + 5.3).
@@ -357,8 +363,10 @@ class ScanExecutor:
         5. Return AuditResponse with recommendations
 
         Args:
-            project_id: GCP project ID to scan
+            project_id: GCP project ID to scan for table metadata
             ephemeral_token: Ephemeral token for authentication
+            query_project: Optional GCP project ID for query metadata.
+                          If None, uses project_id for both tables and queries.
 
         Returns:
             AuditResponse with recommendations and new ephemeral token
@@ -410,8 +418,10 @@ class ScanExecutor:
                 logger.info("Extracting table metadata...")
                 table_metadata = extract_table_metadata(client, project_id)
 
-                logger.info("Extracting query metadata...")
-                query_metadata = extract_query_metadata(client, project_id, days=90)
+                # Use query_project if specified, otherwise use project_id
+                query_project_id = query_project or project_id
+                logger.info(f"Extracting query metadata from project: {query_project_id}")
+                query_metadata = extract_query_metadata(client, query_project_id, days=90)
 
                 logger.info("Extracting access patterns...")
                 access_patterns = extract_access_patterns(client, project_id)

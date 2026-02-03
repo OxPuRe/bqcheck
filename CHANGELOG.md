@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Filtered columns: 24 tests (100% pass rate)
   - Referenced tables: 6 additional tests (100% pass rate)
 - Support for BigQuery timezone offset format (`+00` suffix)
+- Multi-project scanning support with `--query-project` flag
+  - Enables scanning storage and query projects separately
+  - Essential for separated architectures (e.g., *-dt-cur-0 storage + *-dt-prc-0 processing)
+  - Dramatically improves query-based recommendation detection
+  - Example: `bqaudit scan --project storage-proj --query-project query-proj`
 
 ### Changed
 - Scan executor now properly anonymizes all metadata before sending to server
