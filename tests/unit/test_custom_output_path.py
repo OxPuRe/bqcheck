@@ -58,33 +58,35 @@ def mock_bigquery_scan():
     mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
     mock_async_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch(
-        "bqaudit.scanner.bigquery_client.authenticate_bigquery",
-        return_value=mock_bq_client,
-    ):
+    # Set BQAUDIT_REAL_SCAN=true to enable real scan mode with mocked dependencies
+    with patch.dict("os.environ", {"BQAUDIT_REAL_SCAN": "true"}):
         with patch(
-            "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
+            "bqaudit.scanner.bigquery_client.authenticate_bigquery",
+            return_value=mock_bq_client,
         ):
             with patch(
-                "bqaudit.scanner.metadata_extractor.extract_table_metadata",
-                return_value=[],
+                "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
             ):
                 with patch(
-                    "bqaudit.scanner.metadata_extractor.extract_query_metadata",
+                    "bqaudit.scanner.metadata_extractor.extract_table_metadata",
                     return_value=[],
                 ):
                     with patch(
-                        "bqaudit.scanner.metadata_extractor.extract_access_patterns",
+                        "bqaudit.scanner.metadata_extractor.extract_query_metadata",
                         return_value=[],
                     ):
                         with patch(
-                            "bqaudit.scanner.metadata_extractor.extract_table_schemas",
-                            return_value={},
+                            "bqaudit.scanner.metadata_extractor.extract_access_patterns",
+                            return_value=[],
                         ):
                             with patch(
-                                "httpx.AsyncClient", return_value=mock_async_client
+                                "bqaudit.scanner.metadata_extractor.extract_table_schemas",
+                                return_value={},
                             ):
-                                yield
+                                with patch(
+                                    "httpx.AsyncClient", return_value=mock_async_client
+                                ):
+                                    yield
 
 
 @pytest.fixture
