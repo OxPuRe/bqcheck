@@ -221,8 +221,9 @@ class MarkdownReportGenerator:
         job_ids = []
         for step in implementation_steps:
             # Look for "Find query in BigQuery Console using job ID: xxx"
-            # Job ID format: project:location.job_abc123 or project.location.job_abc123
-            match = re.search(r"job ID:\s+([a-zA-Z0-9_-]+[:.][a-zA-Z0-9_-]+\.job_[a-zA-Z0-9_]+)", step)
+            # Job ID format: project:location.{job_id} (e.g., roam-prod:EU.bquxjob_xxx or roam-prod:EU.scheduled_query_xxx)
+            # Match: alphanumeric+hyphens+underscores, colon or dot, alphanumeric, dot, alphanumeric+underscores+hyphens
+            match = re.search(r"job ID:\s+([a-zA-Z0-9_-]+[:.][a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)", step)
             if match:
                 job_ids.append(match.group(1))
 
@@ -241,8 +242,9 @@ class MarkdownReportGenerator:
         """
         import re
 
-        # Parse job ID format: project:location.job_abc123 or project.location.job_abc123
-        match = re.match(r"([a-zA-Z0-9_-]+)[:.]([ a-zA-Z0-9_-]+)\.(job_[a-zA-Z0-9_]+)", job_id)
+        # Parse job ID format: project:location.{job_id} (e.g., roam-prod:EU.bquxjob_xxx)
+        # Accept any alphanumeric job ID, not just those starting with "job_"
+        match = re.match(r"([a-zA-Z0-9_-]+)[:.]([ A-Z0-9]+)\.([a-zA-Z0-9_-]+)", job_id)
         if not match:
             # Return plain text if format doesn't match
             return f"`{job_id}`"
