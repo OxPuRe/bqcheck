@@ -10,7 +10,9 @@ Tests cover:
 """
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -21,6 +23,60 @@ from bqaudit.report_generator import MarkdownReportGenerator
 from bqaudit.scanner.encryption import IdentifierEncryptor
 
 runner = CliRunner()
+
+
+@contextmanager
+def mock_bigquery_scan():
+    """Context manager to mock BigQuery scanning for tests."""
+    mock_bq_client = Mock()
+    mock_bq_client.list_datasets.return_value = []
+
+    # Mock HTTP response from server
+    mock_http_response = Mock()
+    mock_http_response.status_code = 200
+    mock_http_response.json.return_value = {
+        "status": "success",
+        "token_pool_balance": 49,
+        "recommendations": [],
+        "summary": {
+            "total_recommendations": 0,
+            "total_potential_savings_eur": 0.0,
+            "high_priority_count": 0,
+            "medium_priority_count": 0,
+            "low_priority_count": 0,
+            "categories_breakdown": {},
+        },
+        "audit_id": "test-audit-id-123",
+        "new_ephemeral_token": "new-token-456",
+    }
+
+    with patch(
+        "bqaudit.scanner.bigquery_client.authenticate_bigquery",
+        return_value=mock_bq_client,
+    ):
+        with patch(
+            "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
+        ):
+            with patch(
+                "bqaudit.scanner.metadata_extractor.extract_table_metadata",
+                return_value=[],
+            ):
+                with patch(
+                    "bqaudit.scanner.metadata_extractor.extract_query_metadata",
+                    return_value=[],
+                ):
+                    with patch(
+                        "bqaudit.scanner.metadata_extractor.extract_access_patterns",
+                        return_value=[],
+                    ):
+                        with patch(
+                            "bqaudit.scanner.metadata_extractor.extract_table_schemas",
+                            return_value={},
+                        ):
+                            with patch(
+                                "httpx.AsyncClient.post", return_value=mock_http_response
+                            ):
+                                yield
 
 
 @pytest.fixture
@@ -405,29 +461,28 @@ class TestScanCommandWithCustomOutput:
         mock_creds_path.write_text(json.dumps(mock_credentials))
         mock_creds_path.chmod(0o600)
 
-        # Enable real scan mode to generate report
-        monkeypatch.setenv("BQAUDIT_REAL_SCAN", "true")
+        # Use mock mode to avoid real BigQuery calls
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")
 
-        # Mock the BigQuery scanning to return a mocked audit response
-        async def mock_execute_real_scan(self, project_id, token):
-            return mock_audit_response
+        # Mock BigQuery authentication and metadata extraction
+        with mock_bigquery_scan():
+            # Custom output path
+            output_path = tmp_path / "custom" / "report.md"
 
-        monkeypatch.setattr(
-            "bqaudit.scan.executor.ScanExecutor.execute_real_scan",
-            mock_execute_real_scan,
-        )
+            # Run scan with custom output
+            result = runner.invoke(
+                app,
+                [
+                    "scan",
+                    "--project",
+                    "test-project",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
-        # Custom output path
-        output_path = tmp_path / "custom" / "report.md"
-
-        # Run scan with custom output
-        result = runner.invoke(
-            app,
-            ["scan", "--project", "test-project", "--output", str(output_path)],
-        )
-
-        # Should succeed
-        assert result.exit_code == 0
+            # Should succeed
+            assert result.exit_code == 0
 
         # Report should be saved to custom path
         assert output_path.exists()
@@ -450,17 +505,8 @@ class TestScanCommandWithCustomOutput:
         mock_creds_path.write_text(json.dumps(mock_credentials))
         mock_creds_path.chmod(0o600)
 
-        # Enable real scan mode to generate report
-        monkeypatch.setenv("BQAUDIT_REAL_SCAN", "true")
-
-        # Mock the BigQuery scanning to return a mocked audit response
-        async def mock_execute_real_scan(self, project_id, token):
-            return mock_audit_response
-
-        monkeypatch.setattr(
-            "bqaudit.scan.executor.ScanExecutor.execute_real_scan",
-            mock_execute_real_scan,
-        )
+        # Use mock mode
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")
 
         # Change to tmp_path for relative path testing
         monkeypatch.chdir(tmp_path)
@@ -469,14 +515,16 @@ class TestScanCommandWithCustomOutput:
         output_path = Path("reports") / "audit.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Run scan with relative output
-        result = runner.invoke(
-            app,
-            ["scan", "--project", "test-project", "--output", str(output_path)],
-        )
+        # Mock BigQuery scanning
+        with mock_bigquery_scan():
+            # Run scan with relative output
+            result = runner.invoke(
+                app,
+                ["scan", "--project", "test-project", "--output", str(output_path)],
+            )
 
-        # Should succeed
-        assert result.exit_code == 0
+            # Should succeed
+            assert result.exit_code == 0
 
         # Report should exist at resolved path
         full_path = tmp_path / "reports" / "audit.md"
@@ -496,38 +544,31 @@ class TestScanCommandWithCustomOutput:
         mock_creds_path.write_text(json.dumps(mock_credentials))
         mock_creds_path.chmod(0o600)
 
-        # Enable real scan mode to generate report
-        monkeypatch.setenv("BQAUDIT_REAL_SCAN", "true")
-
-        # Mock the BigQuery scanning to return a mocked audit response
-        async def mock_execute_real_scan(self, project_id, token):
-            return mock_audit_response
-
-        monkeypatch.setattr(
-            "bqaudit.scan.executor.ScanExecutor.execute_real_scan",
-            mock_execute_real_scan,
-        )
+        # Use mock mode
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")
 
         # Create existing file
         output_path = tmp_path / "existing.md"
         output_path.write_text("old report")
 
-        # Run scan with --force
-        result = runner.invoke(
-            app,
-            [
-                "scan",
-                "--project",
-                "test-project",
-                "--output",
-                str(output_path),
-                "--force",
-            ],
-        )
+        # Mock BigQuery scanning
+        with mock_bigquery_scan():
+            # Run scan with --force
+            result = runner.invoke(
+                app,
+                [
+                    "scan",
+                    "--project",
+                    "test-project",
+                    "--output",
+                    str(output_path),
+                    "--force",
+                ],
+            )
 
-        # Should succeed without prompt
-        assert result.exit_code == 0
-        assert "Overwrite?" not in result.stdout  # No prompt shown
+            # Should succeed without prompt
+            assert result.exit_code == 0
+            assert "Overwrite?" not in result.stdout  # No prompt shown
 
         # File should be overwritten
         assert output_path.read_text() != "old report"
@@ -547,17 +588,8 @@ class TestScanCommandWithCustomOutput:
         mock_creds_path.write_text(json.dumps(mock_credentials))
         mock_creds_path.chmod(0o600)
 
-        # Enable real scan mode to generate report
-        monkeypatch.setenv("BQAUDIT_REAL_SCAN", "true")
-
-        # Mock the BigQuery scanning to return a mocked audit response
-        async def mock_execute_real_scan(self, project_id, token):
-            return mock_audit_response
-
-        monkeypatch.setattr(
-            "bqaudit.scan.executor.ScanExecutor.execute_real_scan",
-            mock_execute_real_scan,
-        )
+        # Use mock mode
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")
 
         # Path that will cause permission error
         output_path = tmp_path / "restricted" / "report.md"
@@ -572,15 +604,17 @@ class TestScanCommandWithCustomOutput:
 
         monkeypatch.setattr(Path, "write_text", mock_write_text)
 
-        # Run scan
-        result = runner.invoke(
-            app,
-            ["scan", "--project", "test-project", "--output", str(output_path)],
-        )
+        # Mock BigQuery scanning
+        with mock_bigquery_scan():
+            # Run scan
+            result = runner.invoke(
+                app,
+                ["scan", "--project", "test-project", "--output", str(output_path)],
+            )
 
-        # Should fail with exit code 2
-        assert result.exit_code == 2
+            # Should fail with exit code 2
+            assert result.exit_code == 2
 
-        # Should display error message (may be split across lines in output)
-        assert "❌ Error: Permission denied" in result.stdout
-        assert "restricted" in result.stdout  # Part of path is in output
+            # Should display error message (may be split across lines in output)
+            assert "❌ Error: Permission denied" in result.stdout
+            assert "restricted" in result.stdout  # Part of path is in output
