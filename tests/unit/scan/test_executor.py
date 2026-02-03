@@ -65,9 +65,12 @@ def mock_real_scan_mode(monkeypatch):
 
 
 @pytest.fixture
-def mock_bigquery_and_server():
+def mock_bigquery_and_server(monkeypatch):
     """Mock BigQuery authentication and server responses for scan tests."""
     from unittest.mock import AsyncMock
+
+    # Set BQAUDIT_REAL_SCAN=true to enable real scan mode with mocked dependencies
+    monkeypatch.setenv("BQAUDIT_REAL_SCAN", "true")
 
     mock_bq_client = mock.Mock()
     mock_bq_client.list_datasets.return_value = []
