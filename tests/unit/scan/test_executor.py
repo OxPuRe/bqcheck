@@ -195,7 +195,7 @@ class TestScanExecutor:
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC2: CRITICAL - Scan failure preserves token and balance."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqaudit.scan.executor import ScanError, ScanExecutor
 
         original_token = test_credentials["ephemeral_token"]
         original_balance = test_credentials["token_pool_balance"]
@@ -203,17 +203,16 @@ class TestScanExecutor:
         api_client = BQAuditAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
-        # Mock the execute_real_scan method to simulate failure
+        # Mock the execute_real_scan method to simulate failure with ScanError
         with mock.patch.object(
             executor,
             "execute_real_scan",
-            side_effect=RuntimeError("Simulated scan failure"),
+            side_effect=ScanError(exit_code=1, message="Simulated scan failure"),
         ):
-            # Execute scan and expect it to catch the error and return ScanResult
-            result = executor.execute_scan_with_tokens("test-project")
-
-            # Scan should fail and return a result with success=False
-            assert result.success is False
+            # Execute scan - should exit with code 1 due to ScanError
+            with pytest.raises(SystemExit) as exc_info:
+                executor.execute_scan_with_tokens("test-project")
+            assert exc_info.value.code == 1
 
         # Load credentials - should be UNCHANGED
         updated_creds = CredentialStore.load()

@@ -12,7 +12,7 @@ Story 3.5, AC4: "Validate command still works (no token consumed)"
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from typer.testing import CliRunner
 
@@ -118,32 +118,94 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
     mock_creds_path.write_text(json.dumps(mock_credentials))
     mock_creds_path.chmod(0o600)
 
+    # Mock BigQuery client
+    mock_bq_client = Mock()
+    mock_bq_client.list_datasets.return_value = []
+
+    # Mock HTTP response
+    mock_http_response = Mock()
+    mock_http_response.status_code = 200
+    mock_http_response.json.return_value = {
+        "status": "success",
+        "token_pool_balance": 4,
+        "recommendations": [],
+        "summary": {
+            "total_recommendations": 0,
+            "total_potential_savings_eur": 0.0,
+            "high_priority_count": 0,
+            "medium_priority_count": 0,
+            "low_priority_count": 0,
+            "categories_breakdown": {},
+        },
+        "audit_id": "test-audit-id-123",
+        "new_ephemeral_token": "new-token-456",
+    }
+
+    # Mock AsyncClient
+    mock_async_client = Mock()
+    mock_async_client.post = AsyncMock(return_value=mock_http_response)
+    mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
+    mock_async_client.__aexit__ = AsyncMock(return_value=None)
+
     # Patch HOME to use tmp_path
     with patch.dict("os.environ", {"HOME": str(tmp_path)}):
-        # ACT 1: Run validate (should succeed)
-        validate_result = runner.invoke(app, ["validate", "--project", "test-project"])
+        # Patch BigQuery and HTTP for scan
+        with patch(
+            "bqaudit.scanner.bigquery_client.authenticate_bigquery",
+            return_value=mock_bq_client,
+        ):
+            with patch("bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client):
+                with patch(
+                    "bqaudit.scanner.metadata_extractor.extract_table_metadata",
+                    return_value=[],
+                ):
+                    with patch(
+                        "bqaudit.scanner.metadata_extractor.extract_query_metadata",
+                        return_value=[],
+                    ):
+                        with patch(
+                            "bqaudit.scanner.metadata_extractor.extract_access_patterns",
+                            return_value=[],
+                        ):
+                            with patch(
+                                "bqaudit.scanner.metadata_extractor.extract_table_schemas",
+                                return_value={},
+                            ):
+                                with patch(
+                                    "httpx.AsyncClient", return_value=mock_async_client
+                                ):
+                                    # ACT 1: Run validate (should succeed)
+                                    validate_result = runner.invoke(
+                                        app, ["validate", "--project", "test-project"]
+                                    )
 
-        # ASSERT 1: Validate doesn't fail due to token issues
-        assert validate_result.exit_code != 4, "Validate should not check token balance"
+                                    # ASSERT 1: Validate doesn't fail due to token issues
+                                    assert (
+                                        validate_result.exit_code != 4
+                                    ), "Validate should not check token balance"
 
-        # Verify balance unchanged (validate doesn't consume)
-        creds_after_validate = json.loads(mock_creds_path.read_text())
-        assert creds_after_validate["token_pool_balance"] == 5, (
-            "Validate should not consume tokens"
-        )
+                                    # Verify balance unchanged (validate doesn't consume)
+                                    creds_after_validate = json.loads(
+                                        mock_creds_path.read_text()
+                                    )
+                                    assert creds_after_validate["token_pool_balance"] == 5, (
+                                        "Validate should not consume tokens"
+                                    )
 
-        # ACT 2: Run scan (should succeed and consume 1 token)
-        scan_result = runner.invoke(app, ["scan", "--project", "test-project"])
+                                    # ACT 2: Run scan (should succeed and consume 1 token)
+                                    scan_result = runner.invoke(
+                                        app, ["scan", "--project", "test-project"]
+                                    )
 
-        # ASSERT 2: Scan succeeds
-        assert scan_result.exit_code == 0, (
-            f"Scan should succeed with available tokens. "
-            f"Got exit code: {scan_result.exit_code}\n"
-            f"Output: {scan_result.stdout}"
-        )
+                                    # ASSERT 2: Scan succeeds
+                                    assert scan_result.exit_code == 0, (
+                                        f"Scan should succeed with available tokens. "
+                                        f"Got exit code: {scan_result.exit_code}\n"
+                                        f"Output: {scan_result.stdout}"
+                                    )
 
-        # Verify balance decremented by 1
-        creds_after_scan = json.loads(mock_creds_path.read_text())
-        assert creds_after_scan["token_pool_balance"] == 4, (
-            "Scan should consume exactly 1 token"
-        )
+                                    # Verify balance decremented by 1
+                                    creds_after_scan = json.loads(mock_creds_path.read_text())
+                                    assert creds_after_scan["token_pool_balance"] == 4, (
+                                        "Scan should consume exactly 1 token"
+                                    )
