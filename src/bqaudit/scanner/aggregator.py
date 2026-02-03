@@ -252,7 +252,9 @@ def aggregate_query_metadata(
         # Encrypt job ID to protect client project ID from server
         # Job ID format: project:location.job_xxx contains the project ID
         encryptor = IdentifierEncryptor(encryption_key)
-        encrypted_job_id = encryptor.encrypt_with_nonce(most_recent_job_id, context="job_id")
+        encrypted_job_id = encryptor.encrypt_with_nonce(
+            most_recent_job_id, context="job_id"
+        )
 
         # Create aggregated entry
         aggregated_entry = {

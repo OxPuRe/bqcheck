@@ -176,7 +176,9 @@ class MarkdownReportGenerator:
         pattern = r"Query pattern ([a-f0-9]{64})\b"
         return re.sub(pattern, lambda m: f"Query pattern {truncate_hash(m)}", text)
 
-    def _extract_query_preview_from_steps(self, implementation_steps: list[str]) -> Optional[str]:
+    def _extract_query_preview_from_steps(
+        self, implementation_steps: list[str]
+    ) -> Optional[str]:
         """
         Extract query preview from implementation steps.
 
@@ -193,7 +195,9 @@ class MarkdownReportGenerator:
 
         for step in implementation_steps:
             # Look for CREATE MATERIALIZED VIEW ... AS <query>
-            match = re.search(r"CREATE MATERIALIZED VIEW.*?AS\s+(.+)", step, re.IGNORECASE | re.DOTALL)
+            match = re.search(
+                r"CREATE MATERIALIZED VIEW.*?AS\s+(.+)", step, re.IGNORECASE | re.DOTALL
+            )
             if match:
                 query = match.group(1).strip()
                 # Decrypt identifiers if encryption key available
@@ -522,7 +526,9 @@ Top high-priority optimizations for immediate impact:
             # Decrypt identifiers in description if encryption key available
             decrypted_description = self._decrypt_identifiers_in_text(rec.description)
             # Convert large GB values to TB for readability
-            decrypted_description = self._format_size_human_readable(decrypted_description)
+            decrypted_description = self._format_size_human_readable(
+                decrypted_description
+            )
             # Truncate long query hashes for readability
             decrypted_description = self._truncate_query_hash(decrypted_description)
             quick_wins += f"""{i}. **{clean_title}** - €{rec.savings_eur:.2f}/month
@@ -591,7 +597,9 @@ Top high-priority optimizations for immediate impact:
 
             # Add query preview for query recommendations
             if rec.type == "queries":
-                query_preview = self._extract_query_preview_from_steps(rec.implementation_steps)
+                query_preview = self._extract_query_preview_from_steps(
+                    rec.implementation_steps
+                )
                 if query_preview:
                     detailed += f"""**Query Preview:**
 ```sql
@@ -606,20 +614,26 @@ Top high-priority optimizations for immediate impact:
                     # Decrypt the encrypted job ID (contains project ID, encrypted for privacy)
                     encrypted_job_id = job_ids[0]
                     try:
-                        decrypted_job_id = self.encryptor.decrypt_with_nonce(encrypted_job_id, context="job_id")
+                        decrypted_job_id = self.encryptor.decrypt_with_nonce(
+                            encrypted_job_id, context="job_id"
+                        )
                         job_link = self._format_job_id_link(decrypted_job_id)
                         detailed += f"""**Find in BigQuery Console:** {job_link}
 
 """
                     except (ValueError, Exception):
                         # If decryption fails, skip the job ID link
-                        logger.debug(f"Failed to decrypt job ID: {encrypted_job_id[:20]}...")
+                        logger.debug(
+                            f"Failed to decrypt job ID: {encrypted_job_id[:20]}..."
+                        )
                         pass
 
             # Decrypt identifiers in description
             decrypted_description = self._decrypt_identifiers_in_text(rec.description)
             # Convert large GB values to TB for readability
-            decrypted_description = self._format_size_human_readable(decrypted_description)
+            decrypted_description = self._format_size_human_readable(
+                decrypted_description
+            )
             # Truncate long query hashes for readability
             decrypted_description = self._truncate_query_hash(decrypted_description)
 
