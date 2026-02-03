@@ -285,9 +285,64 @@ class TestQueryAggregation:
         required_fields = {
             "query_hash",
             "query_text",
+            "query_type",
             "executions_per_day",
             "bytes_per_execution",
             "total_bytes_processed",
             "has_materialized_view",
         }
         assert set(result[0].keys()) >= required_fields
+        # Verify query_type is extracted correctly
+        assert result[0]["query_type"] == "SELECT"
+
+    def test_aggregate_extracts_query_type_correctly(self):
+        """Test that query_type is correctly extracted for different SQL statements."""
+        salt = IdentifierEncryptor.generate_key()
+
+        # Test SELECT
+        select_query = QueryMetadata(
+            job_id="project:us.job1",
+            query="SELECT * FROM dataset.table",
+            total_bytes_processed=1099511627776,
+            creation_time="2024-01-01 10:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+        )
+        result = aggregate_query_metadata([select_query], salt)
+        assert result[0]["query_type"] == "SELECT"
+
+        # Test MERGE
+        merge_query = QueryMetadata(
+            job_id="project:us.job2",
+            query="MERGE INTO dataset.table AS t USING source AS s ON t.id = s.id",
+            total_bytes_processed=1099511627776,
+            creation_time="2024-01-01 10:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+        )
+        result = aggregate_query_metadata([merge_query], salt)
+        assert result[0]["query_type"] == "MERGE"
+
+        # Test INSERT
+        insert_query = QueryMetadata(
+            job_id="project:us.job3",
+            query="INSERT INTO dataset.table VALUES (1, 2, 3)",
+            total_bytes_processed=1099511627776,
+            creation_time="2024-01-01 10:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+        )
+        result = aggregate_query_metadata([insert_query], salt)
+        assert result[0]["query_type"] == "INSERT"
+
+        # Test CREATE
+        create_query = QueryMetadata(
+            job_id="project:us.job4",
+            query="CREATE TABLE dataset.new_table AS SELECT * FROM dataset.source",
+            total_bytes_processed=1099511627776,
+            creation_time="2024-01-01 10:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+        )
+        result = aggregate_query_metadata([create_query], salt)
+        assert result[0]["query_type"] == "CREATE"

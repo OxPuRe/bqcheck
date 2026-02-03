@@ -579,6 +579,52 @@ def test_extract_query_metadata_success(mock_client):
 
 
 @patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_job_id_format_handling(mock_client):
+    """Test that job_id is correctly formatted regardless of input format."""
+
+    # Test with short format job_id (should be prefixed)
+    mock_row_short = Mock()
+    mock_row_short.ddl = ""
+    mock_row_short.job_id = "bquxjob_abc123"  # Short format
+    mock_row_short.query = "SELECT 1"
+    mock_row_short.total_bytes_processed = 1073741824
+    mock_row_short.creation_time = "2024-01-20 10:30:00 UTC"
+    mock_row_short.user_email = "user@example.com"
+    mock_row_short.job_type = "QUERY"
+    mock_row_short.state = "DONE"
+    mock_row_short.referenced_tables = []
+
+    # Test with full format job_id (should be kept as-is)
+    mock_row_full = Mock()
+    mock_row_full.ddl = ""
+    mock_row_full.job_id = "my-project:EU.script_job_def456"  # Full format
+    mock_row_full.query = "SELECT 2"
+    mock_row_full.total_bytes_processed = 1073741824
+    mock_row_full.creation_time = "2024-01-20 10:30:00 UTC"
+    mock_row_full.user_email = "user@example.com"
+    mock_row_full.job_type = "QUERY"
+    mock_row_full.state = "DONE"
+    mock_row_full.referenced_tables = []
+
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = [mock_row_short, mock_row_full]
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
+
+    queries = extract_query_metadata(mock_bq_client, "my-project", days=30)
+
+    assert len(queries) == 2
+
+    # Short format should be prefixed with project:location.
+    assert queries[0].job_id == "my-project:EU.bquxjob_abc123"
+
+    # Full format should be kept as-is
+    assert queries[1].job_id == "my-project:EU.script_job_def456"
+
+
+@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_job_type_filter(mock_client):
     """Test that extract_query_metadata filters to job_type='QUERY' only."""
 
