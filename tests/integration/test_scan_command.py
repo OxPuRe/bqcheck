@@ -368,52 +368,69 @@ class TestScanCommandProgressIndicators:
         from bqaudit.api.client import BQAuditAPIClient
         from bqaudit.scan.executor import ScanError, ScanExecutor
 
+        # Mock credentials
+        mock_creds = {
+            "master_key": "sk_live_test_key",
+            "ephemeral_token": "eph_test_token",
+            "token_pool_balance": 5,
+            "server_url": "https://api.bqaudit.test",
+            "activated_at": "2024-01-01T00:00:00+00:00",
+            "encryption_key": IdentifierEncryptor.key_to_base64(
+                IdentifierEncryptor.generate_key()
+            ),
+            "used_tokens": [],
+        }
+
         # Mock BigQuery and server responses
-        with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
-            with patch(
-                "bqaudit.scanner.metadata_extractor.extract_table_metadata"
-            ) as mock_tables:
+        with patch(
+            "bqaudit.license.storage.CredentialStore.load", return_value=mock_creds
+        ):
+            with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
                 with patch(
-                    "bqaudit.scanner.metadata_extractor.extract_query_metadata"
-                ) as mock_queries:
+                    "bqaudit.scanner.metadata_extractor.extract_table_metadata"
+                ) as mock_tables:
                     with patch(
-                        "bqaudit.scanner.metadata_extractor.extract_access_patterns"
-                    ) as mock_access:
+                        "bqaudit.scanner.metadata_extractor.extract_query_metadata"
+                    ) as mock_queries:
                         with patch(
-                            "bqaudit.scanner.metadata_extractor.extract_table_schemas"
-                        ) as mock_schemas:
-                            with patch("httpx.AsyncClient.post") as mock_post:
-                                # Setup mocks
-                                mock_auth.return_value = Mock()
-                                mock_tables.return_value = []
-                                mock_queries.return_value = []
-                                mock_access.return_value = []
-                                mock_schemas.return_value = {}
+                            "bqaudit.scanner.metadata_extractor.extract_access_patterns"
+                        ) as mock_access:
+                            with patch(
+                                "bqaudit.scanner.metadata_extractor.extract_table_schemas"
+                            ) as mock_schemas:
+                                with patch("httpx.AsyncClient.post") as mock_post:
+                                    # Setup mocks
+                                    mock_auth.return_value = Mock()
+                                    mock_tables.return_value = []
+                                    mock_queries.return_value = []
+                                    mock_access.return_value = []
+                                    mock_schemas.return_value = {}
 
-                                # Simulate network error
-                                mock_post.side_effect = httpx.ConnectError(
-                                    "Connection refused"
-                                )
-
-                                # Execute scan
-                                client = BQAuditAPIClient(mock_mode=False)
-                                executor = ScanExecutor(client)
-
-                                # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
-                                with pytest.raises(ScanError) as exc_info:
-                                    await executor.execute_real_scan(
-                                        project_id="my-project",
-                                        ephemeral_token="eph_test_token",
+                                    # Simulate network error
+                                    mock_post.side_effect = httpx.ConnectError(
+                                        "Connection refused"
                                     )
 
-                                assert exc_info.value.exit_code == 1
+                                    # Execute scan
+                                    client = BQAuditAPIClient(mock_mode=False)
+                                    executor = ScanExecutor(client)
 
-                                # Verify error message was printed
-                                captured = capsys.readouterr()
-                                assert (
-                                    "Unable to reach audit server" in captured.err
-                                    or "Unable to reach audit server" in captured.out
-                                )
+                                    # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
+                                    with pytest.raises(ScanError) as exc_info:
+                                        await executor.execute_real_scan(
+                                            project_id="my-project",
+                                            ephemeral_token="eph_test_token",
+                                        )
+
+                                    assert exc_info.value.exit_code == 1
+
+                                    # Verify error message was printed
+                                    captured = capsys.readouterr()
+                                    assert (
+                                        "Unable to reach audit server" in captured.err
+                                        or "Unable to reach audit server"
+                                        in captured.out
+                                    )
 
     @pytest.mark.skip(reason="Flaky test - timeout error message inconsistent")
     @pytest.mark.asyncio
