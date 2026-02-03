@@ -384,7 +384,11 @@ def extract_query_metadata(
 
                 # Convert BigQuery row to dict
                 # Build full job ID format for BigQuery Console links: project:location.job_id
-                full_job_id = f"{project_id}:{location}.{row.job_id}"
+                # Check if job_id is already in full format (contains ':')
+                if ":" in row.job_id:
+                    full_job_id = row.job_id
+                else:
+                    full_job_id = f"{project_id}:{location}.{row.job_id}"
 
                 query_dict = {
                     "job_id": full_job_id,
