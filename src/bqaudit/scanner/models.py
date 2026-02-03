@@ -65,6 +65,11 @@ class QueryMetadata(BaseModel):
     )
     creation_time: str = Field(..., description="Query creation timestamp (ISO format)")
 
+    # Referenced tables (from BigQuery metadata)
+    referenced_tables: Optional[List[str]] = Field(
+        None, description="List of tables referenced in 'dataset.table' format"
+    )
+
     # Optional metadata
     user_email: Optional[str] = Field(
         None, description="Email of user who ran the query"

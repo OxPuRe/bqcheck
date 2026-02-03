@@ -2,6 +2,7 @@
 
 
 from bqaudit.scanner.query_analyzer import (
+    aggregate_filtered_columns_all_tables,
     aggregate_filtered_columns_by_table,
     extract_filtered_columns,
 )
@@ -209,3 +210,104 @@ class TestAggregateFilteredColumnsByTable:
         ]
         result = aggregate_filtered_columns_by_table(queries, "invalid")
         assert result == {}
+
+    def test_with_referenced_tables_metadata(self):
+        """Test that BigQuery referenced_tables metadata is used when available."""
+        queries = [
+            {
+                "query": "SELECT * FROM dataset.users WHERE user_id = 1",
+                "referenced_tables": ["dataset.users"]
+            },
+            {
+                "query": "SELECT * FROM dataset.users WHERE status = 'active'",
+                "referenced_tables": ["dataset.users"]
+            }
+        ]
+        result = aggregate_filtered_columns_by_table(queries, "dataset.users")
+        assert result["user_id"] == 1
+        assert result["status"] == 1
+
+    def test_referenced_tables_filters_correctly(self):
+        """Test that referenced_tables correctly filters out non-matching queries."""
+        queries = [
+            {
+                "query": "SELECT * FROM dataset.users WHERE user_id = 1",
+                "referenced_tables": ["dataset.users"]
+            },
+            {
+                "query": "SELECT * FROM dataset.orders WHERE order_id = 123",
+                "referenced_tables": ["dataset.orders"]
+            }
+        ]
+        result = aggregate_filtered_columns_by_table(queries, "dataset.users")
+        assert "user_id" in result
+        assert "order_id" not in result
+
+
+class TestAggregateFilteredColumnsAllTables:
+    """Test suite for aggregating filtered columns across all tables."""
+
+    def test_single_table(self):
+        """Test aggregation with single table."""
+        queries = [
+            {
+                "query": "SELECT * FROM dataset.users WHERE user_id = 1 AND status = 'active'",
+                "referenced_tables": ["dataset.users"]
+            }
+        ]
+        result = aggregate_filtered_columns_all_tables(queries)
+        assert "dataset.users" in result
+        assert result["dataset.users"]["user_id"] == 1
+        assert result["dataset.users"]["status"] == 1
+
+    def test_multiple_tables(self):
+        """Test aggregation with multiple tables."""
+        queries = [
+            {
+                "query": "SELECT * FROM dataset.users WHERE user_id = 1",
+                "referenced_tables": ["dataset.users"]
+            },
+            {
+                "query": "SELECT * FROM dataset.orders WHERE order_id = 123",
+                "referenced_tables": ["dataset.orders"]
+            }
+        ]
+        result = aggregate_filtered_columns_all_tables(queries)
+        assert "dataset.users" in result
+        assert "dataset.orders" in result
+        assert result["dataset.users"]["user_id"] == 1
+        assert result["dataset.orders"]["order_id"] == 1
+
+    def test_join_query_multiple_tables(self):
+        """Test that JOIN queries attribute columns to all referenced tables."""
+        queries = [
+            {
+                "query": """
+                    SELECT * FROM dataset.users u
+                    JOIN dataset.orders o ON u.user_id = o.user_id
+                    WHERE u.status = 'active' AND o.amount > 100
+                """,
+                "referenced_tables": ["dataset.users", "dataset.orders"]
+            }
+        ]
+        result = aggregate_filtered_columns_all_tables(queries)
+        # Both tables should have the filtered columns
+        assert "dataset.users" in result
+        assert "dataset.orders" in result
+        # Columns are attributed to all referenced tables
+        assert "status" in result["dataset.users"]
+        assert "amount" in result["dataset.users"]  # Attributed to users too
+        assert "status" in result["dataset.orders"]  # Attributed to orders too
+        assert "amount" in result["dataset.orders"]
+
+    def test_fallback_to_regex_when_no_metadata(self):
+        """Test fallback to regex parsing when referenced_tables not provided."""
+        queries = [
+            {
+                "query": "SELECT * FROM dataset.users WHERE user_id = 1"
+                # No referenced_tables field - should use regex fallback
+            }
+        ]
+        result = aggregate_filtered_columns_all_tables(queries)
+        assert "dataset.users" in result
+        assert result["dataset.users"]["user_id"] == 1

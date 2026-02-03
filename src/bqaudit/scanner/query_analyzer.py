@@ -98,8 +98,11 @@ def aggregate_filtered_columns_all_tables(
     More efficient than calling aggregate_filtered_columns_by_table() for each table
     individually. Processes all queries once and builds a complete map.
 
+    Uses referenced_tables from BigQuery metadata when available, falling back to
+    regex parsing for backwards compatibility.
+
     Args:
-        queries: List of query metadata dicts with 'query' field
+        queries: List of query metadata dicts with 'query' and optionally 'referenced_tables'
 
     Returns:
         Dict mapping table_key to column counts
@@ -107,8 +110,8 @@ def aggregate_filtered_columns_all_tables(
 
     Example:
         >>> queries = [
-        ...     {"query": "SELECT * FROM dataset.users WHERE user_id = 1"},
-        ...     {"query": "SELECT * FROM dataset.orders WHERE order_id = 123"}
+        ...     {"query": "SELECT * FROM dataset.users WHERE user_id = 1", "referenced_tables": ["dataset.users"]},
+        ...     {"query": "SELECT * FROM dataset.orders WHERE order_id = 123", "referenced_tables": ["dataset.orders"]}
         ... ]
         >>> aggregate_filtered_columns_all_tables(queries)
         {'dataset.users': {'user_id': 1}, 'dataset.orders': {'order_id': 1}}
@@ -121,12 +124,14 @@ def aggregate_filtered_columns_all_tables(
         if not query:
             continue
 
-        query_lower = query.lower()
+        # Get table references - prefer BigQuery metadata over regex parsing
+        table_refs = query_meta.get('referenced_tables', [])
 
-        # Extract all table references from the query
-        # Matches dataset.table patterns (with optional backticks)
-        table_pattern = r'(?:from|join)\s+[`"]?([a-z0-9_-]+\.[a-z0-9_]+)[`"]?'
-        table_refs = re.findall(table_pattern, query_lower)
+        if not table_refs:
+            # Fallback: Extract table references using regex (backwards compatibility)
+            query_lower = query.lower()
+            table_pattern = r'(?:from|join)\s+[`"]?([a-z0-9_-]+\.[a-z0-9_]+)[`"]?'
+            table_refs = re.findall(table_pattern, query_lower)
 
         # Extract filtered columns once for this query
         filtered_columns = extract_filtered_columns(query)
@@ -186,16 +191,23 @@ def aggregate_filtered_columns_by_table(
             continue
 
         # Check if this query references our table
-        # Simple heuristic: look for dataset.table or just table in FROM/JOIN
-        query_lower = query.lower()
-        table_patterns = [
-            rf'\bfrom\s+[`"]?{re.escape(dataset)}\.{re.escape(table)}[`"]?\b',
-            rf'\bjoin\s+[`"]?{re.escape(dataset)}\.{re.escape(table)}[`"]?\b',
-            rf'\bfrom\s+[`"]?{re.escape(table)}[`"]?\b',  # Without dataset prefix
-            rf'\bjoin\s+[`"]?{re.escape(table)}[`"]?\b',
-        ]
+        # Prefer BigQuery metadata over regex parsing
+        referenced_tables = query_meta.get('referenced_tables', [])
 
-        references_table = any(re.search(pattern, query_lower) for pattern in table_patterns)
+        references_table = False
+        if referenced_tables:
+            # Use BigQuery metadata if available
+            references_table = table_key in referenced_tables
+        else:
+            # Fallback: regex parsing (backwards compatibility)
+            query_lower = query.lower()
+            table_patterns = [
+                rf'\bfrom\s+[`"]?{re.escape(dataset)}\.{re.escape(table)}[`"]?\b',
+                rf'\bjoin\s+[`"]?{re.escape(dataset)}\.{re.escape(table)}[`"]?\b',
+                rf'\bfrom\s+[`"]?{re.escape(table)}[`"]?\b',  # Without dataset prefix
+                rf'\bjoin\s+[`"]?{re.escape(table)}[`"]?\b',
+            ]
+            references_table = any(re.search(pattern, query_lower) for pattern in table_patterns)
 
         if references_table:
             # Extract filtered columns from this query

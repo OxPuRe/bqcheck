@@ -350,7 +350,8 @@ def extract_query_metadata(
             CAST(creation_time AS STRING) as creation_time,
             user_email,
             job_type,
-            state
+            state,
+            referenced_tables
 
         FROM `{project_id}.region-{location.lower()}.INFORMATION_SCHEMA.JOBS_BY_PROJECT`
 
@@ -372,6 +373,15 @@ def extract_query_metadata(
             # Collect results (automatic pagination handled by SDK)
             queries = []
             for row in query_job.result():
+                # Process referenced_tables: convert from array of structs to list of strings
+                referenced_tables = None
+                if row.referenced_tables:
+                    referenced_tables = [
+                        f"{table['dataset_id']}.{table['table_id']}"
+                        for table in row.referenced_tables
+                        if table.get('dataset_id') and table.get('table_id')
+                    ]
+
                 # Convert BigQuery row to dict
                 query_dict = {
                     "job_id": row.job_id,
@@ -381,6 +391,7 @@ def extract_query_metadata(
                     "user_email": row.user_email,
                     "job_type": row.job_type,
                     "state": row.state,
+                    "referenced_tables": referenced_tables,
                 }
 
                 # Validate and create Pydantic model
