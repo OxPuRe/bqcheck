@@ -93,9 +93,8 @@ class MarkdownReportGenerator:
 
         # Pattern 1: Match "project.dataset.table" format (encrypted triple)
         # Base64url chars: A-Za-z0-9_-
-        pattern_triple = (
-            r"\b([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]+)\b"
-        )
+        # Use negative lookahead/lookbehind instead of \b to handle leading/trailing hyphens
+        pattern_triple = r"(?<![A-Za-z0-9_-])([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])"
 
         def decrypt_triple(match: re.Match[str]) -> str:
             encrypted_project = match.group(1)
@@ -116,7 +115,8 @@ class MarkdownReportGenerator:
         text = re.sub(pattern_triple, decrypt_triple, text)
 
         # Pattern 2: Match "dataset.table" format (encrypted pairs)
-        pattern_pair = r"\b([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\b"
+        # Use negative lookahead/lookbehind instead of \b to handle leading/trailing hyphens
+        pattern_pair = r"(?<![A-Za-z0-9_-])([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})(?![A-Za-z0-9_-])"
 
         def decrypt_pair(match: re.Match[str]) -> str:
             encrypted_dataset = match.group(1)
