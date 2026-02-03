@@ -143,19 +143,75 @@ class MarkdownReportGenerator:
         return text
 
     @staticmethod
+    def _format_size_human_readable(text: str) -> str:
+        """
+        Convert large GB values to TB for better readability.
+
+        Converts sizes >= 1000 GB to TB format in titles and descriptions.
+
+        Args:
+            text: Text containing size values like "268695GB" or "268695.41 GB"
+
+        Returns:
+            Text with large sizes converted to TB
+
+        Example:
+            >>> _format_size_human_readable("Remove unused 268695GB table")
+            "Remove unused 262TB table"
+            >>> _format_size_human_readable("Table test (1500.50 GB)")
+            "Table test (1.47 TB)"
+            >>> _format_size_human_readable("Table test (500 GB)")
+            "Table test (500 GB)"
+        """
+        import re
+
+        def convert_to_tb(match: re.Match[str]) -> str:
+            # Extract the numeric value and the format (with or without decimal/space)
+            size_str = match.group(1)
+            has_space = match.group(2) == " "
+
+            size_gb = float(size_str)
+
+            # Only convert if >= 1000 GB
+            if size_gb >= 1000:
+                size_tb = size_gb / 1024
+                # Format with appropriate precision
+                if size_tb >= 100:
+                    formatted = f"{size_tb:.0f}"
+                elif size_tb >= 10:
+                    formatted = f"{size_tb:.1f}"
+                else:
+                    formatted = f"{size_tb:.2f}"
+
+                return f"{formatted}{' ' if has_space else ''}TB"
+            else:
+                # Keep as GB
+                return match.group(0)
+
+        # Pattern matches:
+        # - "268695GB" (no space, no decimal)
+        # - "268695.41 GB" (space and decimal)
+        # - "1500 GB" (space, no decimal)
+        pattern = r"(\d+(?:\.\d+)?)(\s?)GB"
+
+        return re.sub(pattern, convert_to_tb, text)
+
+    @staticmethod
     def _clean_title(title: Optional[str]) -> str:
         """
-        Clean recommendation title by rounding decimals.
+        Clean recommendation title by rounding decimals and converting large sizes to TB.
 
         Args:
             title: Raw title from server (may be None)
 
         Returns:
-            Cleaned title with rounded decimals, or "Untitled" if None
+            Cleaned title with rounded decimals and TB conversion, or "Untitled" if None
 
         Example:
             >>> _clean_title("Materialize repeated query (6.048781288508676/day)")
             "Materialize repeated query (6.0/day)"
+            >>> _clean_title("Remove unused 268695GB table")
+            "Remove unused 262TB table"
         """
         if title is None:
             return "Untitled"
@@ -166,7 +222,12 @@ class MarkdownReportGenerator:
             # Round to 1 decimal place
             return f"{value:.1f}/{match.group(2)}"
 
-        return re.sub(r"(\d+\.\d+)/(\w+)", round_decimal, title)
+        title = re.sub(r"(\d+\.\d+)/(\w+)", round_decimal, title)
+
+        # Convert large GB values to TB for readability
+        title = MarkdownReportGenerator._format_size_human_readable(title)
+
+        return title
 
     @staticmethod
     def _extract_file_reference(text: str) -> Optional[str]:
@@ -342,6 +403,8 @@ Top high-priority optimizations for immediate impact:
             clean_title = self._clean_title(rec.title)
             # Decrypt identifiers in description if encryption key available
             decrypted_description = self._decrypt_identifiers_in_text(rec.description)
+            # Convert large GB values to TB for readability
+            decrypted_description = self._format_size_human_readable(decrypted_description)
             quick_wins += f"""{i}. **{clean_title}** - €{rec.savings_eur:.2f}/month
    - {decrypted_description}
 
@@ -408,6 +471,8 @@ Top high-priority optimizations for immediate impact:
 
             # Decrypt identifiers in description
             decrypted_description = self._decrypt_identifiers_in_text(rec.description)
+            # Convert large GB values to TB for readability
+            decrypted_description = self._format_size_human_readable(decrypted_description)
 
             detailed += f"""**Description:**
 {decrypted_description}
@@ -492,9 +557,28 @@ Top high-priority optimizations for immediate impact:
 For tables identified as unused:
 
 1. **Verify table is truly unused**
-   - Check application code and documentation
-   - Confirm with data owners and stakeholders
-   - Review any data retention policies
+
+   Check application code and documentation, confirm with data owners, and review retention policies.
+
+   To verify last access time yourself:
+   ```sql
+   -- Check when table was last accessed
+   SELECT
+     table_name,
+     TIMESTAMP_MILLIS(last_modified_time) as last_modified,
+     TIMESTAMP_MILLIS(CAST(JSON_VALUE(option_value) AS INT64)) as last_access
+   FROM
+     `project.dataset.INFORMATION_SCHEMA.TABLE_OPTIONS`
+   WHERE
+     table_name = 'your_table_name'
+     AND option_name = 'lastAccessTime';
+   ```
+
+   Or check table metadata:
+   ```bash
+   # Get table metadata including last access time
+   bq show --format=prettyjson project:dataset.table_name | grep -A 2 lastModifiedTime
+   ```
 
 2. **Create backup** (if needed)
 
