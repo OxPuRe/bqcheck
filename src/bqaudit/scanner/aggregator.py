@@ -226,6 +226,11 @@ def aggregate_query_metadata(
             pattern_queries[0].query, encryption_key
         )
 
+        # Extract query type (SELECT, MERGE, INSERT, etc.) before encryption
+        # This helps server-side filtering without exposing query content
+        raw_query = pattern_queries[0].query.strip().upper()
+        query_type = raw_query.split()[0] if raw_query else "UNKNOWN"
+
         # Find last execution time (most recent timestamp) and get the most recent job ID
         try:
             # Parse timestamps and sort queries by time (most recent first)
@@ -253,6 +258,7 @@ def aggregate_query_metadata(
         aggregated_entry = {
             "query_hash": pattern_hash,
             "query_text": encrypted_query,
+            "query_type": query_type,
             "executions_per_day": executions_per_day,
             "bytes_per_execution": bytes_per_execution,
             "total_bytes_processed": total_bytes,
