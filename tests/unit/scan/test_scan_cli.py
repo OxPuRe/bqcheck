@@ -55,6 +55,18 @@ def mock_creds_path(tmp_path: Path, monkeypatch):
     return creds_path
 
 
+@pytest.fixture
+def mock_bq_validation(monkeypatch):
+    """Mock BigQuery multi-project validation to avoid real API calls."""
+    # Mock the validation function
+    monkeypatch.setattr(
+        "bqaudit.scanner.bigquery_client.validate_multi_project_permissions",
+        lambda storage_project, query_project=None: None,
+    )
+    # Force simulated scan mode for unit tests
+    monkeypatch.setenv("BQAUDIT_REAL_SCAN", "false")
+
+
 class TestScanCommand:
     """Test scan command with token management."""
 
@@ -67,7 +79,7 @@ class TestScanCommand:
         assert "bqaudit license activate" in result.stdout
 
     def test_scan_with_credentials_executes_simulated_scan(
-        self, tmp_path, mock_credentials, mock_creds_path
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
         """AC1: Scan loads credentials and executes simulated scan."""
         # Create credentials file
@@ -85,7 +97,7 @@ class TestScanCommand:
         assert "test-project" in result.stdout
 
     def test_scan_displays_simulation_notice(
-        self, tmp_path, mock_credentials, mock_creds_path
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
         """AC7: Clear simulation notice displayed to user."""
         # Create credentials file
@@ -105,7 +117,7 @@ class TestScanCommand:
         assert "Epic 4" in result.stdout or "future" in result.stdout.lower()
 
     def test_scan_success_displays_balance(
-        self, tmp_path, mock_credentials, mock_creds_path
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
         """AC1: Scan success displays token pool balance."""
         # Create credentials file
@@ -120,7 +132,7 @@ class TestScanCommand:
         assert "scans remaining" in result.stdout
 
     def test_scan_tokens_never_logged(
-        self, tmp_path, mock_credentials, mock_creds_path, caplog
+        self, tmp_path, mock_credentials, mock_creds_path, caplog, mock_bq_validation
     ):
         """AC4: Ephemeral tokens NEVER appear in logs."""
         # Create credentials file
@@ -142,7 +154,7 @@ class TestScanCommand:
             assert "test-token" not in record.message or "***" in record.message
 
     def test_scan_master_key_never_logged(
-        self, tmp_path, mock_credentials, mock_creds_path, caplog
+        self, tmp_path, mock_credentials, mock_creds_path, caplog, mock_bq_validation
     ):
         """AC5: Master key NEVER appears in logs."""
         # Create credentials file
@@ -162,7 +174,7 @@ class TestScanCommand:
             )
 
     def test_scan_decrements_token_balance(
-        self, tmp_path, mock_credentials, mock_creds_path
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
         """AC1: Successful scan decrements token pool balance by 1."""
         # Create credentials file with balance=10
@@ -181,7 +193,7 @@ class TestScanCommand:
         assert updated_creds["token_pool_balance"] == 9
 
     def test_scan_renews_token_after_success(
-        self, tmp_path, mock_credentials, mock_creds_path
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
         """AC3: Token renewed after successful scan."""
         # Create credentials file
@@ -202,7 +214,7 @@ class TestScanCommand:
         assert updated_creds["ephemeral_token"].startswith("mock-renewed-token-")
 
     def test_scan_prevented_when_balance_zero(
-        self, tmp_path, mock_credentials, mock_creds_path
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
         """AC1 (Story 3.5): Scan prevented with balance = 0, exit code 4."""
         # Arrange: Set balance to 0
@@ -223,7 +235,7 @@ class TestScanCommand:
         assert "[SIMULATED]" not in result.stdout
 
     def test_warning_displayed_for_last_token(
-        self, tmp_path, mock_credentials, mock_creds_path
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
         """AC2 (Story 3.5): Warning shown when using last token."""
         # Arrange: Set balance to 1
@@ -246,7 +258,7 @@ class TestScanCommand:
         assert updated_creds["token_pool_balance"] == 0
 
     def test_scan_handles_negative_balance_edge_case(
-        self, tmp_path, mock_credentials, mock_creds_path
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
         """
         Edge case: Scan handles corrupted negative balance gracefully.
@@ -281,3 +293,62 @@ class TestScanCommand:
             or "invalid data" in result.stdout.lower()
             or "depleted" in result.stdout.lower()
         )
+
+
+class TestScanMultiProjectSupport:
+    """Test multi-project scanning with --query-project flag."""
+
+    def test_scan_accepts_query_project_parameter(
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
+    ):
+        """Test that --query-project parameter is accepted."""
+        # Create credentials file
+        mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
+        mock_creds_path.write_text(json.dumps(mock_credentials))
+        mock_creds_path.chmod(0o600)
+
+        result = runner.invoke(
+            app,
+            [
+                "scan",
+                "--project",
+                "storage-project",
+                "--query-project",
+                "query-project",
+            ],
+        )
+
+        # Should succeed (simulated mode doesn't validate actual projects)
+        assert result.exit_code == 0
+        assert "storage-project" in result.stdout
+
+    def test_scan_with_query_project_short_flag(
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
+    ):
+        """Test that -q short flag works for --query-project."""
+        # Create credentials file
+        mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
+        mock_creds_path.write_text(json.dumps(mock_credentials))
+        mock_creds_path.chmod(0o600)
+
+        result = runner.invoke(
+            app, ["scan", "-p", "storage-project", "-q", "query-project"]
+        )
+
+        # Should succeed
+        assert result.exit_code == 0
+
+    def test_scan_works_without_query_project(
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
+    ):
+        """Test that scan works without --query-project (single-project mode)."""
+        # Create credentials file
+        mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
+        mock_creds_path.write_text(json.dumps(mock_credentials))
+        mock_creds_path.chmod(0o600)
+
+        result = runner.invoke(app, ["scan", "--project", "my-project"])
+
+        # Should succeed in single-project mode
+        assert result.exit_code == 0
+        assert "my-project" in result.stdout

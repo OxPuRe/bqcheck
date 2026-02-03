@@ -50,6 +50,16 @@ def test_credentials(mock_creds_path):
     return credentials
 
 
+@pytest.fixture
+def mock_real_scan_mode(monkeypatch):
+    """Force simulated scan mode and mock validation for unit tests."""
+    monkeypatch.setenv("BQAUDIT_REAL_SCAN", "false")
+    monkeypatch.setattr(
+        "bqaudit.scanner.bigquery_client.validate_multi_project_permissions",
+        lambda storage_project, query_project=None: None,
+    )
+
+
 class TestScanExecutor:
     """Test ScanExecutor token lifecycle management."""
 
@@ -228,3 +238,125 @@ class TestScanExecutor:
         expected_hash = hashlib.sha256(original_token.encode("utf-8")).hexdigest()
         used_token_hashes = [ut["token_hash"] for ut in updated_creds["used_tokens"]]
         assert expected_hash in used_token_hashes
+
+
+class TestMultiProjectPermissionValidation:
+    """Test multi-project permission validation before token consumption."""
+
+    def test_validation_function_exists(self):
+        """Verify validate_multi_project_permissions can be imported."""
+        from bqaudit.scanner.bigquery_client import validate_multi_project_permissions
+
+        assert validate_multi_project_permissions is not None
+
+    def test_validation_with_mock_projects(self, test_credentials, mock_creds_path):
+        """Test that validation runs before scan execution."""
+        from bqaudit.scan.executor import ScanExecutor
+
+        api_client = BQAuditAPIClient(mock_mode=True)
+        executor = ScanExecutor(api_client)
+
+        # Mock validate_multi_project_permissions to avoid real BQ calls
+        with mock.patch(
+            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions"
+        ) as mock_validate:
+            executor.execute_scan_with_tokens(
+                "storage-project", query_project="query-project"
+            )
+
+            # Validation should be called with both projects
+            mock_validate.assert_called_once_with("storage-project", "query-project")
+
+    def test_validation_with_single_project(self, test_credentials, mock_creds_path):
+        """Test that validation works with single project (no query_project)."""
+        from bqaudit.scan.executor import ScanExecutor
+
+        api_client = BQAuditAPIClient(mock_mode=True)
+        executor = ScanExecutor(api_client)
+
+        # Mock validate_multi_project_permissions
+        with mock.patch(
+            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions"
+        ) as mock_validate:
+            executor.execute_scan_with_tokens("my-project")
+
+            # Validation should be called with project and None
+            mock_validate.assert_called_once_with("my-project", None)
+
+    def test_permission_error_prevents_token_consumption(
+        self, test_credentials, mock_creds_path
+    ):
+        """CRITICAL: Permission errors prevent token consumption."""
+        from bqaudit.scan.executor import ScanExecutor
+        from bqaudit.scanner.bigquery_client import PermissionError as BQPermissionError
+
+        original_balance = test_credentials["token_pool_balance"]
+
+        api_client = BQAuditAPIClient(mock_mode=True)
+        executor = ScanExecutor(api_client)
+
+        # Mock validation to raise PermissionError
+        with mock.patch(
+            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions",
+            side_effect=BQPermissionError("Missing permissions on query-project"),
+        ):
+            # Should exit with code 3 (caught by sys.exit in executor)
+            with pytest.raises(SystemExit) as exc_info:
+                executor.execute_scan_with_tokens(
+                    "storage-project", query_project="query-project"
+                )
+            assert exc_info.value.code == 3
+
+        # CRITICAL: Token balance should NOT be decremented
+        updated_creds = CredentialStore.load()
+        assert updated_creds["token_pool_balance"] == original_balance
+
+    def test_project_not_found_prevents_token_consumption(
+        self, test_credentials, mock_creds_path
+    ):
+        """CRITICAL: Project not found errors prevent token consumption."""
+        from bqaudit.scan.executor import ScanExecutor
+        from bqaudit.scanner.bigquery_client import ProjectNotFoundError
+
+        original_balance = test_credentials["token_pool_balance"]
+
+        api_client = BQAuditAPIClient(mock_mode=True)
+        executor = ScanExecutor(api_client)
+
+        # Mock validation to raise ProjectNotFoundError
+        with mock.patch(
+            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions",
+            side_effect=ProjectNotFoundError("Project 'fake-project' not found"),
+        ):
+            # Should exit with code 2
+            with pytest.raises(SystemExit) as exc_info:
+                executor.execute_scan_with_tokens(
+                    "storage-project", query_project="fake-project"
+                )
+            assert exc_info.value.code == 2
+
+        # CRITICAL: Token balance should NOT be decremented
+        updated_creds = CredentialStore.load()
+        assert updated_creds["token_pool_balance"] == original_balance
+
+    def test_successful_validation_allows_scan(self, test_credentials, mock_creds_path):
+        """Test that successful validation allows scan to proceed."""
+        from bqaudit.scan.executor import ScanExecutor
+
+        api_client = BQAuditAPIClient(mock_mode=True)
+        executor = ScanExecutor(api_client)
+
+        # Mock successful validation
+        with mock.patch(
+            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions"
+        ):
+            result = executor.execute_scan_with_tokens(
+                "storage-project", query_project="query-project"
+            )
+
+            # Scan should succeed
+            assert result.success is True
+
+        # Token should be consumed
+        updated_creds = CredentialStore.load()
+        assert updated_creds["token_pool_balance"] == 9
