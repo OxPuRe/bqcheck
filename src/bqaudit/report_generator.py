@@ -494,6 +494,8 @@ For tables identified as unused:
    - Review any data retention policies
 
 2. **Create backup** (if needed)
+
+   Using bq CLI:
    ```bash
    # Create backup dataset if it doesn't exist
    bq mk --dataset backup_dataset
@@ -502,9 +504,26 @@ For tables identified as unused:
    bq cp project.dataset.table_name backup_dataset.table_name
    ```
 
-3. **Delete the table**
+   Or using SQL:
    ```sql
-   DROP TABLE `project.dataset.table_name`
+   -- Create backup dataset
+   CREATE SCHEMA IF NOT EXISTS `project.backup_dataset`;
+
+   -- Copy table to backup
+   CREATE TABLE `project.backup_dataset.table_name`
+   AS SELECT * FROM `project.dataset.table_name`;
+   ```
+
+3. **Delete the table**
+
+   Using bq CLI:
+   ```bash
+   bq rm -t project:dataset.table_name
+   ```
+
+   Or using SQL:
+   ```sql
+   DROP TABLE `project.dataset.table_name`;
    ```
 
 4. **Verify and monitor**
@@ -629,14 +648,6 @@ For tables with historical data that's rarely accessed:
 
 """
 
-        # Add general footer
-        guidance += """### Need Help?
-
-- **BigQuery Documentation**: [Best Practices](https://cloud.google.com/bigquery/docs/best-practices)
-- **Cost Optimization**: [Controlling Costs](https://cloud.google.com/bigquery/docs/best-practices-costs)
-- **Table Management**: [Managing Tables](https://cloud.google.com/bigquery/docs/managing-tables)
-
-"""
         return guidance
 
     def generate_report(self) -> str:
