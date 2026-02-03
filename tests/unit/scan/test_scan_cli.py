@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 
 from bqaudit.cli import app
 from bqaudit.constants import ExitCode
+from bqaudit.scanner.encryption import IdentifierEncryptor
 
 runner = CliRunner()
 
@@ -30,6 +31,9 @@ def mock_credentials(tmp_path: Path) -> dict:
         "token_pool_balance": 10,
         "server_url": "https://api.bqaudit.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
+        "encryption_key": IdentifierEncryptor.key_to_base64(
+            IdentifierEncryptor.generate_key()
+        ),
     }
 
     # Create credentials file
@@ -275,6 +279,9 @@ class TestScanCommand:
             "token_pool_balance": -5,  # Invalid negative balance
             "server_url": "https://api.bqaudit.com",
             "activated_at": "2024-01-01T00:00:00+00:00",
+            "encryption_key": IdentifierEncryptor.key_to_base64(
+                IdentifierEncryptor.generate_key()
+            ),
         }
         mock_creds_path.write_text(json.dumps(corrupted_creds))
         mock_creds_path.chmod(0o600)

@@ -11,7 +11,7 @@ from bqaudit.scanner.aggregator import (
     _parse_iso_timestamp,
     aggregate_query_metadata,
 )
-from bqaudit.scanner.anonymizer import generate_salt
+from bqaudit.scanner.encryption import IdentifierEncryptor
 from bqaudit.scanner.models import QueryMetadata
 
 
@@ -103,13 +103,13 @@ class TestQueryAggregation:
 
     def test_aggregate_empty_list(self):
         """Test aggregation with empty query list."""
-        salt = generate_salt()
+        salt = IdentifierEncryptor.generate_key()
         result = aggregate_query_metadata([], salt)
         assert result == []
 
     def test_aggregate_single_query(self):
         """Test aggregation with a single query."""
-        salt = generate_salt()
+        salt = IdentifierEncryptor.generate_key()
         queries = [
             QueryMetadata(
                 job_id="project:us.job1",
@@ -133,7 +133,7 @@ class TestQueryAggregation:
 
     def test_aggregate_duplicate_queries(self):
         """Test aggregation groups duplicate queries by pattern."""
-        salt = generate_salt()
+        salt = IdentifierEncryptor.generate_key()
         queries = [
             QueryMetadata(
                 job_id="project:us.job1",
@@ -163,7 +163,7 @@ class TestQueryAggregation:
 
     def test_aggregate_different_queries(self):
         """Test aggregation creates separate groups for different queries."""
-        salt = generate_salt()
+        salt = IdentifierEncryptor.generate_key()
         queries = [
             QueryMetadata(
                 job_id="project:us.job1",
@@ -196,7 +196,7 @@ class TestQueryAggregation:
 
     def test_aggregate_skips_empty_queries(self):
         """Test that queries without query text are skipped."""
-        salt = generate_salt()
+        salt = IdentifierEncryptor.generate_key()
         queries = [
             QueryMetadata(
                 job_id="project:us.job1",
@@ -224,7 +224,7 @@ class TestQueryAggregation:
 
     def test_aggregate_query_text_anonymized(self):
         """Test that query text has table references anonymized."""
-        salt = generate_salt()
+        salt = IdentifierEncryptor.generate_key()
         queries = [
             QueryMetadata(
                 job_id="project:us.job1",
@@ -245,7 +245,7 @@ class TestQueryAggregation:
 
     def test_aggregate_executions_per_day_calculation(self):
         """Test accurate executions per day calculation across time range."""
-        salt = generate_salt()
+        salt = IdentifierEncryptor.generate_key()
         queries = [
             QueryMetadata(
                 job_id=f"project:us.job{i}",
@@ -266,7 +266,7 @@ class TestQueryAggregation:
 
     def test_aggregate_returns_all_required_fields(self):
         """Test that aggregated results contain all required fields."""
-        salt = generate_salt()
+        salt = IdentifierEncryptor.generate_key()
         queries = [
             QueryMetadata(
                 job_id="project:us.job1",
@@ -281,7 +281,7 @@ class TestQueryAggregation:
         result = aggregate_query_metadata(queries, salt)
 
         assert len(result) == 1
-        # Verify all required fields are present
+        # Verify all required fields are present (may have additional fields)
         required_fields = {
             "query_hash",
             "query_text",
@@ -290,4 +290,4 @@ class TestQueryAggregation:
             "total_bytes_processed",
             "has_materialized_view",
         }
-        assert set(result[0].keys()) == required_fields
+        assert set(result[0].keys()) >= required_fields
