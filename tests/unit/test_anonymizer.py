@@ -56,6 +56,7 @@ class TestTableNameAnonymization:
         assert isinstance(encrypted, str)
         # Base64 URL-safe characters (no padding)
         import string
+
         valid_chars = string.ascii_letters + string.digits + "-_"
         assert all(c in valid_chars for c in encrypted)
 

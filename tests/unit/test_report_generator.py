@@ -522,7 +522,9 @@ class TestRecommendationFormatting:
 
     def test_extract_file_reference_from_comment(self):
         """Test extracting file path from SQL comment."""
-        text = "-- Query logic taken from mobility/mobility/queries/compute_pickwell.sql"
+        text = (
+            "-- Query logic taken from mobility/mobility/queries/compute_pickwell.sql"
+        )
         file_ref = MarkdownReportGenerator._extract_file_reference(text)
         assert file_ref == "mobility/mobility/queries/compute_pickwell.sql"
 
@@ -547,7 +549,9 @@ class TestRecommendationFormatting:
 
     def test_truncate_sql_in_step_long_sql(self):
         """Test that long SQL is truncated with message."""
-        lines = ["CREATE TABLE foo AS ("] + [f"  SELECT col{i}," for i in range(20)] + [")"]
+        lines = (
+            ["CREATE TABLE foo AS ("] + [f"  SELECT col{i}," for i in range(20)] + [")"]
+        )
         step = "\n".join(lines)
 
         truncated = MarkdownReportGenerator._truncate_sql_in_step(step, max_lines=10)
@@ -557,10 +561,9 @@ class TestRecommendationFormatting:
 
     def test_truncate_sql_in_step_with_file_reference(self):
         """Test that file reference is extracted and shown in truncation."""
-        lines = (
-            ["CREATE VIEW AS -- Query from mobility/queries/test.sql"]
-            + [f"SELECT col{i}," for i in range(20)]
-        )
+        lines = ["CREATE VIEW AS -- Query from mobility/queries/test.sql"] + [
+            f"SELECT col{i}," for i in range(20)
+        ]
         step = "\n".join(lines)
 
         truncated = MarkdownReportGenerator._truncate_sql_in_step(step, max_lines=5)

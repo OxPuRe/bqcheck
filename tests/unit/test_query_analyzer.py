@@ -1,6 +1,5 @@
 """Tests for query pattern analysis and filtered column extraction."""
 
-
 from bqaudit.scanner.query_analyzer import (
     aggregate_filtered_columns_all_tables,
     aggregate_filtered_columns_by_table,
@@ -70,7 +69,9 @@ class TestExtractFilteredColumns:
 
     def test_having_clause(self):
         """Test extraction from HAVING clause."""
-        query = "SELECT user_id, COUNT(*) FROM orders GROUP BY user_id HAVING COUNT(*) > 5"
+        query = (
+            "SELECT user_id, COUNT(*) FROM orders GROUP BY user_id HAVING COUNT(*) > 5"
+        )
         # COUNT(*) is not a column, should not be extracted
         columns = extract_filtered_columns(query)
         # HAVING clause with aggregation functions might not extract columns perfectly
@@ -128,9 +129,7 @@ class TestAggregateFilteredColumnsByTable:
 
     def test_single_query_single_table(self):
         """Test aggregation for single query on single table."""
-        queries = [
-            {"query": "SELECT * FROM dataset.users WHERE user_id = 1"}
-        ]
+        queries = [{"query": "SELECT * FROM dataset.users WHERE user_id = 1"}]
         result = aggregate_filtered_columns_by_table(queries, "dataset.users")
         assert result["user_id"] == 1
 
@@ -138,12 +137,14 @@ class TestAggregateFilteredColumnsByTable:
         """Test that column frequency is counted correctly."""
         queries = [
             {"query": "SELECT * FROM dataset.users WHERE user_id = 1"},
-            {"query": "SELECT * FROM dataset.users WHERE user_id = 2 AND status = 'active'"},
+            {
+                "query": "SELECT * FROM dataset.users WHERE user_id = 2 AND status = 'active'"
+            },
             {"query": "SELECT * FROM dataset.users WHERE user_id = 3"},
         ]
         result = aggregate_filtered_columns_by_table(queries, "dataset.users")
         assert result["user_id"] == 3  # appears in all 3 queries
-        assert result["status"] == 1   # appears in 1 query
+        assert result["status"] == 1  # appears in 1 query
 
     def test_different_tables_ignored(self):
         """Test that queries on different tables are ignored."""
@@ -174,18 +175,14 @@ class TestAggregateFilteredColumnsByTable:
 
     def test_table_without_dataset_prefix(self):
         """Test queries that reference table without dataset prefix."""
-        queries = [
-            {"query": "SELECT * FROM users WHERE user_id = 1"}
-        ]
+        queries = [{"query": "SELECT * FROM users WHERE user_id = 1"}]
         result = aggregate_filtered_columns_by_table(queries, "dataset.users")
         # Should match even without dataset prefix
         assert "user_id" in result
 
     def test_backtick_quoted_tables(self):
         """Test queries with backtick-quoted table names."""
-        queries = [
-            {"query": "SELECT * FROM `dataset.users` WHERE user_id = 1"}
-        ]
+        queries = [{"query": "SELECT * FROM `dataset.users` WHERE user_id = 1"}]
         result = aggregate_filtered_columns_by_table(queries, "dataset.users")
         assert "user_id" in result
 
@@ -205,9 +202,7 @@ class TestAggregateFilteredColumnsByTable:
 
     def test_invalid_table_key(self):
         """Test with invalid table key format."""
-        queries = [
-            {"query": "SELECT * FROM users WHERE user_id = 1"}
-        ]
+        queries = [{"query": "SELECT * FROM users WHERE user_id = 1"}]
         result = aggregate_filtered_columns_by_table(queries, "invalid")
         assert result == {}
 
@@ -216,12 +211,12 @@ class TestAggregateFilteredColumnsByTable:
         queries = [
             {
                 "query": "SELECT * FROM dataset.users WHERE user_id = 1",
-                "referenced_tables": ["dataset.users"]
+                "referenced_tables": ["dataset.users"],
             },
             {
                 "query": "SELECT * FROM dataset.users WHERE status = 'active'",
-                "referenced_tables": ["dataset.users"]
-            }
+                "referenced_tables": ["dataset.users"],
+            },
         ]
         result = aggregate_filtered_columns_by_table(queries, "dataset.users")
         assert result["user_id"] == 1
@@ -232,12 +227,12 @@ class TestAggregateFilteredColumnsByTable:
         queries = [
             {
                 "query": "SELECT * FROM dataset.users WHERE user_id = 1",
-                "referenced_tables": ["dataset.users"]
+                "referenced_tables": ["dataset.users"],
             },
             {
                 "query": "SELECT * FROM dataset.orders WHERE order_id = 123",
-                "referenced_tables": ["dataset.orders"]
-            }
+                "referenced_tables": ["dataset.orders"],
+            },
         ]
         result = aggregate_filtered_columns_by_table(queries, "dataset.users")
         assert "user_id" in result
@@ -252,7 +247,7 @@ class TestAggregateFilteredColumnsAllTables:
         queries = [
             {
                 "query": "SELECT * FROM dataset.users WHERE user_id = 1 AND status = 'active'",
-                "referenced_tables": ["dataset.users"]
+                "referenced_tables": ["dataset.users"],
             }
         ]
         result = aggregate_filtered_columns_all_tables(queries)
@@ -265,12 +260,12 @@ class TestAggregateFilteredColumnsAllTables:
         queries = [
             {
                 "query": "SELECT * FROM dataset.users WHERE user_id = 1",
-                "referenced_tables": ["dataset.users"]
+                "referenced_tables": ["dataset.users"],
             },
             {
                 "query": "SELECT * FROM dataset.orders WHERE order_id = 123",
-                "referenced_tables": ["dataset.orders"]
-            }
+                "referenced_tables": ["dataset.orders"],
+            },
         ]
         result = aggregate_filtered_columns_all_tables(queries)
         assert "dataset.users" in result
@@ -287,7 +282,7 @@ class TestAggregateFilteredColumnsAllTables:
                     JOIN dataset.orders o ON u.user_id = o.user_id
                     WHERE u.status = 'active' AND o.amount > 100
                 """,
-                "referenced_tables": ["dataset.users", "dataset.orders"]
+                "referenced_tables": ["dataset.users", "dataset.orders"],
             }
         ]
         result = aggregate_filtered_columns_all_tables(queries)

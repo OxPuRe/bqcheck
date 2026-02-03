@@ -84,7 +84,7 @@ class MarkdownReportGenerator:
 
         # Pattern 1: Match "dataset.table" format (encrypted pairs)
         # Base64url chars: A-Za-z0-9_-
-        pattern_pair = r'\b([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\b'
+        pattern_pair = r"\b([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\b"
 
         def decrypt_pair(match):
             encrypted_dataset = match.group(1)
@@ -92,7 +92,9 @@ class MarkdownReportGenerator:
 
             try:
                 # Try to decrypt both parts
-                dataset = self.encryptor.decrypt_with_nonce(encrypted_dataset, "dataset")
+                dataset = self.encryptor.decrypt_with_nonce(
+                    encrypted_dataset, "dataset"
+                )
                 table = self.encryptor.decrypt_with_nonce(encrypted_table, "table")
                 # Successfully decrypted - return decrypted version
                 return f"{dataset}.{table}"
@@ -107,7 +109,9 @@ class MarkdownReportGenerator:
         # Pattern 2: Match standalone encrypted identifiers (not already decrypted)
         # These appear after spaces, dots (like backup_dataset.XXX), or at word boundaries
         # Avoid matching regular words by requiring minimum length and base64 chars
-        pattern_standalone = r'(?<=[\s\.])([A-Za-z0-9_-]{30,})(?=\s|$|\)|\,|&&|\||\.(?!\w))'
+        pattern_standalone = (
+            r"(?<=[\s\.])([A-Za-z0-9_-]{30,})(?=\s|$|\)|\,|&&|\||\.(?!\w))"
+        )
 
         def decrypt_standalone(match):
             encrypted = match.group(1)
@@ -149,6 +153,7 @@ class MarkdownReportGenerator:
             >>> _clean_title("Materialize repeated query (6.048781288508676/day)")
             "Materialize repeated query (6.0/day)"
         """
+
         # Round decimals like "6.048781288508676/day" -> "6.0/day"
         def round_decimal(match):
             value = float(match.group(1))

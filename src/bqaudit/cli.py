@@ -251,7 +251,9 @@ def validate(
                     original = (
                         f"{table.table_catalog}.{table.table_schema}.{table.table_name}"
                     )
-                    anonymized = anonymize_table_name(table.table_name, temp_encryption_key)
+                    anonymized = anonymize_table_name(
+                        table.table_name, temp_encryption_key
+                    )
                     # Truncate encrypted identifier for display
                     anonymized_short = anonymized[:16] + "..."
                     console.print(
@@ -273,7 +275,9 @@ def validate(
                         original_truncated += "..."
 
                     # Anonymize query
-                    anonymized = anonymize_query_pattern(query_row.query, temp_encryption_key)
+                    anonymized = anonymize_query_pattern(
+                        query_row.query, temp_encryption_key
+                    )
                     anonymized_truncated = anonymized[:60].replace("\n", " ")
                     if len(anonymized) > 60:
                         anonymized_truncated += "..."
@@ -286,7 +290,9 @@ def validate(
             payload_sample = {
                 "tables": [
                     {
-                        "table_name": anonymize_table_name(t.table_name, temp_encryption_key),
+                        "table_name": anonymize_table_name(
+                            t.table_name, temp_encryption_key
+                        ),
                         "table_catalog": t.table_catalog,
                         "table_schema": t.table_schema,
                         # Varied: 5MB, 10MB, 15MB
@@ -624,10 +630,7 @@ def scan(
         api_client = BQAuditAPIClient(mock_mode=mock_mode)
         executor = ScanExecutor(api_client)
         executor.execute_scan_with_tokens(
-            project,
-            query_project=query_project,
-            output_path=output,
-            force=force
+            project, query_project=query_project, output_path=output, force=force
         )
 
         # Step 5: Show warning if was last token (AC2, Story 3.5)

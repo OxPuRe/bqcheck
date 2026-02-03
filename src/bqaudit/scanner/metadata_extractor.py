@@ -379,7 +379,7 @@ def extract_query_metadata(
                     referenced_tables = [
                         f"{table['dataset_id']}.{table['table_id']}"
                         for table in row.referenced_tables
-                        if table.get('dataset_id') and table.get('table_id')
+                        if table.get("dataset_id") and table.get("table_id")
                     ]
 
                 # Convert BigQuery row to dict

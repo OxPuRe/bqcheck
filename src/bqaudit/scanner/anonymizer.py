@@ -54,7 +54,9 @@ def _validate_encryption_key(encryption_key: bytes) -> None:
         ValueError: If encryption_key is not exactly 32 bytes
     """
     if not isinstance(encryption_key, bytes):
-        raise TypeError(f"Encryption key must be bytes, got {type(encryption_key).__name__}")
+        raise TypeError(
+            f"Encryption key must be bytes, got {type(encryption_key).__name__}"
+        )
 
     if len(encryption_key) != 32:
         raise ValueError(
@@ -382,7 +384,9 @@ def anonymize_query_pattern(query: Optional[str], encryption_key: bytes) -> str:
     return anonymized_query
 
 
-def anonymize_metadata(metadata_dict: Dict[str, Any], encryption_key: bytes) -> Dict[str, Any]:
+def anonymize_metadata(
+    metadata_dict: Dict[str, Any], encryption_key: bytes
+) -> Dict[str, Any]:
     """
     Anonymize sensitive fields in metadata dictionary using AES encryption.
 
@@ -486,7 +490,9 @@ def anonymize_metadata(metadata_dict: Dict[str, Any], encryption_key: bytes) -> 
 
     # Copy known safe (non-sensitive) fields
     for field, value in metadata_dict.items():
-        if field in known_safe_fields and field != "table_id":  # Skip table_id (handled above)
+        if (
+            field in known_safe_fields and field != "table_id"
+        ):  # Skip table_id (handled above)
             anonymized[field] = value
 
     return anonymized
@@ -540,7 +546,7 @@ def merge_table_metadata(
                 query_stats_map[key] = {
                     "total_bytes_processed": 0,
                     "query_count": 0,
-                    "filtered_columns": {}
+                    "filtered_columns": {},
                 }
             query_stats_map[key]["total_bytes_processed"] += query.total_bytes_processed
             query_stats_map[key]["query_count"] += 1
@@ -689,7 +695,9 @@ def anonymize_query_list(
 
         # Encrypt query text (table references)
         if "query" in query_dict and query_dict["query"]:
-            query_dict["query"] = anonymize_query_pattern(query_dict["query"], encryption_key)
+            query_dict["query"] = anonymize_query_pattern(
+                query_dict["query"], encryption_key
+            )
 
         anonymized_queries.append(query_dict)
 

@@ -90,7 +90,7 @@ class IdentifierEncryptor:
             >>> isinstance(b64, str)
             True
         """
-        return base64.b64encode(key).decode('ascii')
+        return base64.b64encode(key).decode("ascii")
 
     @staticmethod
     def key_from_base64(b64_key: str) -> bytes:
@@ -139,13 +139,13 @@ class IdentifierEncryptor:
         """
         # Use HKDF to derive nonce from plaintext hash
         # This is deterministic: same input → same nonce
-        plaintext_hash = hashlib.sha256(plaintext.encode('utf-8')).digest()
+        plaintext_hash = hashlib.sha256(plaintext.encode("utf-8")).digest()
 
         hkdf = HKDF(
             algorithm=hashes.SHA256(),
             length=12,  # AES-GCM nonce is 12 bytes
             salt=self.key,  # Use encryption key as salt for additional binding
-            info=context.encode('utf-8'),  # Domain separation
+            info=context.encode("utf-8"),  # Domain separation
         )
 
         return hkdf.derive(plaintext_hash)
@@ -176,12 +176,12 @@ class IdentifierEncryptor:
         # Encrypt with AES-GCM (authenticated encryption)
         ciphertext = self.aesgcm.encrypt(
             nonce,
-            plaintext.encode('utf-8'),
-            associated_data=context.encode('utf-8')  # Additional authentication
+            plaintext.encode("utf-8"),
+            associated_data=context.encode("utf-8"),  # Additional authentication
         )
 
         # Return as URL-safe base64 (no padding for cleaner output)
-        return base64.urlsafe_b64encode(ciphertext).decode('ascii').rstrip('=')
+        return base64.urlsafe_b64encode(ciphertext).decode("ascii").rstrip("=")
 
     def decrypt(self, ciphertext: str, context: str = "identifier") -> str:
         """
@@ -205,7 +205,7 @@ class IdentifierEncryptor:
         """
         # Add padding back if needed
         padding = (4 - len(ciphertext) % 4) % 4
-        ciphertext_padded = ciphertext + '=' * padding
+        ciphertext_padded = ciphertext + "=" * padding
 
         try:
             base64.urlsafe_b64decode(ciphertext_padded)
@@ -246,18 +246,18 @@ class IdentifierEncryptor:
 
         # Encrypt with AES-GCM
         ciphertext = self.aesgcm.encrypt(
-            nonce,
-            plaintext.encode('utf-8'),
-            associated_data=context.encode('utf-8')
+            nonce, plaintext.encode("utf-8"), associated_data=context.encode("utf-8")
         )
 
         # Prepend nonce to ciphertext for decryption
         combined = nonce + ciphertext
 
         # Return as URL-safe base64 (no padding for cleaner output)
-        return base64.urlsafe_b64encode(combined).decode('ascii').rstrip('=')
+        return base64.urlsafe_b64encode(combined).decode("ascii").rstrip("=")
 
-    def decrypt_with_nonce(self, ciphertext_with_nonce: str, context: str = "identifier") -> str:
+    def decrypt_with_nonce(
+        self, ciphertext_with_nonce: str, context: str = "identifier"
+    ) -> str:
         """
         Decrypt identifier encrypted with encrypt_with_nonce().
 
@@ -273,7 +273,7 @@ class IdentifierEncryptor:
         """
         # Add padding back if needed
         padding = (4 - len(ciphertext_with_nonce) % 4) % 4
-        padded = ciphertext_with_nonce + '=' * padding
+        padded = ciphertext_with_nonce + "=" * padding
 
         try:
             combined = base64.urlsafe_b64decode(padded)
@@ -290,14 +290,12 @@ class IdentifierEncryptor:
         # Decrypt
         try:
             plaintext_bytes = self.aesgcm.decrypt(
-                nonce,
-                ciphertext,
-                associated_data=context.encode('utf-8')
+                nonce, ciphertext, associated_data=context.encode("utf-8")
             )
         except Exception as e:
             raise ValueError(f"Decryption failed: {e}") from e
 
-        return plaintext_bytes.decode('utf-8')
+        return plaintext_bytes.decode("utf-8")
 
     def encrypt_bulk(self, identifiers: Dict[str, str]) -> Dict[str, str]:
         """
@@ -345,6 +343,7 @@ class IdentifierEncryptor:
 
 
 # Convenience functions for backward compatibility with anonymizer.py
+
 
 def generate_encryption_key() -> bytes:
     """Generate a new encryption key."""

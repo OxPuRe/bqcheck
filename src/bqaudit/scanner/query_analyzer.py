@@ -45,14 +45,16 @@ def extract_filtered_columns(query: str) -> List[str]:
 
     # Extract WHERE clause (everything after WHERE until GROUP BY/ORDER BY/LIMIT/;)
     # Match WHERE...GROUP|ORDER|HAVING|LIMIT|WINDOW|QUALIFY|;|end
-    where_pattern = r'\bwhere\b\s+(.*?)(?:\b(?:group\s+by|order\s+by|having|limit|window|qualify)\b|;|$)'
+    where_pattern = r"\bwhere\b\s+(.*?)(?:\b(?:group\s+by|order\s+by|having|limit|window|qualify)\b|;|$)"
     where_matches = re.findall(where_pattern, query_lower, re.IGNORECASE | re.DOTALL)
 
     # Also extract HAVING clause
-    having_pattern = r'\bhaving\b\s+(.*?)(?:\b(?:order\s+by|limit|window|qualify)\b|;|$)'
+    having_pattern = (
+        r"\bhaving\b\s+(.*?)(?:\b(?:order\s+by|limit|window|qualify)\b|;|$)"
+    )
     having_matches = re.findall(having_pattern, query_lower, re.IGNORECASE | re.DOTALL)
 
-    all_conditions = ' '.join(where_matches + having_matches)
+    all_conditions = " ".join(where_matches + having_matches)
 
     if not all_conditions:
         return []
@@ -63,34 +65,48 @@ def extract_filtered_columns(query: str) -> List[str]:
     # Column names: alphanumeric + underscore, optionally table-qualified (table.column)
     filter_patterns = [
         # column = value / column != value / column <> value
-        r'\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s*(?:=|!=|<>|>|<|>=|<=)\s*',
+        r"\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s*(?:=|!=|<>|>|<|>=|<=)\s*",
         # column IN (...)
-        r'\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s+in\s*\(',
+        r"\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s+in\s*\(",
         # column BETWEEN x AND y
-        r'\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s+between\s+',
+        r"\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s+between\s+",
         # column IS [NOT] NULL
-        r'\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s+is\s+(?:not\s+)?null\b',
+        r"\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s+is\s+(?:not\s+)?null\b",
         # column LIKE pattern
-        r'\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s+(?:not\s+)?like\s+',
+        r"\b([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s+(?:not\s+)?like\s+",
         # REGEXP_CONTAINS(column, pattern)
-        r'regexp_contains\s*\(\s*([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s*,',
+        r"regexp_contains\s*\(\s*([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s*,",
     ]
 
     for pattern in filter_patterns:
         matches = re.findall(pattern, all_conditions, re.IGNORECASE)
         for match in matches:
             # Remove table prefix if present (table.column → column)
-            column = match.split('.')[-1] if '.' in match else match
+            column = match.split(".")[-1] if "." in match else match
             # Skip SQL keywords that might be matched
-            if column not in ('select', 'from', 'where', 'and', 'or', 'not', 'null',
-                             'true', 'false', 'between', 'in', 'like', 'is', 'as'):
+            if column not in (
+                "select",
+                "from",
+                "where",
+                "and",
+                "or",
+                "not",
+                "null",
+                "true",
+                "false",
+                "between",
+                "in",
+                "like",
+                "is",
+                "as",
+            ):
                 filtered_columns.append(column)
 
     return filtered_columns
 
 
 def aggregate_filtered_columns_all_tables(
-    queries: List[Dict[str, any]]
+    queries: List[Dict[str, any]],
 ) -> Dict[str, Dict[str, int]]:
     """
     Aggregate filtered columns for all tables in a single pass.
@@ -117,15 +133,17 @@ def aggregate_filtered_columns_all_tables(
         {'dataset.users': {'user_id': 1}, 'dataset.orders': {'order_id': 1}}
     """
     # Map of table_key -> column_name -> count
-    table_column_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    table_column_counts: Dict[str, Dict[str, int]] = defaultdict(
+        lambda: defaultdict(int)
+    )
 
     for query_meta in queries:
-        query = query_meta.get('query', '')
+        query = query_meta.get("query", "")
         if not query:
             continue
 
         # Get table references - prefer BigQuery metadata over regex parsing
-        table_refs = query_meta.get('referenced_tables', [])
+        table_refs = query_meta.get("referenced_tables", [])
 
         if not table_refs:
             # Fallback: Extract table references using regex (backwards compatibility)
@@ -143,15 +161,11 @@ def aggregate_filtered_columns_all_tables(
                     table_column_counts[table_ref][column] += 1
 
     # Convert defaultdict to regular dict
-    return {
-        table: dict(columns)
-        for table, columns in table_column_counts.items()
-    }
+    return {table: dict(columns) for table, columns in table_column_counts.items()}
 
 
 def aggregate_filtered_columns_by_table(
-    queries: List[Dict[str, any]],
-    table_key: str
+    queries: List[Dict[str, any]], table_key: str
 ) -> Dict[str, int]:
     """
     Aggregate filtered columns for a specific table from all queries.
@@ -180,19 +194,19 @@ def aggregate_filtered_columns_by_table(
     column_counts: Dict[str, int] = defaultdict(int)
 
     # Extract dataset and table from table_key
-    if '.' not in table_key:
+    if "." not in table_key:
         return {}
 
-    dataset, table = table_key.split('.', 1)
+    dataset, table = table_key.split(".", 1)
 
     for query_meta in queries:
-        query = query_meta.get('query', '')
+        query = query_meta.get("query", "")
         if not query:
             continue
 
         # Check if this query references our table
         # Prefer BigQuery metadata over regex parsing
-        referenced_tables = query_meta.get('referenced_tables', [])
+        referenced_tables = query_meta.get("referenced_tables", [])
 
         references_table = False
         if referenced_tables:
@@ -207,7 +221,9 @@ def aggregate_filtered_columns_by_table(
                 rf'\bfrom\s+[`"]?{re.escape(table)}[`"]?\b',  # Without dataset prefix
                 rf'\bjoin\s+[`"]?{re.escape(table)}[`"]?\b',
             ]
-            references_table = any(re.search(pattern, query_lower) for pattern in table_patterns)
+            references_table = any(
+                re.search(pattern, query_lower) for pattern in table_patterns
+            )
 
         if references_table:
             # Extract filtered columns from this query

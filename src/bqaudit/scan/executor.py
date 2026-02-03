@@ -228,7 +228,9 @@ class ScanExecutor:
                 encryption_key_b64 = credentials.get("encryption_key")
                 encryption_key = None
                 if encryption_key_b64:
-                    encryption_key = IdentifierEncryptor.key_from_base64(encryption_key_b64)
+                    encryption_key = IdentifierEncryptor.key_from_base64(
+                        encryption_key_b64
+                    )
 
                 generator = MarkdownReportGenerator(
                     audit_response,
@@ -454,8 +456,12 @@ class ScanExecutor:
 
                 # Use query_project if specified, otherwise use project_id
                 query_project_id = query_project or project_id
-                logger.info(f"Extracting query metadata from project: {query_project_id}")
-                query_metadata = extract_query_metadata(client, query_project_id, days=90)
+                logger.info(
+                    f"Extracting query metadata from project: {query_project_id}"
+                )
+                query_metadata = extract_query_metadata(
+                    client, query_project_id, days=90
+                )
 
                 logger.info("Extracting access patterns...")
                 access_patterns = extract_access_patterns(client, project_id)
@@ -482,7 +488,8 @@ class ScanExecutor:
 
             # Encrypt enriched tables (apply anonymize_metadata to each dict)
             anonymized_tables = [
-                anonymize_metadata(table_dict, encryption_key) for table_dict in enriched_tables
+                anonymize_metadata(table_dict, encryption_key)
+                for table_dict in enriched_tables
             ]
 
             # Aggregate and encrypt queries (groups by pattern, calculates stats)
@@ -491,7 +498,9 @@ class ScanExecutor:
             )
 
             # Encrypt access patterns
-            anonymized_patterns = anonymize_access_patterns(access_patterns, encryption_key)
+            anonymized_patterns = anonymize_access_patterns(
+                access_patterns, encryption_key
+            )
 
             # Convert Pydantic models to dicts and create validated AuditMetadata
             from bqaudit.api.models import AuditMetadata

@@ -50,11 +50,11 @@ def _parse_iso_timestamp(timestamp_str: str) -> datetime:
     # Try multiple formats to be robust
     formats = [
         "%Y-%m-%d %H:%M:%S.%f%z",  # 2025-12-15 15:06:24.456+0000
-        "%Y-%m-%d %H:%M:%S%z",     # 2025-12-15 15:06:24+0000
-        "%Y-%m-%d %H:%M:%S UTC",   # 2024-01-20 10:30:00 UTC
+        "%Y-%m-%d %H:%M:%S%z",  # 2025-12-15 15:06:24+0000
+        "%Y-%m-%d %H:%M:%S UTC",  # 2024-01-20 10:30:00 UTC
         "%Y-%m-%d %H:%M:%S.%f UTC",  # 2024-01-20 10:30:00.123456 UTC
-        "%Y-%m-%dT%H:%M:%S",       # 2024-01-20T10:30:00
-        "%Y-%m-%dT%H:%M:%S.%f",    # 2024-01-20T10:30:00.123456
+        "%Y-%m-%dT%H:%M:%S",  # 2024-01-20T10:30:00
+        "%Y-%m-%dT%H:%M:%S.%f",  # 2024-01-20T10:30:00.123456
     ]
 
     for fmt in formats:
@@ -180,7 +180,9 @@ def aggregate_query_metadata(
 
         # Calculate average bytes per execution
         execution_count = len(pattern_queries)
-        bytes_per_execution = total_bytes // execution_count if execution_count > 0 else 0
+        bytes_per_execution = (
+            total_bytes // execution_count if execution_count > 0 else 0
+        )
 
         # Calculate executions per day using actual time range
         timestamps = [q.creation_time for q in pattern_queries]
@@ -188,7 +190,9 @@ def aggregate_query_metadata(
         executions_per_day = execution_count / days_in_period
 
         # Get encrypted query text (same for all queries in group)
-        encrypted_query = anonymize_query_pattern(pattern_queries[0].query, encryption_key)
+        encrypted_query = anonymize_query_pattern(
+            pattern_queries[0].query, encryption_key
+        )
 
         # Find last execution time (most recent timestamp)
         try:
