@@ -525,6 +525,7 @@ def test_extract_query_metadata_success(mock_client):
     mock_row_1.user_email = "user@example.com"
     mock_row_1.job_type = "QUERY"
     mock_row_1.state = "DONE"
+    mock_row_1.referenced_tables = [{"dataset_id": "analytics", "table_id": "events"}]
 
     mock_row_2 = Mock()
     mock_row_2.ddl = ""
@@ -535,6 +536,7 @@ def test_extract_query_metadata_success(mock_client):
     mock_row_2.user_email = None  # Service account
     mock_row_2.job_type = "QUERY"
     mock_row_2.state = "DONE"
+    mock_row_2.referenced_tables = [{"dataset_id": "analytics", "table_id": "users"}]
 
     mock_row_3 = Mock()
     mock_row_3.ddl = ""
@@ -545,6 +547,7 @@ def test_extract_query_metadata_success(mock_client):
     mock_row_3.user_email = "analyst@example.com"
     mock_row_3.job_type = "QUERY"
     mock_row_3.state = "DONE"
+    mock_row_3.referenced_tables = [{"dataset_id": "sales", "table_id": "transactions"}]
 
     # Mock query result
     mock_query_job = Mock()
@@ -588,6 +591,7 @@ def test_extract_query_metadata_job_type_filter(mock_client):
     mock_query_row.user_email = "user@example.com"
     mock_query_row.job_type = "QUERY"
     mock_query_row.state = "DONE"
+    mock_query_row.referenced_tables = [{"dataset_id": "dataset", "table_id": "table"}]
 
     # These should be filtered out by SQL WHERE clause
     # (we verify the SQL query excludes them, not that we filter in Python)

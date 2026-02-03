@@ -7,6 +7,7 @@ from typing import Any, Dict
 from bqaudit.api.client import BQAuditAPIClient
 from bqaudit.api.exceptions import InvalidLicenseKeyError, NetworkError
 from bqaudit.license.storage import CredentialStore
+from bqaudit.scanner.encryption import IdentifierEncryptor
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,11 @@ def activate_license(master_key: str, mock_mode: bool = True) -> Dict[str, Any]:
         logger.debug("Calling API to activate license")
         response = api_client.activate_license(master_key)
 
+        # Generate encryption key for identifier anonymization
+        encryption_key_bytes = IdentifierEncryptor.generate_key()
+        encryption_key_b64 = IdentifierEncryptor.key_to_base64(encryption_key_bytes)
+        logger.debug("Generated encryption key for identifier anonymization")
+
         # Build credentials dictionary
         credentials = {
             "master_key": master_key,
@@ -60,6 +66,7 @@ def activate_license(master_key: str, mock_mode: bool = True) -> Dict[str, Any]:
             "activated_at": (
                 response.activated_at or datetime.now(timezone.utc)
             ).isoformat(),
+            "encryption_key": encryption_key_b64,
         }
 
         # AC5: Save with chmod 600

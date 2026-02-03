@@ -105,9 +105,9 @@ class TestPathResolution:
         result_path = generator.save_report()
 
         # Should be in cwd with default name format
-        # Use generator's timestamp to match the filename
-        date_str = generator.timestamp.strftime("%Y-%m-%d")
-        expected_name = f"audit-report-{date_str}.md"
+        # Use generator's timestamp to match the filename (now includes time)
+        timestamp_str = generator.timestamp.strftime("%Y-%m-%d-%H%M%S")
+        expected_name = f"audit-report-{timestamp_str}.md"
 
         assert result_path.name == expected_name
         assert result_path.parent == tmp_path

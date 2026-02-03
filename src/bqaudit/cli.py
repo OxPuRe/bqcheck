@@ -37,8 +37,8 @@ from bqaudit.scanner import (
 from bqaudit.scanner.anonymizer import (
     anonymize_query_pattern,
     anonymize_table_name,
-    generate_salt,
 )
+from bqaudit.scanner.encryption import IdentifierEncryptor
 
 app = typer.Typer(
     name="bqaudit", help="BigQuery cost optimization audit tool", no_args_is_help=True
@@ -225,8 +225,9 @@ def validate(
             query_job = client.query(sample_queries_query)
             sample_queries = list(query_job.result())
 
-            # Generate salt for anonymization preview
-            salt = generate_salt()
+            # Generate temporary encryption key for anonymization preview
+            # (validate command doesn't need real credentials)
+            temp_encryption_key = IdentifierEncryptor.generate_key()
 
             # Display metadata preview section
             console.print("\n")
@@ -250,8 +251,8 @@ def validate(
                     original = (
                         f"{table.table_catalog}.{table.table_schema}.{table.table_name}"
                     )
-                    anonymized = anonymize_table_name(table.table_name, salt)
-                    # Truncate hash for display
+                    anonymized = anonymize_table_name(table.table_name, temp_encryption_key)
+                    # Truncate encrypted identifier for display
                     anonymized_short = anonymized[:16] + "..."
                     console.print(
                         f"  Table: [yellow]{original}[/yellow] → "
@@ -272,7 +273,7 @@ def validate(
                         original_truncated += "..."
 
                     # Anonymize query
-                    anonymized = anonymize_query_pattern(query_row.query, salt)
+                    anonymized = anonymize_query_pattern(query_row.query, temp_encryption_key)
                     anonymized_truncated = anonymized[:60].replace("\n", " ")
                     if len(anonymized) > 60:
                         anonymized_truncated += "..."
@@ -285,7 +286,7 @@ def validate(
             payload_sample = {
                 "tables": [
                     {
-                        "table_name": anonymize_table_name(t.table_name, salt),
+                        "table_name": anonymize_table_name(t.table_name, temp_encryption_key),
                         "table_catalog": t.table_catalog,
                         "table_schema": t.table_schema,
                         # Varied: 5MB, 10MB, 15MB
@@ -299,7 +300,7 @@ def validate(
                 "queries": [
                     {
                         "query": anonymize_query_pattern(
-                            q.query if q.query else "", salt
+                            q.query if q.query else "", temp_encryption_key
                         ),
                         # Varied: 2.5MB, 5MB, 7.5MB
                         "bytes_processed": (i + 1) * 2500000,
@@ -331,7 +332,7 @@ def validate(
             transmission_panel = Panel(
                 "[bold]This is what will be sent to bqaudit server:[/bold]\n"
                 "• Metadata only (no table data)\n"
-                "• All identifiers anonymized with SHA-256\n"
+                "• All identifiers encrypted with AES-256\n"
                 "• Only statistical information (sizes, counts, patterns)",
                 title="[cyan]Data Transmission[/cyan]",
                 border_style="cyan",

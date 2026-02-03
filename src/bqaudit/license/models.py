@@ -21,6 +21,9 @@ class Credentials(BaseModel):
     ephemeral_token: str = Field(description="Current single-use scan token")
     server_url: str = Field(description="API server URL")
     activated_at: datetime = Field(description="ISO8601 timestamp of activation")
+    encryption_key: str = Field(
+        description="Base64-encoded AES-256 encryption key for identifier anonymization"
+    )
     used_tokens: List[Dict[str, Any]] = Field(
         default_factory=list,
         description="Client-side tracking of used tokens (Story 3.4, AC8)",
@@ -65,4 +68,5 @@ class Credentials(BaseModel):
         # Mask sensitive fields
         data["master_key"] = "***REDACTED***"
         data["ephemeral_token"] = "***REDACTED***"
+        data["encryption_key"] = "***REDACTED***"
         return data

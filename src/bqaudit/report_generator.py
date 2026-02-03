@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from bqaudit.api.models import AuditResponse
+from bqaudit.scanner.encryption import IdentifierEncryptor
 
 
 class MarkdownReportGenerator:
@@ -27,17 +28,111 @@ class MarkdownReportGenerator:
         >>> report_path = generator.generate_and_save()
     """
 
-    def __init__(self, audit_response: AuditResponse, project_name: str = "Unknown"):
+    def __init__(
+        self,
+        audit_response: AuditResponse,
+        project_name: str = "Unknown",
+        encryption_key: Optional[bytes] = None,
+    ):
         """
         Initialize report generator.
 
         Args:
             audit_response: AuditResponse from server
             project_name: GCP project name for report title
+            encryption_key: Optional 32-byte AES-256 encryption key for decrypting identifiers.
+                          If provided, encrypted table/dataset names in recommendations
+                          will be decrypted to human-readable names.
         """
         self.audit_response = audit_response
         self.project_name = project_name
         self.timestamp = datetime.now(timezone.utc)
+        self.encryption_key = encryption_key
+
+        # Initialize encryptor if key provided
+        if encryption_key:
+            self.encryptor = IdentifierEncryptor(encryption_key)
+        else:
+            self.encryptor = None
+
+    def _decrypt_identifiers_in_text(self, text: str) -> str:
+        """
+        Decrypt encrypted table identifiers in text.
+
+        Finds encrypted table references (e.g., "Table ABC123.DEF456" or
+        "dataset.table format like ABC123.DEF456") and replaces them
+        with decrypted names. Also handles standalone encrypted identifiers.
+
+        Args:
+            text: Text containing encrypted identifiers
+
+        Returns:
+            Text with identifiers decrypted (if encryption key available)
+
+        Example:
+            >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+            >>> key = IdentifierEncryptor.generate_key()
+            >>> encryptor = IdentifierEncryptor(key)
+            >>> dataset_enc = encryptor.encrypt_with_nonce("analytics", "dataset")
+            >>> table_enc = encryptor.encrypt_with_nonce("users", "table")
+            >>> text = f"Table {dataset_enc}.{table_enc} (100 GB)"
+            >>> # After decryption: "Table analytics.users (100 GB)"
+        """
+        if not self.encryptor:
+            # No encryption key - return original text
+            return text
+
+        # Pattern 1: Match "dataset.table" format (encrypted pairs)
+        # Base64url chars: A-Za-z0-9_-
+        pattern_pair = r'\b([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\b'
+
+        def decrypt_pair(match):
+            encrypted_dataset = match.group(1)
+            encrypted_table = match.group(2)
+
+            try:
+                # Try to decrypt both parts
+                dataset = self.encryptor.decrypt_with_nonce(encrypted_dataset, "dataset")
+                table = self.encryptor.decrypt_with_nonce(encrypted_table, "table")
+                # Successfully decrypted - return decrypted version
+                return f"{dataset}.{table}"
+            except (ValueError, Exception):
+                # Decryption failed - likely not an encrypted identifier
+                # Return original text
+                return match.group(0)
+
+        # First pass: decrypt dataset.table pairs
+        text = re.sub(pattern_pair, decrypt_pair, text)
+
+        # Pattern 2: Match standalone encrypted identifiers (not already decrypted)
+        # These appear after spaces, dots (like backup_dataset.XXX), or at word boundaries
+        # Avoid matching regular words by requiring minimum length and base64 chars
+        pattern_standalone = r'(?<=[\s\.])([A-Za-z0-9_-]{30,})(?=\s|$|\)|\,|&&|\||\.(?!\w))'
+
+        def decrypt_standalone(match):
+            encrypted = match.group(1)
+
+            # Try to decrypt as table name first (most common in implementation steps)
+            try:
+                table = self.encryptor.decrypt_with_nonce(encrypted, "table")
+                return table
+            except (ValueError, Exception):
+                pass
+
+            # Try dataset if table failed
+            try:
+                dataset = self.encryptor.decrypt_with_nonce(encrypted, "dataset")
+                return dataset
+            except (ValueError, Exception):
+                pass
+
+            # Not an encrypted identifier - return as is
+            return match.group(0)
+
+        # Second pass: decrypt standalone identifiers
+        text = re.sub(pattern_standalone, decrypt_standalone, text)
+
+        return text
 
     @staticmethod
     def _clean_title(title: str) -> str:
@@ -234,8 +329,10 @@ Top high-priority optimizations for immediate impact:
 """
         for i, rec in enumerate(top_wins, 1):
             clean_title = self._clean_title(rec.title)
+            # Decrypt identifiers in description if encryption key available
+            decrypted_description = self._decrypt_identifiers_in_text(rec.description)
             quick_wins += f"""{i}. **{clean_title}** - €{rec.savings_eur:.2f}/month
-   - {rec.description}
+   - {decrypted_description}
 
 """
 
@@ -295,17 +392,15 @@ Top high-priority optimizations for immediate impact:
 
 """
 
+            # Decrypt identifiers in description
+            decrypted_description = self._decrypt_identifiers_in_text(rec.description)
+
             detailed += f"""**Description:**
-{rec.description}
+{decrypted_description}
 
-**Implementation Steps:**
+---
+
 """
-            for step_num, step in enumerate(rec.implementation_steps, 1):
-                # Truncate large SQL blocks
-                cleaned_step = self._truncate_sql_in_step(step, max_lines=10)
-                detailed += f"{step_num}. {cleaned_step}\n"
-
-            detailed += "\n---\n\n"
 
         return detailed
 
@@ -350,13 +445,19 @@ Top high-priority optimizations for immediate impact:
 
     def generate_implementation_guidance(self) -> str:
         """
-        Generate Implementation Guidance section.
+        Generate Implementation Guidance section with context-specific instructions.
+
+        Analyzes recommendation types present in the report and generates
+        relevant implementation guidance for each type.
 
         Returns:
             Markdown-formatted Implementation Guidance section
         """
         if not self.audit_response.recommendations:
             return ""
+
+        # Detect which recommendation types are present
+        rec_types = set(rec.type for rec in self.audit_response.recommendations)
 
         guidance = """
 ## Implementation Guidance
@@ -365,19 +466,164 @@ Top high-priority optimizations for immediate impact:
 
 1. **Prioritize High-Impact Changes**: Start with HIGH priority recommendations that offer the largest monthly savings
 2. **Test in Non-Production**: Always test changes in a development or staging environment first
-3. **Monitor Query Performance**: Use BigQuery's query execution details to validate improvements
-4. **Backup Before Changes**: Create table snapshots before modifying partitioning or clustering
+3. **Backup Before Changes**: Create table snapshots before making destructive changes
+4. **Monitor After Changes**: Verify that queries continue to work and performance improves
 
-### Best Practices
+"""
 
-- **Partitioning**: Implement date-based partitioning for time-series data to reduce scan costs
-- **Clustering**: Add clustering keys for columns frequently used in WHERE and GROUP BY clauses
-- **Storage Cleanup**: Schedule regular reviews of unused tables and datasets
-- **Query Optimization**: Review and optimize queries identified as expensive or repetitive
+        # Add type-specific implementation sections
+        if "storage" in rec_types:
+            guidance += """### Removing Unused Tables
 
-### Need Help?
+For tables identified as unused:
 
-Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-practices) for detailed guidance on implementing these recommendations.
+1. **Verify table is truly unused**
+   - Check application code and documentation
+   - Confirm with data owners and stakeholders
+   - Review any data retention policies
+
+2. **Create backup** (if needed)
+   ```bash
+   # Create backup dataset if it doesn't exist
+   bq mk --dataset backup_dataset
+
+   # Copy table to backup
+   bq cp project.dataset.table_name backup_dataset.table_name
+   ```
+
+3. **Delete the table**
+   ```sql
+   DROP TABLE `project.dataset.table_name`
+   ```
+
+4. **Verify and monitor**
+   - Monitor application logs for errors
+   - Check for failed scheduled queries
+   - If issues arise, restore from backup
+
+"""
+
+        if "clustering" in rec_types:
+            guidance += """### Adding Clustering
+
+For tables that would benefit from clustering:
+
+1. **Identify clustering columns**
+   - Review WHERE and GROUP BY clauses in your queries
+   - Choose columns with high cardinality
+   - Order columns by query filter frequency (max 4 columns)
+
+2. **Create clustered table**
+   ```sql
+   -- Option A: Create new table with clustering
+   CREATE TABLE `project.dataset.table_clustered`
+   CLUSTER BY column1, column2, column3
+   AS SELECT * FROM `project.dataset.table_original`
+
+   -- Option B: Copy to new table
+   bq mk --table \\
+     --clustering_fields=column1,column2,column3 \\
+     project:dataset.table_clustered
+
+   bq cp project:dataset.table_original project:dataset.table_clustered
+   ```
+
+3. **Validate query performance**
+   - Run test queries and compare bytes scanned
+   - Verify cost reduction in query execution details
+   - Update application to use new table name
+
+"""
+
+        if "partitioning" in rec_types:
+            guidance += """### Adding Partitioning
+
+For tables that would benefit from partitioning:
+
+1. **Choose partition column**
+   - Prefer DATE or TIMESTAMP columns
+   - Select column frequently used in WHERE clauses
+   - Consider data distribution (avoid skewed partitions)
+
+2. **Create partitioned table**
+   ```sql
+   -- Daily partitioning example
+   CREATE TABLE `project.dataset.table_partitioned`
+   PARTITION BY DATE(timestamp_column)
+   AS SELECT * FROM `project.dataset.table_original`
+   ```
+
+3. **Verify partition pruning**
+   - Add partition filter to queries (WHERE DATE(timestamp_column) = '2024-01-01')
+   - Check query execution details for partition pruning
+   - Compare bytes scanned before/after
+
+"""
+
+        if "queries" in rec_types:
+            guidance += """### Materializing Repeated Queries
+
+For frequently-run expensive queries:
+
+1. **Create materialized view or scheduled query**
+   ```sql
+   -- Option A: Materialized view (auto-refresh)
+   CREATE MATERIALIZED VIEW `project.dataset.mv_name`
+   AS
+   SELECT ... FROM ...
+
+   -- Option B: Scheduled table update
+   -- Set up via Cloud Console > Scheduled Queries
+   ```
+
+2. **Update application queries**
+   - Replace original query with simple SELECT from materialized view
+   - Test query performance improvement
+   - Monitor view refresh costs vs. query savings
+
+3. **Configure refresh schedule**
+   - Balance freshness requirements vs. refresh costs
+   - Consider incremental updates for large datasets
+
+"""
+
+        if "temporal" in rec_types:
+            guidance += """### Archiving Old Data
+
+For tables with historical data that's rarely accessed:
+
+1. **Identify data to archive**
+   - Determine cutoff date based on business requirements
+   - Separate active vs. historical data
+
+2. **Export to Cloud Storage**
+   ```bash
+   # Export old data to cheaper storage
+   bq extract \\
+     --destination_format=PARQUET \\
+     'project:dataset.table_name$20230101-20231231' \\
+     gs://bucket/archive/table_name_2023_*.parquet
+   ```
+
+3. **Delete archived data**
+   ```sql
+   -- For partitioned tables
+   DELETE FROM `project.dataset.table_name`
+   WHERE DATE(partition_column) < '2024-01-01'
+   ```
+
+4. **Document archive location**
+   - Maintain inventory of archived data
+   - Document restore procedure if needed
+
+"""
+
+        # Add general footer
+        guidance += """### Need Help?
+
+- **BigQuery Documentation**: [Best Practices](https://cloud.google.com/bigquery/docs/best-practices)
+- **Cost Optimization**: [Controlling Costs](https://cloud.google.com/bigquery/docs/best-practices-costs)
+- **Table Management**: [Managing Tables](https://cloud.google.com/bigquery/docs/managing-tables)
 
 """
         return guidance
@@ -474,8 +720,9 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
                 )
         else:
             # Default behavior - use output_dir (legacy) or cwd
-            date_str = self.timestamp.strftime("%Y-%m-%d")
-            filename = f"audit-report-{date_str}.md"
+            # Include full timestamp to avoid naming conflicts
+            timestamp_str = self.timestamp.strftime("%Y-%m-%d-%H%M%S")
+            filename = f"audit-report-{timestamp_str}.md"
 
             if output_dir is None:
                 output_dir = current_dir

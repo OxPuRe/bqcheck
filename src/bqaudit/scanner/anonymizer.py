@@ -1,23 +1,23 @@
 """
-Client-side SHA-256 anonymization for BigQuery metadata.
+Client-side AES encryption for BigQuery metadata anonymization.
 
 This module provides PRIVACY-CRITICAL functions for anonymizing sensitive
-identifiers (table names, dataset names, queries) using SHA-256 hashing.
+identifiers (table names, dataset names, queries) using AES-256 encryption.
 
 Privacy-by-Design Guarantees:
-- All hashing occurs client-side before transmission
-- SHA-256 irreversibility prevents reverse-engineering
-- Deterministic hashing preserves cardinality within scan
+- All encryption occurs client-side before transmission
+- AES-256 with deterministic nonces for grouping/deduplication
+- Client-side decryption enables human-readable reports
 - No raw identifiers leave the user's environment
+- Server operates on encrypted data only
 
 Coverage Target: >90% (CRITICAL - privacy code must be thoroughly tested)
 """
 
-import hashlib
 import re
-import secrets
 from typing import Any, Dict, List, Optional
 
+from bqaudit.scanner.encryption import IdentifierEncryptor
 from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 
 # Public API
@@ -39,33 +39,27 @@ MAX_DATASET_NAME_LENGTH = 1024
 MAX_PROJECT_ID_LENGTH = 1024
 
 
-def _validate_salt(salt: str) -> None:
+def _validate_encryption_key(encryption_key: bytes) -> None:
     """
-    Validate salt format and length.
+    Validate encryption key format and length.
 
-    PRIVACY-CRITICAL: Ensures salt is cryptographically strong (32 hex chars).
-    Weak or malformed salts compromise anonymization security.
+    PRIVACY-CRITICAL: Ensures encryption key is valid for AES-256 (32 bytes).
+    Invalid keys compromise anonymization security.
 
     Args:
-        salt: Salt to validate
+        encryption_key: Encryption key to validate
 
     Raises:
-        TypeError: If salt is not a string
-        ValueError: If salt is not exactly 32 hex characters
+        TypeError: If encryption_key is not bytes
+        ValueError: If encryption_key is not exactly 32 bytes
     """
-    if not isinstance(salt, str):
-        raise TypeError(f"Salt must be string, got {type(salt).__name__}")
+    if not isinstance(encryption_key, bytes):
+        raise TypeError(f"Encryption key must be bytes, got {type(encryption_key).__name__}")
 
-    if len(salt) != 32:
+    if len(encryption_key) != 32:
         raise ValueError(
-            f"Salt must be exactly 32 characters (got {len(salt)}). "
-            "Use generate_salt() to create a valid salt."
-        )
-
-    if not all(c in "0123456789abcdef" for c in salt):
-        raise ValueError(
-            "Salt must contain only hexadecimal characters (0-9, a-f). "
-            "Use generate_salt() to create a valid salt."
+            f"Encryption key must be exactly 32 bytes (got {len(encryption_key)}). "
+            "Load from credentials or use IdentifierEncryptor.generate_key()."
         )
 
 
@@ -96,146 +90,140 @@ def _validate_identifier(
 
 def generate_salt() -> str:
     """
-    Generate cryptographically secure random salt for anonymization.
+    Deprecated: Generate encryption key (backward compatibility stub).
 
-    Uses secrets module (cryptographically strong random number generator)
-    to generate a 32-character hexadecimal salt. This salt should be
-    generated once per scan session and used consistently for all
-    anonymization operations within that scan.
+    This function is deprecated and exists only for backward compatibility.
+    Use encryption keys from credentials instead.
+
+    The encryption key should be loaded from ~/.bqaudit/credentials.json
+    (encryption_key field) rather than generated per-scan.
 
     Returns:
-        32-character hex string (16 random bytes = 128 bits of randomness)
-
-    Example:
-        >>> salt = generate_salt()
-        >>> len(salt)
-        32
-        >>> all(c in '0123456789abcdef' for c in salt)
-        True
+        Empty string (placeholder for backward compatibility)
 
     Privacy Note:
-        Salt is generated per-scan and destroyed after anonymized payload
-        is created. It is NEVER transmitted to the server.
+        Encryption keys are stored in credentials and persisted across scans,
+        allowing client-side decryption of identifiers in reports.
     """
-    return secrets.token_hex(16)
+    # Deprecated: encryption keys come from credentials now
+    # Return empty string for backward compatibility
+    return ""
 
 
-def anonymize_table_name(name: str, salt: str) -> str:
+def anonymize_table_name(name: str, encryption_key: bytes) -> str:
     """
-    Anonymize table name using SHA-256 hash.
+    Anonymize table name using AES-256 encryption.
 
-    PRIVACY-CRITICAL: This function hashes table names to prevent raw data
-    identifiers from leaving the user's environment. The hash is deterministic
-    (same input + same salt → same hash) to preserve cardinality within a scan.
+    PRIVACY-CRITICAL: This function encrypts table names to prevent raw data
+    identifiers from leaving the user's environment. The encryption is deterministic
+    (same input + same key → same ciphertext) to preserve cardinality within scans.
 
     Args:
         name: Raw table name (e.g., "users_2024", "events", "payments")
-        salt: 32-character hex salt from generate_salt()
+        encryption_key: 32-byte AES-256 encryption key from credentials
 
     Returns:
-        64-character hex hash (SHA-256 digest)
+        Base64-encoded ciphertext (URL-safe, deterministic)
 
     Raises:
-        TypeError: If name or salt is not a string
-        ValueError: If table name is empty, too long, or salt is invalid
+        TypeError: If name is not string or encryption_key is not bytes
+        ValueError: If table name is empty, too long, or encryption_key is invalid
 
     Example:
-        >>> salt = "a3f8c9e1b2d4c5e7a9f8b2d4c5e7a9f8"
-        >>> hash1 = anonymize_table_name("users", salt)
-        >>> len(hash1)
-        64
-        >>> hash2 = anonymize_table_name("users", salt)
-        >>> hash1 == hash2  # Deterministic
+        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> key = IdentifierEncryptor.generate_key()
+        >>> enc1 = anonymize_table_name("users", key)
+        >>> enc2 = anonymize_table_name("users", key)
+        >>> enc1 == enc2  # Deterministic
         True
 
     Privacy Note:
-        SHA-256 is cryptographically secure and collision-resistant.
-        The hash cannot be reversed to recover the original table name.
-        Type prefix prevents correlation with dataset/project hashes.
+        AES-256 with deterministic nonces allows server-side grouping while
+        enabling client-side decryption for human-readable reports.
+        Context "table" prevents correlation with dataset/project encryption.
     """
     _validate_identifier(name, "Table name", MAX_TABLE_NAME_LENGTH)
-    _validate_salt(salt)
+    _validate_encryption_key(encryption_key)
 
-    # Add type prefix to prevent hash correlation across identifier types
-    combined = f"TABLE:{name}:{salt}"
-    return hashlib.sha256(combined.encode("utf-8")).hexdigest()
+    encryptor = IdentifierEncryptor(encryption_key)
+    return encryptor.encrypt_with_nonce(name, context="table")
 
 
-def anonymize_dataset_name(name: str, salt: str) -> str:
+def anonymize_dataset_name(name: str, encryption_key: bytes) -> str:
     """
-    Anonymize dataset name using SHA-256 hash.
+    Anonymize dataset name using AES-256 encryption.
 
-    PRIVACY-CRITICAL: This function hashes dataset names using the same
-    SHA-256 pattern as table names. Dataset and table anonymization use
-    the same hashing logic to ensure consistency.
+    PRIVACY-CRITICAL: This function encrypts dataset names using the same
+    AES-256 pattern as table names. Dataset and table anonymization use
+    different contexts to prevent correlation.
 
     Args:
         name: Raw dataset name (e.g., "analytics", "production", "staging")
-        salt: 32-character hex salt from generate_salt()
+        encryption_key: 32-byte AES-256 encryption key from credentials
 
     Returns:
-        64-character hex hash (SHA-256 digest)
+        Base64-encoded ciphertext (URL-safe, deterministic)
 
     Raises:
-        TypeError: If name or salt is not a string
-        ValueError: If dataset name is empty, too long, or salt is invalid
+        TypeError: If name is not string or encryption_key is not bytes
+        ValueError: If dataset name is empty, too long, or encryption_key is invalid
 
     Example:
-        >>> salt = generate_salt()
-        >>> hash1 = anonymize_dataset_name("analytics", salt)
-        >>> len(hash1)
-        64
+        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> key = IdentifierEncryptor.generate_key()
+        >>> enc1 = anonymize_dataset_name("analytics", key)
+        >>> len(enc1) > 0
+        True
 
     Privacy Note:
         Dataset names are treated with the same privacy guarantees as
-        table names. All identifiers are hashed client-side.
-        Type prefix prevents correlation with table/project hashes.
+        table names. All identifiers are encrypted client-side.
+        Context "dataset" prevents correlation with table/project encryption.
     """
     _validate_identifier(name, "Dataset name", MAX_DATASET_NAME_LENGTH)
-    _validate_salt(salt)
+    _validate_encryption_key(encryption_key)
 
-    # Add type prefix to prevent hash correlation across identifier types
-    combined = f"DATASET:{name}:{salt}"
-    return hashlib.sha256(combined.encode("utf-8")).hexdigest()
+    encryptor = IdentifierEncryptor(encryption_key)
+    return encryptor.encrypt_with_nonce(name, context="dataset")
 
 
-def anonymize_project_id(project_id: str, salt: str) -> str:
+def anonymize_project_id(project_id: str, encryption_key: bytes) -> str:
     """
-    Anonymize GCP project ID using SHA-256 hash.
+    Anonymize GCP project ID using AES-256 encryption.
 
-    PRIVACY-CRITICAL: This function hashes project IDs to prevent exposing
+    PRIVACY-CRITICAL: This function encrypts project IDs to prevent exposing
     GCP project information. Project IDs can reveal organizational structure
-    and naming conventions, so they are anonymized using the same SHA-256
+    and naming conventions, so they are anonymized using the same AES-256
     pattern as table/dataset names.
 
     Args:
         project_id: Raw GCP project ID (e.g., "my-prod-project-123")
-        salt: 32-character hex salt from generate_salt()
+        encryption_key: 32-byte AES-256 encryption key from credentials
 
     Returns:
-        64-character hex hash (SHA-256 digest)
+        Base64-encoded ciphertext (URL-safe, deterministic)
 
     Raises:
-        TypeError: If project_id or salt is not a string
-        ValueError: If project ID is empty, too long, or salt is invalid
+        TypeError: If project_id is not string or encryption_key is not bytes
+        ValueError: If project ID is empty, too long, or encryption_key is invalid
 
     Example:
-        >>> salt = generate_salt()
-        >>> hash1 = anonymize_project_id("echo-analytics-prod", salt)
-        >>> len(hash1)
-        64
+        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> key = IdentifierEncryptor.generate_key()
+        >>> enc1 = anonymize_project_id("echo-analytics-prod", key)
+        >>> len(enc1) > 0
+        True
 
     Privacy Note:
         Project IDs are particularly sensitive as they can reveal
-        organizational structure. Always hash before transmission.
-        Type prefix prevents correlation with table/dataset hashes.
+        organizational structure. Always encrypt before transmission.
+        Context "project" prevents correlation with table/dataset encryption.
     """
     _validate_identifier(project_id, "Project ID", MAX_PROJECT_ID_LENGTH)
-    _validate_salt(salt)
+    _validate_encryption_key(encryption_key)
 
-    # Add type prefix to prevent hash correlation across identifier types
-    combined = f"PROJECT:{project_id}:{salt}"
-    return hashlib.sha256(combined.encode("utf-8")).hexdigest()
+    encryptor = IdentifierEncryptor(encryption_key)
+    return encryptor.encrypt_with_nonce(project_id, context="project")
 
 
 def _extract_table_references(query: str) -> List[str]:
@@ -323,25 +311,26 @@ def _replace_table_reference(query: str, original: str, hashed: str) -> str:
     return query
 
 
-def anonymize_query_pattern(query: Optional[str], salt: str) -> str:
+def anonymize_query_pattern(query: Optional[str], encryption_key: bytes) -> str:
     """
-    Anonymize table references in SQL query pattern.
+    Anonymize table references in SQL query pattern using AES encryption.
 
     PRIVACY-CRITICAL: This function extracts table references from SQL queries
-    and replaces them with SHA-256 hashed versions. Preserves SQL structure
+    and replaces them with encrypted versions. Preserves SQL structure
     while anonymizing all table identifiers.
 
     Args:
         query: SQL query string (can be None or empty)
-        salt: 32-character hex salt from generate_salt()
+        encryption_key: 32-byte AES-256 encryption key from credentials
 
     Returns:
-        Anonymized query string with hashed table references
+        Anonymized query string with encrypted table references
 
     Example:
-        >>> salt = generate_salt()
+        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> key = IdentifierEncryptor.generate_key()
         >>> query = "SELECT * FROM project.dataset.table"
-        >>> anonymized = anonymize_query_pattern(query, salt)
+        >>> anonymized = anonymize_query_pattern(query, key)
         >>> "project.dataset.table" in anonymized
         False
         >>> "SELECT * FROM" in anonymized
@@ -349,7 +338,7 @@ def anonymize_query_pattern(query: Optional[str], salt: str) -> str:
 
     Privacy Note:
         Query text contains sensitive table references that reveal data
-        structure. All table identifiers are hashed before transmission.
+        structure. All table identifiers are encrypted before transmission.
         SQL structure (SELECT, WHERE, etc.) is preserved for pattern analysis.
     """
     # Handle NULL/None/empty queries
@@ -363,7 +352,7 @@ def anonymize_query_pattern(query: Optional[str], salt: str) -> str:
     if not table_refs:
         return query
 
-    # Anonymize each table reference
+    # Encrypt each table reference
     anonymized_query = query
     for table_ref in table_refs:
         # Split table reference into components (project.dataset.table or dataset.table)
@@ -371,45 +360,46 @@ def anonymize_query_pattern(query: Optional[str], salt: str) -> str:
 
         if len(parts) == 3:
             # Full reference: project.dataset.table
-            project_hash = anonymize_project_id(parts[0], salt)
-            dataset_hash = anonymize_dataset_name(parts[1], salt)
-            table_hash = anonymize_table_name(parts[2], salt)
-            hashed_ref = f"{project_hash}.{dataset_hash}.{table_hash}"
+            project_encrypted = anonymize_project_id(parts[0], encryption_key)
+            dataset_encrypted = anonymize_dataset_name(parts[1], encryption_key)
+            table_encrypted = anonymize_table_name(parts[2], encryption_key)
+            encrypted_ref = f"{project_encrypted}.{dataset_encrypted}.{table_encrypted}"
         elif len(parts) == 2:
             # Short reference: dataset.table
-            dataset_hash = anonymize_dataset_name(parts[0], salt)
-            table_hash = anonymize_table_name(parts[1], salt)
-            hashed_ref = f"{dataset_hash}.{table_hash}"
+            dataset_encrypted = anonymize_dataset_name(parts[0], encryption_key)
+            table_encrypted = anonymize_table_name(parts[1], encryption_key)
+            encrypted_ref = f"{dataset_encrypted}.{table_encrypted}"
         else:
             # Single identifier (shouldn't happen with regex pattern, but handle it)
-            table_hash = anonymize_table_name(parts[0], salt)
-            hashed_ref = table_hash
+            table_encrypted = anonymize_table_name(parts[0], encryption_key)
+            encrypted_ref = table_encrypted
 
-        # Replace original reference with hashed version
+        # Replace original reference with encrypted version
         anonymized_query = _replace_table_reference(
-            anonymized_query, table_ref, hashed_ref
+            anonymized_query, table_ref, encrypted_ref
         )
 
     return anonymized_query
 
 
-def anonymize_metadata(metadata_dict: Dict[str, Any], salt: str) -> Dict[str, Any]:
+def anonymize_metadata(metadata_dict: Dict[str, Any], encryption_key: bytes) -> Dict[str, Any]:
     """
-    Anonymize sensitive fields in metadata dictionary.
+    Anonymize sensitive fields in metadata dictionary using AES encryption.
 
-    This function anonymizes table_catalog (project ID), table_schema
+    This function encrypts table_catalog (project ID), table_schema
     (dataset name), and table_name fields while preserving all other
     metadata fields (size_bytes, row_count, creation_time, etc.).
 
     Args:
         metadata_dict: Metadata dictionary with sensitive fields
-        salt: 32-character hex salt from generate_salt()
+        encryption_key: 32-byte AES-256 encryption key from credentials
 
     Returns:
-        New dictionary with anonymized sensitive fields
+        New dictionary with encrypted sensitive fields
 
     Example:
-        >>> salt = generate_salt()
+        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> key = IdentifierEncryptor.generate_key()
         >>> metadata = {
         ...     "table_catalog": "my-project",
         ...     "table_schema": "analytics",
@@ -417,14 +407,14 @@ def anonymize_metadata(metadata_dict: Dict[str, Any], salt: str) -> Dict[str, An
         ...     "size_bytes": 1073741824,
         ...     "row_count": 1000000
         ... }
-        >>> anonymized = anonymize_metadata(metadata, salt)
-        >>> len(anonymized["table_catalog"])
-        64
+        >>> anonymized = anonymize_metadata(metadata, key)
+        >>> len(anonymized["table_catalog"]) > 0
+        True
         >>> anonymized["size_bytes"]  # Non-sensitive fields preserved
         1073741824
 
     Privacy Note:
-        Only sensitive identifier fields are anonymized. Metadata values
+        Only sensitive identifier fields are encrypted. Metadata values
         (sizes, counts, timestamps) are preserved as-is.
 
         SECURITY: Whitelists known safe fields to prevent leaking extra
@@ -465,31 +455,31 @@ def anonymize_metadata(metadata_dict: Dict[str, Any], salt: str) -> Dict[str, An
 
     anonymized: Dict[str, Any] = {}
 
-    # Anonymize sensitive identifier fields if present
+    # Encrypt sensitive identifier fields if present
     if "table_catalog" in metadata_dict:
         anonymized["table_catalog"] = anonymize_project_id(
-            metadata_dict["table_catalog"], salt
+            metadata_dict["table_catalog"], encryption_key
         )
 
     if "table_schema" in metadata_dict:
         anonymized["table_schema"] = anonymize_dataset_name(
-            metadata_dict["table_schema"], salt
+            metadata_dict["table_schema"], encryption_key
         )
 
     if "table_name" in metadata_dict:
         anonymized["table_name"] = anonymize_table_name(
-            metadata_dict["table_name"], salt
+            metadata_dict["table_name"], encryption_key
         )
 
-    # Anonymize table_id field (format: "dataset.table") if present
+    # Encrypt table_id field (format: "dataset.table") if present
     if "table_id" in metadata_dict:
         table_id = metadata_dict["table_id"]
         if table_id and "." in table_id:
-            # Split "dataset.table" and anonymize each part
+            # Split "dataset.table" and encrypt each part
             parts = table_id.split(".", 1)  # Split on first dot only
-            dataset_hash = anonymize_dataset_name(parts[0], salt)
-            table_hash = anonymize_table_name(parts[1], salt)
-            anonymized["table_id"] = f"{dataset_hash}.{table_hash}"
+            dataset_encrypted = anonymize_dataset_name(parts[0], encryption_key)
+            table_encrypted = anonymize_table_name(parts[1], encryption_key)
+            anonymized["table_id"] = f"{dataset_encrypted}.{table_encrypted}"
         else:
             # If table_id doesn't have expected format, keep as-is (shouldn't happen)
             anonymized["table_id"] = table_id
@@ -595,24 +585,25 @@ def merge_table_metadata(
 
 
 def anonymize_table_list(
-    tables: List[TableMetadata], salt: str
+    tables: List[TableMetadata], encryption_key: bytes
 ) -> List[Dict[str, Any]]:
     """
-    Anonymize list of TableMetadata objects.
+    Anonymize list of TableMetadata objects using AES encryption.
 
-    Converts Pydantic TableMetadata models to dictionaries and anonymizes
+    Converts Pydantic TableMetadata models to dictionaries and encrypts
     all sensitive fields (table_catalog, table_schema, table_name) while
     preserving metadata values (size_bytes, row_count, timestamps, etc.).
 
     Args:
         tables: List of TableMetadata Pydantic models
-        salt: 32-character hex salt from generate_salt()
+        encryption_key: 32-byte AES-256 encryption key from credentials
 
     Returns:
         List of anonymized dictionaries
 
     Example:
         >>> from bqaudit.scanner.models import TableMetadata
+        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
         >>> tables = [
         ...     TableMetadata(
         ...         table_catalog="my-project",
@@ -624,16 +615,16 @@ def anonymize_table_list(
         ...         row_count=1000000
         ...     )
         ... ]
-        >>> salt = generate_salt()
-        >>> anonymized = anonymize_table_list(tables, salt)
-        >>> len(anonymized[0]["table_name"])
-        64
+        >>> key = IdentifierEncryptor.generate_key()
+        >>> anonymized = anonymize_table_list(tables, key)
+        >>> len(anonymized[0]["table_name"]) > 0
+        True
         >>> anonymized[0]["size_bytes"]
         1073741824
 
     Privacy Note:
         This is the primary function for anonymizing table metadata batches.
-        All table identifiers are hashed before transmission to server.
+        All table identifiers are encrypted before transmission to server.
     """
     anonymized_tables = []
 
@@ -641,8 +632,8 @@ def anonymize_table_list(
         # Convert Pydantic model to dict
         table_dict = table.model_dump()
 
-        # Anonymize sensitive fields
-        anonymized_dict = anonymize_metadata(table_dict, salt)
+        # Encrypt sensitive fields
+        anonymized_dict = anonymize_metadata(table_dict, encryption_key)
 
         anonymized_tables.append(anonymized_dict)
 
@@ -650,23 +641,24 @@ def anonymize_table_list(
 
 
 def anonymize_query_list(
-    queries: List[QueryMetadata], salt: str
+    queries: List[QueryMetadata], encryption_key: bytes
 ) -> List[Dict[str, Any]]:
     """
-    Anonymize list of QueryMetadata objects.
+    Anonymize list of QueryMetadata objects using AES encryption.
 
-    Converts Pydantic QueryMetadata models to dictionaries and anonymizes
-    query text by replacing table references with SHA-256 hashed versions.
+    Converts Pydantic QueryMetadata models to dictionaries and encrypts
+    query text by replacing table references with encrypted versions.
 
     Args:
         queries: List of QueryMetadata Pydantic models
-        salt: 32-character hex salt from generate_salt()
+        encryption_key: 32-byte AES-256 encryption key from credentials
 
     Returns:
-        List of anonymized dictionaries with query text table references hashed
+        List of anonymized dictionaries with query text table references encrypted
 
     Example:
         >>> from bqaudit.scanner.models import QueryMetadata
+        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
         >>> queries = [
         ...     QueryMetadata(
         ...         job_id="project:location.job_abc123",
@@ -677,8 +669,8 @@ def anonymize_query_list(
         ...         state="DONE"
         ...     )
         ... ]
-        >>> salt = generate_salt()
-        >>> anonymized = anonymize_query_list(queries, salt)
+        >>> key = IdentifierEncryptor.generate_key()
+        >>> anonymized = anonymize_query_list(queries, key)
         >>> len(anonymized)
         1
         >>> "dataset.table" in anonymized[0]["query"]
@@ -686,7 +678,7 @@ def anonymize_query_list(
 
     Privacy Note:
         Query text is anonymized using anonymize_query_pattern() which replaces
-        all table references (FROM/JOIN clauses) with SHA-256 hashes while
+        all table references (FROM/JOIN clauses) with encrypted versions while
         preserving SQL structure.
     """
     anonymized_queries = []
@@ -695,9 +687,9 @@ def anonymize_query_list(
         # Convert Pydantic model to dict
         query_dict = query.model_dump()
 
-        # Anonymize query text (table references)
+        # Encrypt query text (table references)
         if "query" in query_dict and query_dict["query"]:
-            query_dict["query"] = anonymize_query_pattern(query_dict["query"], salt)
+            query_dict["query"] = anonymize_query_pattern(query_dict["query"], encryption_key)
 
         anonymized_queries.append(query_dict)
 
@@ -705,24 +697,25 @@ def anonymize_query_list(
 
 
 def anonymize_access_patterns(
-    patterns: List[AccessPattern], salt: str
+    patterns: List[AccessPattern], encryption_key: bytes
 ) -> List[Dict[str, Any]]:
     """
-    Anonymize list of AccessPattern objects.
+    Anonymize list of AccessPattern objects using AES encryption.
 
-    Converts Pydantic AccessPattern models to dictionaries and anonymizes
+    Converts Pydantic AccessPattern models to dictionaries and encrypts
     sensitive fields (table_catalog, table_schema, table_name) while
     preserving last_modified_time metadata.
 
     Args:
         patterns: List of AccessPattern Pydantic models
-        salt: 32-character hex salt from generate_salt()
+        encryption_key: 32-byte AES-256 encryption key from credentials
 
     Returns:
         List of anonymized dictionaries
 
     Example:
         >>> from bqaudit.scanner.models import AccessPattern
+        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
         >>> patterns = [
         ...     AccessPattern(
         ...         table_catalog="my-project",
@@ -731,14 +724,14 @@ def anonymize_access_patterns(
         ...         last_modified_time="2024-01-20 10:30:00 UTC"
         ...     )
         ... ]
-        >>> salt = generate_salt()
-        >>> anonymized = anonymize_access_patterns(patterns, salt)
-        >>> len(anonymized[0]["table_name"])
-        64
+        >>> key = IdentifierEncryptor.generate_key()
+        >>> anonymized = anonymize_access_patterns(patterns, key)
+        >>> len(anonymized[0]["table_name"]) > 0
+        True
 
     Privacy Note:
         Access patterns reveal which tables are actively used. Table
-        identifiers are anonymized while preserving timestamps for
+        identifiers are encrypted while preserving timestamps for
         pattern analysis.
     """
     anonymized_patterns = []
@@ -747,8 +740,8 @@ def anonymize_access_patterns(
         # Convert Pydantic model to dict
         pattern_dict = pattern.model_dump()
 
-        # Anonymize sensitive fields
-        anonymized_dict = anonymize_metadata(pattern_dict, salt)
+        # Encrypt sensitive fields
+        anonymized_dict = anonymize_metadata(pattern_dict, encryption_key)
 
         anonymized_patterns.append(anonymized_dict)
 

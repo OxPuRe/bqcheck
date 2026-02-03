@@ -222,9 +222,18 @@ class ScanExecutor:
 
                 # Generate and save Markdown report (Story 5.2, 5.4)
                 from bqaudit.report_generator import MarkdownReportGenerator
+                from bqaudit.scanner.encryption import IdentifierEncryptor
+
+                # Load encryption key for report decryption
+                encryption_key_b64 = credentials.get("encryption_key")
+                encryption_key = None
+                if encryption_key_b64:
+                    encryption_key = IdentifierEncryptor.key_from_base64(encryption_key_b64)
 
                 generator = MarkdownReportGenerator(
-                    audit_response, project_name=project_id
+                    audit_response,
+                    project_name=project_id,
+                    encryption_key=encryption_key,  # Pass encryption key for decryption
                 )
                 report_path = generator.save_report(
                     output_path=output_path,
@@ -429,9 +438,9 @@ class ScanExecutor:
                 from bqaudit.scanner.anonymizer import (
                     anonymize_access_patterns,
                     anonymize_metadata,
-                    generate_salt,
                     merge_table_metadata,
                 )
+                from bqaudit.scanner.encryption import IdentifierEncryptor
                 from bqaudit.scanner.metadata_extractor import (
                     extract_access_patterns,
                     extract_query_metadata,
@@ -459,22 +468,30 @@ class ScanExecutor:
                 table_metadata, access_patterns, query_metadata, table_schemas
             )
 
-            # Generate cryptographic salt for anonymization (privacy-critical)
+            # Load encryption key from credentials for anonymization (privacy-critical)
             logger.info("Anonymizing metadata...")
-            salt = generate_salt()
+            credentials = CredentialStore.load()
+            encryption_key_b64 = credentials.get("encryption_key")
+            if not encryption_key_b64:
+                raise ValueError(
+                    "Encryption key not found in credentials. "
+                    "Please revoke and re-activate your license: "
+                    "bqaudit license revoke && bqaudit license activate <key>"
+                )
+            encryption_key = IdentifierEncryptor.key_from_base64(encryption_key_b64)
 
-            # Anonymize enriched tables (apply anonymize_metadata to each dict)
+            # Encrypt enriched tables (apply anonymize_metadata to each dict)
             anonymized_tables = [
-                anonymize_metadata(table_dict, salt) for table_dict in enriched_tables
+                anonymize_metadata(table_dict, encryption_key) for table_dict in enriched_tables
             ]
 
-            # Aggregate and anonymize queries (groups by pattern, calculates stats)
+            # Aggregate and encrypt queries (groups by pattern, calculates stats)
             aggregated_queries = aggregate_query_metadata(
-                query_metadata, salt, scan_days=90
+                query_metadata, encryption_key, scan_days=90
             )
 
-            # Anonymize access patterns
-            anonymized_patterns = anonymize_access_patterns(access_patterns, salt)
+            # Encrypt access patterns
+            anonymized_patterns = anonymize_access_patterns(access_patterns, encryption_key)
 
             # Convert Pydantic models to dicts and create validated AuditMetadata
             from bqaudit.api.models import AuditMetadata

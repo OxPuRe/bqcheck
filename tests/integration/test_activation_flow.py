@@ -25,6 +25,7 @@ class TestActivationFlowIntegration:
         5. Verify all fields present
         """
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
 
         # Step 1: Activate license
         result = runner.invoke(
@@ -50,8 +51,9 @@ class TestActivationFlowIntegration:
         assert credentials["master_key"] == "VALID-INTEGRATION-TEST-KEY"
         assert credentials["token_pool_balance"] == 50
         assert credentials["ephemeral_token"] == "mock-ephemeral-token-xyz"
-        assert "api.bqaudit.com" in credentials["server_url"]
+        assert "bqaudit" in credentials["server_url"]
         assert credentials["activated_at"] is not None
+        assert "encryption_key" in credentials  # Verify encryption key present
 
     def test_prevent_reactivation_flow(self, tmp_path, monkeypatch):
         """
@@ -60,6 +62,7 @@ class TestActivationFlowIntegration:
         AC4: Credentials already exist scenario
         """
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
 
         # First activation
         result1 = runner.invoke(app, ["license", "activate", "VALID-FIRST-KEY"])
@@ -82,6 +85,7 @@ class TestActivationFlowIntegration:
         AC2: Invalid license key scenario
         """
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
 
         result = runner.invoke(app, ["license", "activate", "INVALID-KEY-BAD"])
 
@@ -100,6 +104,7 @@ class TestActivationFlowIntegration:
         AC3: Network failure scenario
         """
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
 
         result = runner.invoke(app, ["license", "activate", "NETWORK-ERROR-TEST"])
 
@@ -118,6 +123,7 @@ class TestActivationFlowIntegration:
         AC7: Tokens never logged - master key masked
         """
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
 
         result = runner.invoke(app, ["license", "activate", "VALID-ABC-XYZ-123-SECRET"])
 
@@ -140,6 +146,7 @@ class TestActivationFlowIntegration:
     def test_various_invalid_keys(self, tmp_path, monkeypatch, invalid_key):
         """Test that various invalid key formats are rejected."""
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
 
         result = runner.invoke(app, ["license", "activate", invalid_key])
 

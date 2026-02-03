@@ -349,7 +349,7 @@ class TestDetailedRecommendations:
         assert "**Priority:**" in detailed
         assert "**Estimated Monthly Savings:**" in detailed
         assert "**Description:**" in detailed
-        assert "**Implementation Steps:**" in detailed
+        # Implementation Steps removed - guidance now in separate section
 
 
 class TestFileSaving:

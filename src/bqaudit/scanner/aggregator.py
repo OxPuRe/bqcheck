@@ -100,23 +100,23 @@ def _calculate_days_in_period(timestamps: List[str]) -> float:
 
 
 def aggregate_query_metadata(
-    queries: List[QueryMetadata], salt: str, scan_days: int = 90
+    queries: List[QueryMetadata], encryption_key: bytes, scan_days: int = 90
 ) -> List[Dict[str, Any]]:
     """
     Aggregate raw query metadata into pattern-based statistics.
 
-    Groups queries by anonymized pattern and calculates execution frequency
+    Groups queries by encrypted pattern and calculates execution frequency
     and byte statistics required by server detection algorithms.
 
     Args:
         queries: List of QueryMetadata objects from INFORMATION_SCHEMA.JOBS
-        salt: 32-character hex salt for anonymization
+        encryption_key: 32-byte AES-256 encryption key from credentials
         scan_days: Number of days in scan period (default: 90)
 
     Returns:
         List of aggregated query statistics dictionaries with fields:
-        - query_hash: SHA-256 hash of anonymized query pattern
-        - query_text: Anonymized query pattern (table refs hashed)
+        - query_hash: SHA-256 hash of encrypted query pattern
+        - query_text: Encrypted query pattern (table refs encrypted)
         - executions_per_day: Average daily execution count
         - bytes_per_execution: Average bytes processed per execution
         - total_bytes_processed: Total bytes across all executions
@@ -124,7 +124,7 @@ def aggregate_query_metadata(
 
     Example:
         >>> from bqaudit.scanner.models import QueryMetadata
-        >>> from bqaudit.scanner.anonymizer import generate_salt
+        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
         >>> queries = [
         ...     QueryMetadata(
         ...         job_id="project:us.job1",
@@ -143,8 +143,8 @@ def aggregate_query_metadata(
         ...         state="DONE"
         ...     ),
         ... ]
-        >>> salt = generate_salt()
-        >>> aggregated = aggregate_query_metadata(queries, salt)
+        >>> key = IdentifierEncryptor.generate_key()
+        >>> aggregated = aggregate_query_metadata(queries, key)
         >>> len(aggregated)
         1
         >>> aggregated[0]["executions_per_day"]  # 2 executions / actual days
@@ -162,11 +162,11 @@ def aggregate_query_metadata(
             logger.debug(f"Skipping query {query.job_id} - no query text")
             continue
 
-        # Anonymize query pattern (table references)
-        anonymized_query = anonymize_query_pattern(query.query, salt)
+        # Encrypt query pattern (table references)
+        encrypted_query = anonymize_query_pattern(query.query, encryption_key)
 
-        # Create pattern hash from anonymized query
-        pattern_hash = hashlib.sha256(anonymized_query.encode("utf-8")).hexdigest()
+        # Create pattern hash from encrypted query
+        pattern_hash = hashlib.sha256(encrypted_query.encode("utf-8")).hexdigest()
 
         # Group by pattern hash
         pattern_groups[pattern_hash].append(query)
@@ -187,8 +187,8 @@ def aggregate_query_metadata(
         days_in_period = _calculate_days_in_period(timestamps)
         executions_per_day = execution_count / days_in_period
 
-        # Get anonymized query text (same for all queries in group)
-        anonymized_query = anonymize_query_pattern(pattern_queries[0].query, salt)
+        # Get encrypted query text (same for all queries in group)
+        encrypted_query = anonymize_query_pattern(pattern_queries[0].query, encryption_key)
 
         # Find last execution time (most recent timestamp)
         try:
@@ -201,7 +201,7 @@ def aggregate_query_metadata(
         # Create aggregated entry
         aggregated_entry = {
             "query_hash": pattern_hash,
-            "query_text": anonymized_query,
+            "query_text": encrypted_query,
             "executions_per_day": executions_per_day,
             "bytes_per_execution": bytes_per_execution,
             "total_bytes_processed": total_bytes,
