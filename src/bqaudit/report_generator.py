@@ -173,6 +173,35 @@ class MarkdownReportGenerator:
         pattern = r"Query pattern ([a-f0-9]{64})\b"
         return re.sub(pattern, lambda m: f"Query pattern {truncate_hash(m)}", text)
 
+    def _extract_query_preview_from_steps(self, implementation_steps: list[str]) -> Optional[str]:
+        """
+        Extract query preview from implementation steps.
+
+        Looks for CREATE MATERIALIZED VIEW statements in implementation steps
+        and extracts a preview of the query.
+
+        Args:
+            implementation_steps: List of implementation step strings
+
+        Returns:
+            Query preview (first 300 chars) or None if not found
+        """
+        import re
+
+        for step in implementation_steps:
+            # Look for CREATE MATERIALIZED VIEW ... AS <query>
+            match = re.search(r"CREATE MATERIALIZED VIEW.*?AS\s+(.+)", step, re.IGNORECASE | re.DOTALL)
+            if match:
+                query = match.group(1).strip()
+                # Decrypt identifiers if encryption key available
+                decrypted_query = self._decrypt_identifiers_in_text(query)
+                # Return first 300 characters for preview
+                if len(decrypted_query) > 300:
+                    return decrypted_query[:300] + "..."
+                return decrypted_query
+
+        return None
+
     @staticmethod
     def _format_size_human_readable(text: str) -> str:
         """
@@ -499,6 +528,17 @@ Top high-priority optimizations for immediate impact:
             # Add source file reference if found (for query recommendations)
             if file_ref and rec.type == "queries":
                 detailed += f"""**Query Source:** `{file_ref}`
+
+"""
+
+            # Add query preview for query recommendations
+            if rec.type == "queries":
+                query_preview = self._extract_query_preview_from_steps(rec.implementation_steps)
+                if query_preview:
+                    detailed += f"""**Query Preview:**
+```sql
+{query_preview}
+```
 
 """
 

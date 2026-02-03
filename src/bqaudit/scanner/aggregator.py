@@ -99,6 +99,34 @@ def _calculate_days_in_period(timestamps: List[str]) -> float:
         return 1.0
 
 
+def _calculate_distinct_days(timestamps: List[str]) -> int:
+    """
+    Calculate the number of distinct calendar days in a list of timestamps.
+
+    This helps identify truly recurring queries vs one-off batches.
+    Example: 7 executions in 1 day = 1 distinct day (likely a one-off batch)
+             7 executions across 7 days = 7 distinct days (truly recurring)
+
+    Args:
+        timestamps: List of ISO format timestamp strings
+
+    Returns:
+        Number of distinct calendar days (minimum 1)
+    """
+    if not timestamps:
+        return 1
+
+    try:
+        datetimes = [_parse_iso_timestamp(ts) for ts in timestamps]
+        # Extract unique dates (ignoring time component)
+        unique_dates = set(dt.date() for dt in datetimes)
+        return len(unique_dates)
+
+    except ValueError as e:
+        logger.warning(f"Failed to parse timestamps: {e}. Using 1 day as fallback.")
+        return 1
+
+
 def aggregate_query_metadata(
     queries: List[QueryMetadata], encryption_key: bytes, scan_days: int = 90
 ) -> List[Dict[str, Any]]:
@@ -189,6 +217,9 @@ def aggregate_query_metadata(
         days_in_period = _calculate_days_in_period(timestamps)
         executions_per_day = execution_count / days_in_period
 
+        # Calculate distinct days to identify truly recurring patterns
+        distinct_days = _calculate_distinct_days(timestamps)
+
         # Get encrypted query text (same for all queries in group)
         encrypted_query = anonymize_query_pattern(
             pattern_queries[0].query, encryption_key
@@ -212,6 +243,7 @@ def aggregate_query_metadata(
             "has_materialized_view": False,  # TODO: Detect materialized views in future
             "execution_count": execution_count,  # Total number of executions
             "days_in_period": days_in_period,  # Actual period of activity
+            "distinct_days": distinct_days,  # Number of distinct calendar days with executions
             "last_execution_time": last_execution,  # Most recent execution
         }
 
