@@ -7,7 +7,7 @@ optimal clustering column candidates.
 import logging
 import re
 from collections import defaultdict
-from typing import Dict, List
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def extract_filtered_columns(query: str) -> List[str]:
 
 
 def aggregate_filtered_columns_all_tables(
-    queries: List[Dict[str, any]],
+    queries: List[Dict[str, Any]],
 ) -> Dict[str, Dict[str, int]]:
     """
     Aggregate filtered columns for all tables in a single pass.
@@ -165,7 +165,7 @@ def aggregate_filtered_columns_all_tables(
 
 
 def aggregate_filtered_columns_by_table(
-    queries: List[Dict[str, any]], table_key: str
+    queries: List[Dict[str, Any]], table_key: str
 ) -> Dict[str, int]:
     """
     Aggregate filtered columns for a specific table from all queries.

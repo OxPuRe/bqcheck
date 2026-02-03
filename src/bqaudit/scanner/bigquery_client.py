@@ -1,5 +1,7 @@
 """BigQuery client authentication and initialization."""
 
+from typing import Optional
+
 from google.api_core.exceptions import Forbidden, NotFound
 from google.auth import default
 from google.auth.exceptions import DefaultCredentialsError
@@ -68,7 +70,7 @@ def authenticate_bigquery(project_id: str) -> bigquery.Client:
 
 
 def validate_multi_project_permissions(
-    storage_project: str, query_project: str | None = None
+    storage_project: str, query_project: Optional[str] = None
 ) -> None:
     """
     Validate BigQuery permissions for multi-project scan.

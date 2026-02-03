@@ -50,6 +50,7 @@ class MarkdownReportGenerator:
         self.encryption_key = encryption_key
 
         # Initialize encryptor if key provided
+        self.encryptor: Optional[IdentifierEncryptor]
         if encryption_key:
             self.encryptor = IdentifierEncryptor(encryption_key)
         else:
@@ -82,20 +83,21 @@ class MarkdownReportGenerator:
             # No encryption key - return original text
             return text
 
+        # Store encryptor in local variable for type narrowing
+        encryptor = self.encryptor
+
         # Pattern 1: Match "dataset.table" format (encrypted pairs)
         # Base64url chars: A-Za-z0-9_-
         pattern_pair = r"\b([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\b"
 
-        def decrypt_pair(match):
+        def decrypt_pair(match: re.Match[str]) -> str:
             encrypted_dataset = match.group(1)
             encrypted_table = match.group(2)
 
             try:
                 # Try to decrypt both parts
-                dataset = self.encryptor.decrypt_with_nonce(
-                    encrypted_dataset, "dataset"
-                )
-                table = self.encryptor.decrypt_with_nonce(encrypted_table, "table")
+                dataset = encryptor.decrypt_with_nonce(encrypted_dataset, "dataset")
+                table = encryptor.decrypt_with_nonce(encrypted_table, "table")
                 # Successfully decrypted - return decrypted version
                 return f"{dataset}.{table}"
             except (ValueError, Exception):
@@ -113,19 +115,19 @@ class MarkdownReportGenerator:
             r"(?<=[\s\.])([A-Za-z0-9_-]{30,})(?=\s|$|\)|\,|&&|\||\.(?!\w))"
         )
 
-        def decrypt_standalone(match):
+        def decrypt_standalone(match: re.Match[str]) -> str:
             encrypted = match.group(1)
 
             # Try to decrypt as table name first (most common in implementation steps)
             try:
-                table = self.encryptor.decrypt_with_nonce(encrypted, "table")
+                table = encryptor.decrypt_with_nonce(encrypted, "table")
                 return table
             except (ValueError, Exception):
                 pass
 
             # Try dataset if table failed
             try:
-                dataset = self.encryptor.decrypt_with_nonce(encrypted, "dataset")
+                dataset = encryptor.decrypt_with_nonce(encrypted, "dataset")
                 return dataset
             except (ValueError, Exception):
                 pass
@@ -139,23 +141,25 @@ class MarkdownReportGenerator:
         return text
 
     @staticmethod
-    def _clean_title(title: str) -> str:
+    def _clean_title(title: Optional[str]) -> str:
         """
         Clean recommendation title by rounding decimals.
 
         Args:
-            title: Raw title from server
+            title: Raw title from server (may be None)
 
         Returns:
-            Cleaned title with rounded decimals
+            Cleaned title with rounded decimals, or "Untitled" if None
 
         Example:
             >>> _clean_title("Materialize repeated query (6.048781288508676/day)")
             "Materialize repeated query (6.0/day)"
         """
+        if title is None:
+            return "Untitled"
 
         # Round decimals like "6.048781288508676/day" -> "6.0/day"
-        def round_decimal(match):
+        def round_decimal(match: re.Match[str]) -> str:
             value = float(match.group(1))
             # Round to 1 decimal place
             return f"{value:.1f}/{match.group(2)}"
