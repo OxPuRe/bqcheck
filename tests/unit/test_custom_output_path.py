@@ -81,7 +81,9 @@ def mock_bigquery_scan():
                             "bqaudit.scanner.metadata_extractor.extract_table_schemas",
                             return_value={},
                         ):
-                            with patch("httpx.AsyncClient", return_value=mock_async_client):
+                            with patch(
+                                "httpx.AsyncClient", return_value=mock_async_client
+                            ):
                                 yield
 
 

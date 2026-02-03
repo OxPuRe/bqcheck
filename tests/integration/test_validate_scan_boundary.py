@@ -154,7 +154,9 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
             "bqaudit.scanner.bigquery_client.authenticate_bigquery",
             return_value=mock_bq_client,
         ):
-            with patch("bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client):
+            with patch(
+                "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
+            ):
                 with patch(
                     "bqaudit.scanner.metadata_extractor.extract_table_metadata",
                     return_value=[],
@@ -180,17 +182,17 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
                                     )
 
                                     # ASSERT 1: Validate doesn't fail due to token issues
-                                    assert (
-                                        validate_result.exit_code != 4
-                                    ), "Validate should not check token balance"
+                                    assert validate_result.exit_code != 4, (
+                                        "Validate should not check token balance"
+                                    )
 
                                     # Verify balance unchanged (validate doesn't consume)
                                     creds_after_validate = json.loads(
                                         mock_creds_path.read_text()
                                     )
-                                    assert creds_after_validate["token_pool_balance"] == 5, (
-                                        "Validate should not consume tokens"
-                                    )
+                                    assert (
+                                        creds_after_validate["token_pool_balance"] == 5
+                                    ), "Validate should not consume tokens"
 
                                     # ACT 2: Run scan (should succeed and consume 1 token)
                                     scan_result = runner.invoke(
@@ -205,7 +207,9 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
                                     )
 
                                     # Verify balance decremented by 1
-                                    creds_after_scan = json.loads(mock_creds_path.read_text())
-                                    assert creds_after_scan["token_pool_balance"] == 4, (
-                                        "Scan should consume exactly 1 token"
+                                    creds_after_scan = json.loads(
+                                        mock_creds_path.read_text()
                                     )
+                                    assert (
+                                        creds_after_scan["token_pool_balance"] == 4
+                                    ), "Scan should consume exactly 1 token"

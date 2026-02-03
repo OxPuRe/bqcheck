@@ -105,7 +105,9 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
         "bqaudit.scanner.bigquery_client.authenticate_bigquery",
         return_value=mock_bq_client,
     ):
-        with patch("bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client):
+        with patch(
+            "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
+        ):
             with patch(
                 "bqaudit.scanner.metadata_extractor.extract_table_metadata",
                 return_value=[],
@@ -126,7 +128,9 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
                                 "httpx.AsyncClient", return_value=mock_async_client
                             ):
                                 # Act 1: Use last token
-                                result1 = runner.invoke(app, ["scan", "--project", "test-project"])
+                                result1 = runner.invoke(
+                                    app, ["scan", "--project", "test-project"]
+                                )
 
                                 # Assert 1: Scan succeeded with warning
                                 assert result1.exit_code == 0
@@ -138,7 +142,9 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
                                 assert updated_creds["token_pool_balance"] == 0
 
                                 # Act 2: Try to scan again
-                                result2 = runner.invoke(app, ["scan", "--project", "test-project"])
+                                result2 = runner.invoke(
+                                    app, ["scan", "--project", "test-project"]
+                                )
 
                                 # Assert 2: Scan prevented with exit code 4
                                 assert result2.exit_code == 4
@@ -149,7 +155,9 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
                                 # Act 3: Validate still attempts to run (doesn't check token balance)
                                 # Note: validate will likely fail due to actual BigQuery API calls,
                                 # but the key is that it doesn't fail with exit code 4 (token depletion)
-                                result3 = runner.invoke(app, ["validate", "--project", "test-project"])
+                                result3 = runner.invoke(
+                                    app, ["validate", "--project", "test-project"]
+                                )
 
                                 # Assert 3: Validation doesn't fail due to token balance check
                                 # The critical test is that it doesn't show "Token pool depleted" error
