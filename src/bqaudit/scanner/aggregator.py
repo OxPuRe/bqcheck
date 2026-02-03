@@ -225,13 +225,23 @@ def aggregate_query_metadata(
             pattern_queries[0].query, encryption_key
         )
 
-        # Find last execution time (most recent timestamp)
+        # Find last execution time (most recent timestamp) and get the most recent job ID
         try:
+            # Parse timestamps and sort queries by time (most recent first)
             datetimes = [_parse_iso_timestamp(ts) for ts in timestamps]
             last_execution = max(datetimes).isoformat()
+
+            # Sort queries by timestamp to get most recent job
+            queries_with_time = list(zip(datetimes, pattern_queries))
+            queries_with_time.sort(key=lambda x: x[0], reverse=True)
+
+            # Get the most recent job ID for user reference
+            most_recent_job_id = queries_with_time[0][1].job_id
         except ValueError:
             # Fallback to first timestamp if parsing fails
             last_execution = timestamps[0]
+            # Use first job ID
+            most_recent_job_id = pattern_queries[0].job_id
 
         # Create aggregated entry
         aggregated_entry = {
@@ -245,6 +255,7 @@ def aggregate_query_metadata(
             "days_in_period": days_in_period,  # Actual period of activity
             "distinct_days": distinct_days,  # Number of distinct calendar days with executions
             "last_execution_time": last_execution,  # Most recent execution
+            "most_recent_job_id": most_recent_job_id,  # Most recent job ID for user reference in BigQuery Console
         }
 
         aggregated_queries.append(aggregated_entry)

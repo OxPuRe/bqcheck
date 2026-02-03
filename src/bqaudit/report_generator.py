@@ -203,6 +203,59 @@ class MarkdownReportGenerator:
         return None
 
     @staticmethod
+    def _extract_job_ids_from_steps(implementation_steps: list[str]) -> list[str]:
+        """
+        Extract BigQuery job IDs from implementation steps.
+
+        Looks for job ID references in implementation steps to help users
+        locate queries in BigQuery Console.
+
+        Args:
+            implementation_steps: List of implementation step strings
+
+        Returns:
+            List of job IDs found in implementation steps
+        """
+        import re
+
+        job_ids = []
+        for step in implementation_steps:
+            # Look for "Find query in BigQuery Console using job ID: xxx"
+            # Job ID format: project:location.job_abc123 or project.location.job_abc123
+            match = re.search(r"job ID:\s+([a-zA-Z0-9_-]+[:.][a-zA-Z0-9_-]+\.job_[a-zA-Z0-9_]+)", step)
+            if match:
+                job_ids.append(match.group(1))
+
+        return job_ids
+
+    @staticmethod
+    def _format_job_id_link(job_id: str) -> str:
+        """
+        Format job ID as clickable BigQuery Console link.
+
+        Args:
+            job_id: BigQuery job ID in format "project:location.job_abc123"
+
+        Returns:
+            Markdown link to BigQuery Console query results
+        """
+        import re
+
+        # Parse job ID format: project:location.job_abc123 or project.location.job_abc123
+        match = re.match(r"([a-zA-Z0-9_-]+)[:.]([ a-zA-Z0-9_-]+)\.(job_[a-zA-Z0-9_]+)", job_id)
+        if not match:
+            # Return plain text if format doesn't match
+            return f"`{job_id}`"
+
+        project, location, job_short = match.groups()
+
+        # Create BigQuery Console link
+        # Format: https://console.cloud.google.com/bigquery?project=PROJECT&j=bq:LOCATION:JOB_ID&page=queryresults
+        console_url = f"https://console.cloud.google.com/bigquery?project={project}&j=bq:{location}:{job_short}&page=queryresults"
+
+        return f"[`{job_id}`]({console_url})"
+
+    @staticmethod
     def _format_size_human_readable(text: str) -> str:
         """
         Convert large GB values to TB for better readability.
@@ -539,6 +592,15 @@ Top high-priority optimizations for immediate impact:
 ```sql
 {query_preview}
 ```
+
+"""
+
+                # Add BigQuery job ID for easy query lookup
+                job_ids = self._extract_job_ids_from_steps(rec.implementation_steps)
+                if job_ids:
+                    # Show only the most recent job ID
+                    job_link = self._format_job_id_link(job_ids[0])
+                    detailed += f"""**Find in BigQuery Console:** {job_link}
 
 """
 
