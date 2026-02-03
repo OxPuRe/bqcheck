@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 from bqaudit.scanner.anonymizer import anonymize_query_pattern
+from bqaudit.scanner.encryption import IdentifierEncryptor
 from bqaudit.scanner.models import QueryMetadata
 
 logger = logging.getLogger(__name__)
@@ -243,6 +244,11 @@ def aggregate_query_metadata(
             # Use first job ID
             most_recent_job_id = pattern_queries[0].job_id
 
+        # Encrypt job ID to protect client project ID from server
+        # Job ID format: project:location.job_xxx contains the project ID
+        encryptor = IdentifierEncryptor(encryption_key)
+        encrypted_job_id = encryptor.encrypt_with_nonce(most_recent_job_id, context="job_id")
+
         # Create aggregated entry
         aggregated_entry = {
             "query_hash": pattern_hash,
@@ -255,7 +261,7 @@ def aggregate_query_metadata(
             "days_in_period": days_in_period,  # Actual period of activity
             "distinct_days": distinct_days,  # Number of distinct calendar days with executions
             "last_execution_time": last_execution,  # Most recent execution
-            "most_recent_job_id": most_recent_job_id,  # Most recent job ID for user reference in BigQuery Console
+            "most_recent_job_id": encrypted_job_id,  # Encrypted job ID (contains project ID)
         }
 
         aggregated_queries.append(aggregated_entry)

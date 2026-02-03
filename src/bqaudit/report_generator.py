@@ -221,9 +221,9 @@ class MarkdownReportGenerator:
         job_ids = []
         for step in implementation_steps:
             # Look for "Find query in BigQuery Console using job ID: xxx"
-            # Job ID format: project:location.{job_id} (e.g., roam-prod:EU.bquxjob_xxx or roam-prod:EU.scheduled_query_xxx)
-            # Match: alphanumeric+hyphens+underscores, colon or dot, alphanumeric, dot, alphanumeric+underscores+hyphens
-            match = re.search(r"job ID:\s+([a-zA-Z0-9_-]+[:.][a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)", step)
+            # Job ID is now encrypted (base64 string) or unencrypted format (project:location.job_xxx)
+            # Match any alphanumeric+hyphens+underscores string after "job ID: "
+            match = re.search(r"job ID:\s+([a-zA-Z0-9_:-]+)", step)
             if match:
                 job_ids.append(match.group(1))
 
@@ -599,12 +599,19 @@ Top high-priority optimizations for immediate impact:
 
                 # Add BigQuery job ID for easy query lookup
                 job_ids = self._extract_job_ids_from_steps(rec.implementation_steps)
-                if job_ids:
-                    # Show only the most recent job ID
-                    job_link = self._format_job_id_link(job_ids[0])
-                    detailed += f"""**Find in BigQuery Console:** {job_link}
+                if job_ids and self.encryptor:
+                    # Decrypt the encrypted job ID (contains project ID, encrypted for privacy)
+                    encrypted_job_id = job_ids[0]
+                    try:
+                        decrypted_job_id = self.encryptor.decrypt_with_nonce(encrypted_job_id, context="job_id")
+                        job_link = self._format_job_id_link(decrypted_job_id)
+                        detailed += f"""**Find in BigQuery Console:** {job_link}
 
 """
+                    except (ValueError, Exception):
+                        # If decryption fails, skip the job ID link
+                        logger.debug(f"Failed to decrypt job ID: {encrypted_job_id[:20]}...")
+                        pass
 
             # Decrypt identifiers in description
             decrypted_description = self._decrypt_identifiers_in_text(rec.description)
