@@ -162,6 +162,8 @@ class ScanExecutor:
         try:
             from bqaudit.scanner.bigquery_client import (
                 PermissionError as BQPermissionError,
+            )
+            from bqaudit.scanner.bigquery_client import (
                 ProjectNotFoundError,
                 validate_multi_project_permissions,
             )

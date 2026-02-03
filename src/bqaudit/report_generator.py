@@ -3,6 +3,7 @@
 Generates well-formatted Markdown reports from AuditResponse data.
 """
 
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -37,6 +38,104 @@ class MarkdownReportGenerator:
         self.audit_response = audit_response
         self.project_name = project_name
         self.timestamp = datetime.now(timezone.utc)
+
+    @staticmethod
+    def _clean_title(title: str) -> str:
+        """
+        Clean recommendation title by rounding decimals.
+
+        Args:
+            title: Raw title from server
+
+        Returns:
+            Cleaned title with rounded decimals
+
+        Example:
+            >>> _clean_title("Materialize repeated query (6.048781288508676/day)")
+            "Materialize repeated query (6.0/day)"
+        """
+        # Round decimals like "6.048781288508676/day" -> "6.0/day"
+        def round_decimal(match):
+            value = float(match.group(1))
+            # Round to 1 decimal place
+            return f"{value:.1f}/{match.group(2)}"
+
+        return re.sub(r"(\d+\.\d+)/(\w+)", round_decimal, title)
+
+    @staticmethod
+    def _extract_file_reference(text: str) -> Optional[str]:
+        """
+        Extract file path reference from text (e.g., SQL comment).
+
+        Args:
+            text: Text that may contain file reference
+
+        Returns:
+            File path if found, None otherwise
+
+        Example:
+            >>> _extract_file_reference("-- Query logic taken from mobility/queries/compute.sql")
+            "mobility/queries/compute.sql"
+        """
+        # Look for patterns like "mobility/*/queries/*.sql" or similar file paths
+        match = re.search(
+            r"(?:taken from |from |see |in )?([a-zA-Z0-9_/-]+/[a-zA-Z0-9_/-]*\.sql)",
+            text,
+            re.IGNORECASE,
+        )
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _truncate_sql_in_step(step: str, max_lines: int = 10) -> str:
+        """
+        Truncate large SQL blocks in implementation steps.
+
+        Args:
+            step: Implementation step text
+            max_lines: Maximum SQL lines to show before truncating
+
+        Returns:
+            Step with truncated SQL if applicable
+
+        Example:
+            >>> step = "Create view: CREATE TABLE foo AS SELECT ... (100 lines)"
+            >>> _truncate_sql_in_step(step, max_lines=5)
+            "Create view: CREATE TABLE foo AS SELECT ...\n  [SQL truncated - 95 more lines]"
+        """
+        # Check if step contains SQL statements (more specific patterns)
+        # Look for SQL keywords at line start or after specific patterns
+        has_sql = re.search(
+            r"(^|\n)\s*(CREATE|DROP|ALTER|SELECT|INSERT|UPDATE|DELETE)\s",
+            step,
+            re.IGNORECASE | re.MULTILINE,
+        ) or re.search(
+            r"\bWITH\s+\w+\s+AS\s*\(", step, re.IGNORECASE
+        )  # WITH clause pattern
+
+        if not has_sql:
+            return step
+
+        lines = step.split("\n")
+
+        # If step has more than max_lines, truncate
+        if len(lines) > max_lines:
+            # Extract file reference before truncating
+            file_ref = MarkdownReportGenerator._extract_file_reference(step)
+
+            # Build truncated version
+            truncated_lines = lines[:max_lines]
+            num_hidden = len(lines) - max_lines
+
+            result = "\n".join(truncated_lines)
+            result += f"\n  [SQL truncated - {num_hidden} more lines]"
+
+            # Add file reference hint if found
+            if file_ref:
+                result += f"\n  See full query in: `{file_ref}`"
+
+            return result
+
+        return step
 
     def generate_header(self) -> str:
         """
@@ -134,7 +233,8 @@ Top high-priority optimizations for immediate impact:
 
 """
         for i, rec in enumerate(top_wins, 1):
-            quick_wins += f"""{i}. **{rec.title}** - €{rec.savings_eur:.2f}/month
+            clean_title = self._clean_title(rec.title)
+            quick_wins += f"""{i}. **{clean_title}** - €{rec.savings_eur:.2f}/month
    - {rec.description}
 
 """
@@ -172,19 +272,38 @@ Top high-priority optimizations for immediate impact:
 
 """
         for i, rec in enumerate(sorted_recs, 1):
-            detailed += f"""### Recommendation {i}: {rec.title}
+            # Clean title (round decimals)
+            clean_title = self._clean_title(rec.title)
+
+            # Extract file reference from steps if available
+            file_ref = None
+            for step in rec.implementation_steps:
+                file_ref = self._extract_file_reference(step)
+                if file_ref:
+                    break
+
+            detailed += f"""### Recommendation {i}: {clean_title}
 
 **Type:** {rec.type}
 **Priority:** {rec.priority}
 **Estimated Monthly Savings:** €{rec.savings_eur:.2f}
+"""
 
-**Description:**
+            # Add source file reference if found (for query recommendations)
+            if file_ref and rec.type == "queries":
+                detailed += f"""**Query Source:** `{file_ref}`
+
+"""
+
+            detailed += f"""**Description:**
 {rec.description}
 
 **Implementation Steps:**
 """
             for step_num, step in enumerate(rec.implementation_steps, 1):
-                detailed += f"{step_num}. {step}\n"
+                # Truncate large SQL blocks
+                cleaned_step = self._truncate_sql_in_step(step, max_lines=10)
+                detailed += f"{step_num}. {cleaned_step}\n"
 
             detailed += "\n---\n\n"
 

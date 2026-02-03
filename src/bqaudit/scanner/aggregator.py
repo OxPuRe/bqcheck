@@ -190,6 +190,14 @@ def aggregate_query_metadata(
         # Get anonymized query text (same for all queries in group)
         anonymized_query = anonymize_query_pattern(pattern_queries[0].query, salt)
 
+        # Find last execution time (most recent timestamp)
+        try:
+            datetimes = [_parse_iso_timestamp(ts) for ts in timestamps]
+            last_execution = max(datetimes).isoformat()
+        except ValueError:
+            # Fallback to first timestamp if parsing fails
+            last_execution = timestamps[0]
+
         # Create aggregated entry
         aggregated_entry = {
             "query_hash": pattern_hash,
@@ -198,6 +206,9 @@ def aggregate_query_metadata(
             "bytes_per_execution": bytes_per_execution,
             "total_bytes_processed": total_bytes,
             "has_materialized_view": False,  # TODO: Detect materialized views in future
+            "execution_count": execution_count,  # Total number of executions
+            "days_in_period": days_in_period,  # Actual period of activity
+            "last_execution_time": last_execution,  # Most recent execution
         }
 
         aggregated_queries.append(aggregated_entry)

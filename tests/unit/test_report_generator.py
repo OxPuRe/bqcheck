@@ -390,6 +390,82 @@ class TestFileSaving:
         assert "## Detailed Recommendations" in content
 
 
+class TestRecommendationFormatting:
+    """Test recommendation formatting helpers."""
+
+    def test_clean_title_rounds_decimals(self):
+        """Test that _clean_title rounds long decimals."""
+        title = "Materialize repeated query (6.048781288508676/day)"
+        cleaned = MarkdownReportGenerator._clean_title(title)
+        assert cleaned == "Materialize repeated query (6.0/day)"
+
+    def test_clean_title_preserves_integer_decimals(self):
+        """Test that _clean_title handles integer-like decimals."""
+        title = "Optimize query (10.0/month)"
+        cleaned = MarkdownReportGenerator._clean_title(title)
+        assert cleaned == "Optimize query (10.0/month)"
+
+    def test_clean_title_no_decimals_unchanged(self):
+        """Test that titles without decimals are unchanged."""
+        title = "Remove unused table"
+        cleaned = MarkdownReportGenerator._clean_title(title)
+        assert cleaned == "Remove unused table"
+
+    def test_extract_file_reference_from_comment(self):
+        """Test extracting file path from SQL comment."""
+        text = "-- Query logic taken from mobility/mobility/queries/compute_pickwell.sql"
+        file_ref = MarkdownReportGenerator._extract_file_reference(text)
+        assert file_ref == "mobility/mobility/queries/compute_pickwell.sql"
+
+    def test_extract_file_reference_from_text(self):
+        """Test extracting file path from descriptive text."""
+        text = "See full query in mobility/queries/report.sql for details"
+        file_ref = MarkdownReportGenerator._extract_file_reference(text)
+        assert file_ref == "mobility/queries/report.sql"
+
+    def test_extract_file_reference_none_when_missing(self):
+        """Test that None is returned when no file reference found."""
+        text = "This is a regular description without any file paths"
+        file_ref = MarkdownReportGenerator._extract_file_reference(text)
+        assert file_ref is None
+
+    def test_truncate_sql_in_step_short_sql(self):
+        """Test that short SQL is not truncated."""
+        step = "CREATE TABLE foo AS SELECT * FROM bar LIMIT 10"
+        truncated = MarkdownReportGenerator._truncate_sql_in_step(step, max_lines=10)
+        assert truncated == step
+        assert "[SQL truncated" not in truncated
+
+    def test_truncate_sql_in_step_long_sql(self):
+        """Test that long SQL is truncated with message."""
+        lines = ["CREATE TABLE foo AS ("] + [f"  SELECT col{i}," for i in range(20)] + [")"]
+        step = "\n".join(lines)
+
+        truncated = MarkdownReportGenerator._truncate_sql_in_step(step, max_lines=10)
+
+        assert "[SQL truncated - 12 more lines]" in truncated
+        assert truncated.count("\n") < step.count("\n")
+
+    def test_truncate_sql_in_step_with_file_reference(self):
+        """Test that file reference is extracted and shown in truncation."""
+        lines = (
+            ["CREATE VIEW AS -- Query from mobility/queries/test.sql"]
+            + [f"SELECT col{i}," for i in range(20)]
+        )
+        step = "\n".join(lines)
+
+        truncated = MarkdownReportGenerator._truncate_sql_in_step(step, max_lines=5)
+
+        assert "[SQL truncated" in truncated
+        assert "See full query in: `mobility/queries/test.sql`" in truncated
+
+    def test_truncate_sql_in_step_non_sql_unchanged(self):
+        """Test that non-SQL steps are not truncated."""
+        step = "This is a regular step\nwith multiple lines\nbut no SQL keywords"
+        truncated = MarkdownReportGenerator._truncate_sql_in_step(step, max_lines=2)
+        assert truncated == step
+
+
 class TestEdgeCases:
     """Test edge case handling (Task 6)."""
 
