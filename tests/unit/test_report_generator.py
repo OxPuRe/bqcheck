@@ -389,6 +389,115 @@ class TestFileSaving:
         assert "## Quick Wins" in content
         assert "## Detailed Recommendations" in content
 
+    def test_save_report_auto_suffix_when_file_exists(
+        self, sample_audit_response, tmp_path
+    ):
+        """Test that save_report adds suffix when file exists (non-interactive)."""
+
+        generator = MarkdownReportGenerator(sample_audit_response)
+        output_file = tmp_path / "test-report.md"
+
+        # Save first report (interactive=False, force=False)
+        path1 = generator.save_report(
+            output_path=output_file, interactive=False, force=False
+        )
+        assert path1 == output_file
+        assert path1.exists()
+
+        # Save second report with same name - should add -1 suffix
+        path2 = generator.save_report(
+            output_path=output_file, interactive=False, force=False
+        )
+        assert path2 == tmp_path / "test-report-1.md"
+        assert path2.exists()
+        assert path1.exists()  # Original still exists
+
+        # Save third report - should add -2 suffix
+        path3 = generator.save_report(
+            output_path=output_file, interactive=False, force=False
+        )
+        assert path3 == tmp_path / "test-report-2.md"
+        assert path3.exists()
+        assert path1.exists()
+        assert path2.exists()
+
+    def test_save_report_force_overwrites_existing(
+        self, sample_audit_response, tmp_path
+    ):
+        """Test that force=True overwrites existing file without suffix."""
+
+        generator = MarkdownReportGenerator(sample_audit_response)
+        output_file = tmp_path / "test-report.md"
+
+        # Create existing file with different content
+        output_file.write_text("old content")
+
+        # Save with force=True - should overwrite
+        path = generator.save_report(output_path=output_file, force=True)
+        assert path == output_file
+        assert "old content" not in path.read_text()
+        assert "# BigQuery Audit Report" in path.read_text()
+
+
+class TestFindAvailablePath:
+    """Test automatic filename suffix generation."""
+
+    def test_find_available_path_returns_base_when_not_exists(self, tmp_path):
+        """Test that base path is returned when it doesn't exist."""
+
+        base_path = tmp_path / "report.md"
+        available = MarkdownReportGenerator._find_available_path(base_path)
+
+        assert available == base_path
+
+    def test_find_available_path_adds_suffix_when_exists(self, tmp_path):
+        """Test that -1 suffix is added when base path exists."""
+
+        base_path = tmp_path / "report.md"
+        base_path.write_text("existing")
+
+        available = MarkdownReportGenerator._find_available_path(base_path)
+
+        assert available == tmp_path / "report-1.md"
+        assert not available.exists()
+
+    def test_find_available_path_increments_suffix(self, tmp_path):
+        """Test that suffix increments when multiple files exist."""
+
+        base_path = tmp_path / "report.md"
+        (tmp_path / "report.md").write_text("0")
+        (tmp_path / "report-1.md").write_text("1")
+        (tmp_path / "report-2.md").write_text("2")
+
+        available = MarkdownReportGenerator._find_available_path(base_path)
+
+        assert available == tmp_path / "report-3.md"
+        assert not available.exists()
+
+    def test_find_available_path_handles_gaps_in_sequence(self, tmp_path):
+        """Test that first available number is used (even with gaps)."""
+
+        base_path = tmp_path / "report.md"
+        (tmp_path / "report.md").write_text("0")
+        (tmp_path / "report-2.md").write_text("2")  # Gap at -1
+
+        available = MarkdownReportGenerator._find_available_path(base_path)
+
+        # Should use -1 (first available), not -3
+        assert available == tmp_path / "report-1.md"
+        assert not available.exists()
+
+    def test_find_available_path_preserves_extension(self, tmp_path):
+        """Test that file extension is preserved correctly."""
+
+        base_path = tmp_path / "audit-report-2026-02-03.md"
+        base_path.write_text("existing")
+
+        available = MarkdownReportGenerator._find_available_path(base_path)
+
+        assert available == tmp_path / "audit-report-2026-02-03-1.md"
+        assert available.suffix == ".md"
+
 
 class TestRecommendationFormatting:
     """Test recommendation formatting helpers."""

@@ -309,6 +309,45 @@ Top high-priority optimizations for immediate impact:
 
         return detailed
 
+    @staticmethod
+    def _find_available_path(base_path: Path) -> Path:
+        """
+        Find an available file path by adding numeric suffix if needed.
+
+        If base_path exists, tries base_path-1, base_path-2, etc.
+        until an available name is found.
+
+        Args:
+            base_path: Original file path (e.g., audit-report-2026-02-03.md)
+
+        Returns:
+            Available file path (may be same as base_path if it doesn't exist)
+
+        Example:
+            >>> _find_available_path(Path("report.md"))
+            Path("report-1.md")  # if report.md exists
+        """
+        if not base_path.exists():
+            return base_path
+
+        # Extract stem and suffix
+        stem = base_path.stem
+        suffix = base_path.suffix
+        parent = base_path.parent
+
+        # Try sequential numbers until we find an available name
+        counter = 1
+        while True:
+            new_path = parent / f"{stem}-{counter}{suffix}"
+            if not new_path.exists():
+                return new_path
+            counter += 1
+            # Safety limit to prevent infinite loop
+            if counter > 1000:
+                raise ValueError(
+                    f"Could not find available filename after 1000 attempts for {base_path}"
+                )
+
     def generate_implementation_guidance(self) -> str:
         """
         Generate Implementation Guidance section.
@@ -452,7 +491,6 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
             ) from e
 
         # Check if file exists and handle overwrite
-        # Story 5.3: Return None instead of raising exception for better separation of concerns
         if final_path.exists() and not force:
             if interactive:
                 # Prompt user for overwrite
@@ -470,8 +508,9 @@ Refer to [BigQuery Best Practices](https://cloud.google.com/bigquery/docs/best-p
                     # KeyboardInterrupt: User pressed Ctrl+C
                     return None
             else:
-                # Non-interactive and not force - return None to let caller decide
-                return None
+                # Non-interactive and not force - find available filename with suffix
+                # This ensures scan results are always saved (no wasted tokens)
+                final_path = self._find_available_path(final_path)
 
         # Generate and save report
         report_content = self.generate_report()
