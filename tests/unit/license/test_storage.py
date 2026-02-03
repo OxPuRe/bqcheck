@@ -103,7 +103,9 @@ class TestCredentialStore:
         assert loaded["ephemeral_token"] == credentials["ephemeral_token"]
         assert loaded["server_url"] == credentials["server_url"]
         assert loaded["encryption_key"] == credentials["encryption_key"]
-        assert loaded["activated_at"] == "2026-01-30T10:00:00Z"  # Serialized to Z format
+        assert (
+            loaded["activated_at"] == "2026-01-30T10:00:00Z"
+        )  # Serialized to Z format
         assert loaded["used_tokens"] == []
 
     def test_load_raises_if_file_not_exists(self, tmp_path, monkeypatch):
