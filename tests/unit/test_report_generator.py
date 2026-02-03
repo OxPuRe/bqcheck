@@ -707,3 +707,259 @@ class TestJobIdHandling:
         assert "Test query recommendation" in report
         # Job ID link should be skipped (not included) due to decryption failure
         assert "CORRUPTED_INVALID_BASE64_STRING" not in report
+
+
+class TestTableNameDecryption:
+    """Test suite for encrypted table name decryption in reports."""
+
+    def test_double_format_decryption(self):
+        """Test decryption of dataset.table format (existing functionality)."""
+        from bqaudit.scanner.encryption import IdentifierEncryptor
+
+        encryption_key = IdentifierEncryptor.generate_key()
+        encryptor = IdentifierEncryptor(encryption_key)
+
+        # Encrypt dataset and table names
+        encrypted_dataset = encryptor.encrypt_with_nonce("my_dataset", "dataset")
+        encrypted_table = encryptor.encrypt_with_nonce("my_table", "table")
+
+        # Create recommendation with encrypted dataset.table reference
+        query_text = f"SELECT * FROM {encrypted_dataset}.{encrypted_table} WHERE date > '2024-01-01'"
+        rec = Recommendation(
+            type="queries",
+            priority="LOW",
+            title="Test query",
+            savings_eur=50.0,
+            description=f"Query: {query_text}",
+            implementation_steps=["Step 1"],
+        )
+
+        response = AuditResponse(
+            project_id="test-project",
+            audit_date=date.today(),
+            generated_at=datetime.now(timezone.utc),
+            summary=AuditSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=50.0,
+                high_priority_count=0,
+                medium_priority_count=0,
+                low_priority_count=1,
+                category_breakdown={"queries": {"count": 1, "savings": 50.0}},
+            ),
+            recommendations=[rec],
+            audit_id="test",
+            new_ephemeral_token="token",
+        )
+
+        generator = MarkdownReportGenerator(response, encryption_key=encryption_key)
+        report = generator.generate_report()
+
+        # Verify decrypted table reference appears in report
+        assert "my_dataset.my_table" in report
+        # Verify encrypted reference does not appear
+        assert encrypted_dataset not in report
+        assert encrypted_table not in report
+
+    def test_triple_format_decryption(self):
+        """Test decryption of project.dataset.table format (new functionality)."""
+        from bqaudit.scanner.encryption import IdentifierEncryptor
+
+        encryption_key = IdentifierEncryptor.generate_key()
+        encryptor = IdentifierEncryptor(encryption_key)
+
+        # Encrypt project, dataset, and table names
+        encrypted_project = encryptor.encrypt_with_nonce("my-project-123", "project")
+        encrypted_dataset = encryptor.encrypt_with_nonce("analytics", "dataset")
+        table_name = "events"  # Table names are not encrypted
+
+        # Create recommendation with encrypted project.dataset.table reference
+        query_text = f"SELECT * FROM {encrypted_project}.{encrypted_dataset}.{table_name} WHERE timestamp > CURRENT_TIMESTAMP()"
+        rec = Recommendation(
+            type="queries",
+            priority="LOW",
+            title="Materialize repeated query",
+            savings_eur=100.0,
+            description=f"Query pattern accesses: {query_text}",
+            implementation_steps=["Create materialized view"],
+        )
+
+        response = AuditResponse(
+            project_id="test-project",
+            audit_date=date.today(),
+            generated_at=datetime.now(timezone.utc),
+            summary=AuditSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=100.0,
+                high_priority_count=0,
+                medium_priority_count=0,
+                low_priority_count=1,
+                category_breakdown={"queries": {"count": 1, "savings": 100.0}},
+            ),
+            recommendations=[rec],
+            audit_id="test",
+            new_ephemeral_token="token",
+        )
+
+        generator = MarkdownReportGenerator(response, encryption_key=encryption_key)
+        report = generator.generate_report()
+
+        # Verify decrypted full table reference appears in report
+        assert "my-project-123.analytics.events" in report
+        # Verify encrypted references do not appear
+        assert encrypted_project not in report
+        assert encrypted_dataset not in report
+
+    def test_mixed_format_decryption(self):
+        """Test that both double and triple format decryption work together."""
+        from bqaudit.scanner.encryption import IdentifierEncryptor
+
+        encryption_key = IdentifierEncryptor.generate_key()
+        encryptor = IdentifierEncryptor(encryption_key)
+
+        # Encrypt identifiers
+        enc_project = encryptor.encrypt_with_nonce("prod-project", "project")
+        enc_dataset1 = encryptor.encrypt_with_nonce("dataset_one", "dataset")
+        enc_dataset2 = encryptor.encrypt_with_nonce("dataset_two", "dataset")
+        enc_table = encryptor.encrypt_with_nonce("table_a", "table")
+
+        # Create recommendation with both formats
+        description = (
+            f"Query joins {enc_project}.{enc_dataset1}.events "
+            f"with {enc_dataset2}.{enc_table}"
+        )
+        rec = Recommendation(
+            type="queries",
+            priority="MEDIUM",
+            title="Complex join query",
+            savings_eur=200.0,
+            description=description,
+            implementation_steps=["Optimize join"],
+        )
+
+        response = AuditResponse(
+            project_id="test-project",
+            audit_date=date.today(),
+            generated_at=datetime.now(timezone.utc),
+            summary=AuditSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=200.0,
+                high_priority_count=0,
+                medium_priority_count=1,
+                low_priority_count=0,
+                category_breakdown={"queries": {"count": 1, "savings": 200.0}},
+            ),
+            recommendations=[rec],
+            audit_id="test",
+            new_ephemeral_token="token",
+        )
+
+        generator = MarkdownReportGenerator(response, encryption_key=encryption_key)
+        report = generator.generate_report()
+
+        # Verify both formats are decrypted
+        assert "prod-project.dataset_one.events" in report
+        assert "dataset_two.table_a" in report
+        # Verify encrypted strings don't appear
+        assert enc_project not in report
+        assert enc_dataset1 not in report
+        assert enc_dataset2 not in report
+
+    def test_decryption_failure_preserves_original_text(self):
+        """Test that decryption failures don't corrupt the report."""
+        from bqaudit.scanner.encryption import IdentifierEncryptor
+
+        encryption_key = IdentifierEncryptor.generate_key()
+
+        # Use invalid encrypted-looking strings that will fail decryption
+        fake_encrypted_project = "INVALID_BASE64_PROJECT_STRING_XXXXX"
+        fake_encrypted_dataset = "INVALID_BASE64_DATASET_STRING_YYYYY"
+
+        description = (
+            f"Query uses {fake_encrypted_project}.{fake_encrypted_dataset}.table_name"
+        )
+        rec = Recommendation(
+            type="queries",
+            priority="LOW",
+            title="Test recommendation",
+            savings_eur=50.0,
+            description=description,
+            implementation_steps=["Step 1"],
+        )
+
+        response = AuditResponse(
+            project_id="test-project",
+            audit_date=date.today(),
+            generated_at=datetime.now(timezone.utc),
+            summary=AuditSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=50.0,
+                high_priority_count=0,
+                medium_priority_count=0,
+                low_priority_count=1,
+                category_breakdown={"queries": {"count": 1, "savings": 50.0}},
+            ),
+            recommendations=[rec],
+            audit_id="test",
+            new_ephemeral_token="token",
+        )
+
+        generator = MarkdownReportGenerator(response, encryption_key=encryption_key)
+        report = generator.generate_report()
+
+        # Verify report generation succeeds
+        assert "# BigQuery Audit Report" in report
+        # Original text should be preserved when decryption fails
+        assert (
+            "INVALID_BASE64_PROJECT_STRING_XXXXX.INVALID_BASE64_DATASET_STRING_YYYYY.table_name"
+            in report
+        )
+
+    def test_standalone_identifier_decryption(self):
+        """Test decryption of standalone encrypted identifiers in description text."""
+        from bqaudit.scanner.encryption import IdentifierEncryptor
+
+        encryption_key = IdentifierEncryptor.generate_key()
+        encryptor = IdentifierEncryptor(encryption_key)
+
+        # Encrypt table and dataset names
+        encrypted_table = encryptor.encrypt_with_nonce("orders_2024", "table")
+        encrypted_dataset = encryptor.encrypt_with_nonce("sales_data", "dataset")
+
+        # Create recommendation with standalone encrypted identifiers in description
+        # These appear as standalone words, not in dotted format
+        description = f"Table {encrypted_table} in dataset {encrypted_dataset} has not been accessed recently."
+        rec = Recommendation(
+            type="storage",
+            priority="MEDIUM",
+            title="Remove unused table",
+            savings_eur=75.0,
+            description=description,
+            implementation_steps=["Verify table is unused", "Drop table"],
+        )
+
+        response = AuditResponse(
+            project_id="test-project",
+            audit_date=date.today(),
+            generated_at=datetime.now(timezone.utc),
+            summary=AuditSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=75.0,
+                high_priority_count=0,
+                medium_priority_count=1,
+                low_priority_count=0,
+                category_breakdown={"storage": {"count": 1, "savings": 75.0}},
+            ),
+            recommendations=[rec],
+            audit_id="test",
+            new_ephemeral_token="token",
+        )
+
+        generator = MarkdownReportGenerator(response, encryption_key=encryption_key)
+        report = generator.generate_report()
+
+        # Verify standalone identifiers are decrypted in description
+        assert "orders_2024" in report
+        assert "sales_data" in report
+        # Verify encrypted strings don't appear
+        assert encrypted_table not in report
+        assert encrypted_dataset not in report

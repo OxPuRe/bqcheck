@@ -91,8 +91,31 @@ class MarkdownReportGenerator:
         # Store encryptor in local variable for type narrowing
         encryptor = self.encryptor
 
-        # Pattern 1: Match "dataset.table" format (encrypted pairs)
+        # Pattern 1: Match "project.dataset.table" format (encrypted triple)
         # Base64url chars: A-Za-z0-9_-
+        pattern_triple = (
+            r"\b([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]+)\b"
+        )
+
+        def decrypt_triple(match: re.Match[str]) -> str:
+            encrypted_project = match.group(1)
+            encrypted_dataset = match.group(2)
+            table_name = match.group(3)  # Table name may or may not be encrypted
+
+            try:
+                # Try to decrypt project and dataset
+                project = encryptor.decrypt_with_nonce(encrypted_project, "project")
+                dataset = encryptor.decrypt_with_nonce(encrypted_dataset, "dataset")
+                # Successfully decrypted - return decrypted version
+                return f"{project}.{dataset}.{table_name}"
+            except (ValueError, Exception):
+                # Decryption failed - return original
+                return match.group(0)
+
+        # First pass: decrypt project.dataset.table triples
+        text = re.sub(pattern_triple, decrypt_triple, text)
+
+        # Pattern 2: Match "dataset.table" format (encrypted pairs)
         pattern_pair = r"\b([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\b"
 
         def decrypt_pair(match: re.Match[str]) -> str:
@@ -110,10 +133,10 @@ class MarkdownReportGenerator:
                 # Return original text
                 return match.group(0)
 
-        # First pass: decrypt dataset.table pairs
+        # Second pass: decrypt dataset.table pairs
         text = re.sub(pattern_pair, decrypt_pair, text)
 
-        # Pattern 2: Match standalone encrypted identifiers (not already decrypted)
+        # Pattern 3: Match standalone encrypted identifiers (not already decrypted)
         # These appear after spaces, dots (like backup_dataset.XXX), or at word boundaries
         # Avoid matching regular words by requiring minimum length and base64 chars
         pattern_standalone = (
@@ -140,7 +163,7 @@ class MarkdownReportGenerator:
             # Not an encrypted identifier - return as is
             return match.group(0)
 
-        # Second pass: decrypt standalone identifiers
+        # Third pass: decrypt standalone identifiers
         text = re.sub(pattern_standalone, decrypt_standalone, text)
 
         return text
