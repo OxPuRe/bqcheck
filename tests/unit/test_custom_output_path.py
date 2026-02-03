@@ -28,6 +28,8 @@ runner = CliRunner()
 @contextmanager
 def mock_bigquery_scan():
     """Context manager to mock BigQuery scanning for tests."""
+    from unittest.mock import AsyncMock
+
     mock_bq_client = Mock()
     mock_bq_client.list_datasets.return_value = []
 
@@ -49,6 +51,12 @@ def mock_bigquery_scan():
         "audit_id": "test-audit-id-123",
         "new_ephemeral_token": "new-token-456",
     }
+
+    # Mock AsyncClient to return our mock response
+    mock_async_client = Mock()
+    mock_async_client.post = AsyncMock(return_value=mock_http_response)
+    mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
+    mock_async_client.__aexit__ = AsyncMock(return_value=None)
 
     with patch(
         "bqaudit.scanner.bigquery_client.authenticate_bigquery",
@@ -73,9 +81,7 @@ def mock_bigquery_scan():
                             "bqaudit.scanner.metadata_extractor.extract_table_schemas",
                             return_value={},
                         ):
-                            with patch(
-                                "httpx.AsyncClient.post", return_value=mock_http_response
-                            ):
+                            with patch("httpx.AsyncClient", return_value=mock_async_client):
                                 yield
 
 

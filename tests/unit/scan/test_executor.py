@@ -67,6 +67,8 @@ def mock_real_scan_mode(monkeypatch):
 @pytest.fixture
 def mock_bigquery_and_server():
     """Mock BigQuery authentication and server responses for scan tests."""
+    from unittest.mock import AsyncMock
+
     mock_bq_client = mock.Mock()
     mock_bq_client.list_datasets.return_value = []
 
@@ -87,6 +89,12 @@ def mock_bigquery_and_server():
         "audit_id": "test-audit-id-123",
         "new_ephemeral_token": "new-token-456",
     }
+
+    # Mock AsyncClient to return our mock response
+    mock_async_client = mock.Mock()
+    mock_async_client.post = AsyncMock(return_value=mock_http_response)
+    mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
+    mock_async_client.__aexit__ = AsyncMock(return_value=None)
 
     patches = [
         mock.patch(
@@ -112,7 +120,7 @@ def mock_bigquery_and_server():
             "bqaudit.scanner.metadata_extractor.extract_table_schemas",
             return_value={},
         ),
-        mock.patch("httpx.AsyncClient.post", return_value=mock_http_response),
+        mock.patch("httpx.AsyncClient", return_value=mock_async_client),
     ]
 
     with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[
