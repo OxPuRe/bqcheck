@@ -249,7 +249,9 @@ class TestMultiProjectPermissionValidation:
 
         assert validate_multi_project_permissions is not None
 
-    def test_validation_with_mock_projects(self, test_credentials, mock_creds_path):
+    def test_validation_with_mock_projects(
+        self, test_credentials, mock_creds_path, mock_real_scan_mode
+    ):
         """Test that validation runs before scan execution."""
         from bqaudit.scan.executor import ScanExecutor
 
@@ -267,7 +269,9 @@ class TestMultiProjectPermissionValidation:
             # Validation should be called with both projects
             mock_validate.assert_called_once_with("storage-project", "query-project")
 
-    def test_validation_with_single_project(self, test_credentials, mock_creds_path):
+    def test_validation_with_single_project(
+        self, test_credentials, mock_creds_path, mock_real_scan_mode
+    ):
         """Test that validation works with single project (no query_project)."""
         from bqaudit.scan.executor import ScanExecutor
 
@@ -339,7 +343,9 @@ class TestMultiProjectPermissionValidation:
         updated_creds = CredentialStore.load()
         assert updated_creds["token_pool_balance"] == original_balance
 
-    def test_successful_validation_allows_scan(self, test_credentials, mock_creds_path):
+    def test_successful_validation_allows_scan(
+        self, test_credentials, mock_creds_path, mock_real_scan_mode
+    ):
         """Test that successful validation allows scan to proceed."""
         from bqaudit.scan.executor import ScanExecutor
 
