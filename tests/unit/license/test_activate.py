@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from bqaudit.api.exceptions import InvalidLicenseKeyError, NetworkError
-from bqaudit.license.activate import activate_license
-from bqaudit.license.storage import CredentialStore
+from bqcheck.api.exceptions import InvalidLicenseKeyError, NetworkError
+from bqcheck.license.activate import activate_license
+from bqcheck.license.storage import CredentialStore
 
 
 class TestActivateLicense:
@@ -19,7 +19,7 @@ class TestActivateLicense:
         result = activate_license("VALID-TEST-KEY-123", mock_mode=True)
 
         # Verify credentials file created
-        cred_file = tmp_path / ".bqaudit" / "credentials.json"
+        cred_file = tmp_path / ".bqcheck" / "credentials.json"
         assert cred_file.exists()
 
         # Verify chmod 600
@@ -43,7 +43,7 @@ class TestActivateLicense:
             activate_license("INVALID-KEY", mock_mode=True)
 
         # Verify NO credentials file created
-        cred_file = tmp_path / ".bqaudit" / "credentials.json"
+        cred_file = tmp_path / ".bqcheck" / "credentials.json"
         assert not cred_file.exists()
 
     def test_activate_network_error_no_file_created(self, tmp_path, monkeypatch):
@@ -54,7 +54,7 @@ class TestActivateLicense:
             activate_license("NETWORK-ERROR-TEST", mock_mode=True)
 
         # Verify NO credentials file created
-        cred_file = tmp_path / ".bqaudit" / "credentials.json"
+        cred_file = tmp_path / ".bqcheck" / "credentials.json"
         assert not cred_file.exists()
 
     def test_activate_raises_if_credentials_exist(self, tmp_path, monkeypatch):

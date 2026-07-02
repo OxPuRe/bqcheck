@@ -4,11 +4,11 @@ import json
 
 import pytest
 
-from bqaudit.license.storage import (
+from bqcheck.license.storage import (
     CredentialNotFoundError,
     CredentialStore,
 )
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 
 def _create_test_credentials():
@@ -17,7 +17,7 @@ def _create_test_credentials():
         "master_key": "TEST-KEY",
         "token_pool_balance": 50,
         "ephemeral_token": "token123",
-        "server_url": "https://api.bqaudit.com",
+        "server_url": "https://api.bqcheck.com",
         "activated_at": "2026-01-30T10:00:00+00:00",
         "encryption_key": IdentifierEncryptor.key_to_base64(
             IdentifierEncryptor.generate_key()
@@ -29,14 +29,14 @@ class TestCredentialStore:
     """Test suite for CredentialStore class."""
 
     def test_save_creates_directory_if_not_exists(self, tmp_path, monkeypatch):
-        """Test that save() creates ~/.bqaudit directory if needed."""
+        """Test that save() creates ~/.bqcheck directory if needed."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
         credentials = _create_test_credentials()
 
         CredentialStore.save(credentials)
 
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         assert cred_dir.exists()
         assert cred_dir.is_dir()
 
@@ -48,7 +48,7 @@ class TestCredentialStore:
 
         CredentialStore.save(credentials)
 
-        cred_file = tmp_path / ".bqaudit" / "credentials.json"
+        cred_file = tmp_path / ".bqcheck" / "credentials.json"
         assert cred_file.exists()
 
         # Verify chmod 600 (owner read/write only)
@@ -64,7 +64,7 @@ class TestCredentialStore:
 
         CredentialStore.save(credentials)
 
-        cred_file = tmp_path / ".bqaudit" / "credentials.json"
+        cred_file = tmp_path / ".bqcheck" / "credentials.json"
         loaded = json.loads(cred_file.read_text())
 
         assert loaded["master_key"] == credentials["master_key"]
@@ -80,11 +80,11 @@ class TestCredentialStore:
         CredentialStore.save(credentials)
 
         # After successful save, temp file should not exist
-        temp_file = tmp_path / ".bqaudit" / "credentials.tmp"
+        temp_file = tmp_path / ".bqcheck" / "credentials.tmp"
         assert not temp_file.exists()
 
         # Final file should exist
-        final_file = tmp_path / ".bqaudit" / "credentials.json"
+        final_file = tmp_path / ".bqcheck" / "credentials.json"
         assert final_file.exists()
 
     def test_load_returns_credentials(self, tmp_path, monkeypatch):
@@ -120,7 +120,7 @@ class TestCredentialStore:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials file with unsafe permissions
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(parents=True)
         cred_file = cred_dir / "credentials.json"
 

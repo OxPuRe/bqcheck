@@ -1,7 +1,7 @@
 """Rich console configuration and progress helpers for CLI UX (Story 5.3).
 
 Provides centralized Rich console with progress indicators and styling for:
-- Audit start/success messages (AC1, AC5)
+- Check start/success messages (AC1, AC5)
 - Metadata extraction spinner (AC2)
 - Server communication progress (AC3)
 - Analysis progress with timer (AC4)
@@ -19,17 +19,17 @@ console = Console(stderr=True)
 
 def show_start_message(project_id: str) -> None:
     """
-    Display audit start message (AC1).
+    Display sanity check start message (AC1).
 
     Args:
-        project_id: GCP project ID being audited
+        project_id: GCP project ID being checked
 
     Example:
         >>> show_start_message("my-gcp-project")
-        🔍 Starting BigQuery audit for project: my-gcp-project
+        🔍 Starting BigQuery sanity check for project: my-gcp-project
     """
     console.print(
-        f"🔍 Starting BigQuery audit for project: [bold cyan]{project_id}[/bold cyan]"
+        f"🔍 Starting BigQuery sanity check for project: [bold cyan]{project_id}[/bold cyan]"
     )
 
 
@@ -56,14 +56,14 @@ def show_server_upload() -> None:
 
     Example:
         >>> show_server_upload()
-        ☁️  Sending anonymized metadata to audit server...
+        ☁️  Sending anonymized metadata to analysis server...
     """
-    console.print("☁️  Sending anonymized metadata to audit server...")
+    console.print("☁️  Sending anonymized metadata to analysis server...")
 
 
 def show_success_message(count: int, savings: float) -> None:
     """
-    Display audit completion success message (AC5).
+    Display sanity check completion success message (AC5).
 
     Args:
         count: Number of recommendations found
@@ -71,10 +71,10 @@ def show_success_message(count: int, savings: float) -> None:
 
     Example:
         >>> show_success_message(5, 1234.56)
-        ✅ Audit complete! Found 5 recommendations with potential savings of €1,234.56/month
+        ✅ Sanity check complete! Found 5 recommendations with potential savings of €1,234.56/month
     """
     console.print(
-        f"[green]✅ Audit complete![/green] Found {count} recommendations "
+        f"[green]✅ Sanity check complete![/green] Found {count} recommendations "
         f"with potential savings of €{savings:,.2f}/month"
     )
 
@@ -105,7 +105,7 @@ async def show_analysis_progress() -> None:
     Example:
         >>> timer_task = asyncio.create_task(show_analysis_progress())
         >>> try:
-        ...     response = await send_audit_request()
+        ...     response = await send_check_request()
         ... finally:
         ...     timer_task.cancel()
         ...     try:
@@ -115,7 +115,7 @@ async def show_analysis_progress() -> None:
     """
     import logging
 
-    from bqaudit.constants import GLOBAL_AUDIT_TIMEOUT_SECONDS
+    from bqcheck.constants import GLOBAL_CHECK_TIMEOUT_SECONDS
 
     logger = logging.getLogger(__name__)
     start_time = datetime.now(timezone.utc)
@@ -140,10 +140,10 @@ async def show_analysis_progress() -> None:
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
 
         # Story 5.3: Add max timeout protection to prevent infinite loop
-        # Uses same timeout as executor.py execute_audit() for consistency
-        if elapsed >= GLOBAL_AUDIT_TIMEOUT_SECONDS:
+        # Uses same timeout as executor.py execute_check() for consistency
+        if elapsed >= GLOBAL_CHECK_TIMEOUT_SECONDS:
             await safe_print(
-                f"[yellow]⚠️  Maximum timeout reached ({int(GLOBAL_AUDIT_TIMEOUT_SECONDS // 60)} minutes)[/yellow]"
+                f"[yellow]⚠️  Maximum timeout reached ({int(GLOBAL_CHECK_TIMEOUT_SECONDS // 60)} minutes)[/yellow]"
             )
             break
 

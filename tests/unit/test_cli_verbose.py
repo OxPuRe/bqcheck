@@ -1,5 +1,5 @@
 """
-Unit tests for bqaudit CLI verbose mode functionality.
+Unit tests for bqcheck CLI verbose mode functionality.
 
 Tests verbose output, metadata preview, anonymization display, payload size
 estimation, and privacy guarantees in the validate command.
@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
+from bqcheck.cli import app
 
 runner = CliRunner()
 
@@ -40,8 +40,8 @@ def _create_query_row(query_text):
 class TestValidateVerboseFlag:
     """Test --verbose flag in validate command."""
 
-    @patch("bqaudit.cli.authenticate_bigquery")
-    @patch("bqaudit.cli.check_server_health")
+    @patch("bqcheck.cli.authenticate_bigquery")
+    @patch("bqcheck.cli.check_server_health")
     def test_validate_verbose_flag_shows_detailed_output(self, mock_health, mock_auth):
         """Test --verbose flag shows detailed validation steps."""
         # Setup mocks
@@ -86,8 +86,8 @@ class TestValidateVerboseFlag:
         assert "ℹ Checking BigQuery API enablement" in result.stdout
         assert "ℹ Checking IAM permissions" in result.stdout
 
-    @patch("bqaudit.cli.authenticate_bigquery")
-    @patch("bqaudit.cli.check_server_health")
+    @patch("bqcheck.cli.authenticate_bigquery")
+    @patch("bqcheck.cli.check_server_health")
     def test_validate_without_verbose_flag(self, mock_health, mock_auth):
         """Test validate command without --verbose flag (normal mode)."""
         # Setup mocks
@@ -120,8 +120,8 @@ class TestValidateVerboseFlag:
 class TestMetadataPreview:
     """Test metadata preview display in verbose mode."""
 
-    @patch("bqaudit.cli.authenticate_bigquery")
-    @patch("bqaudit.cli.check_server_health")
+    @patch("bqcheck.cli.authenticate_bigquery")
+    @patch("bqcheck.cli.check_server_health")
     def test_validate_verbose_shows_metadata_preview(self, mock_health, mock_auth):
         """Test verbose mode displays sample metadata with anonymization."""
         # Setup mocks
@@ -171,8 +171,8 @@ class TestMetadataPreview:
 class TestAnonymizationPreview:
     """Test raw → anonymized mapping display."""
 
-    @patch("bqaudit.cli.authenticate_bigquery")
-    @patch("bqaudit.cli.check_server_health")
+    @patch("bqcheck.cli.authenticate_bigquery")
+    @patch("bqcheck.cli.check_server_health")
     def test_validate_verbose_shows_table_anonymization(self, mock_health, mock_auth):
         """Test verbose mode shows table name anonymization mapping."""
         # Setup mocks
@@ -223,8 +223,8 @@ class TestAnonymizationPreview:
 class TestPayloadSizeEstimation:
     """Test payload size calculation and display."""
 
-    @patch("bqaudit.cli.authenticate_bigquery")
-    @patch("bqaudit.cli.check_server_health")
+    @patch("bqcheck.cli.authenticate_bigquery")
+    @patch("bqcheck.cli.check_server_health")
     def test_validate_verbose_shows_payload_size(self, mock_health, mock_auth):
         """Test verbose mode displays estimated payload size in KB."""
         # Setup mocks
@@ -277,8 +277,8 @@ class TestPayloadSizeEstimation:
 class TestPrivacyGuarantees:
     """Test privacy confirmation messages."""
 
-    @patch("bqaudit.cli.authenticate_bigquery")
-    @patch("bqaudit.cli.check_server_health")
+    @patch("bqcheck.cli.authenticate_bigquery")
+    @patch("bqcheck.cli.check_server_health")
     def test_validate_verbose_shows_privacy_guarantees(self, mock_health, mock_auth):
         """Test verbose mode displays privacy guarantee messages."""
         # Setup mocks
@@ -326,8 +326,8 @@ class TestPrivacyGuarantees:
 class TestTransmissionStatement:
     """Test clear transmission statement display."""
 
-    @patch("bqaudit.cli.authenticate_bigquery")
-    @patch("bqaudit.cli.check_server_health")
+    @patch("bqcheck.cli.authenticate_bigquery")
+    @patch("bqcheck.cli.check_server_health")
     def test_validate_verbose_shows_transmission_statement(
         self, mock_health, mock_auth
     ):
@@ -368,7 +368,7 @@ class TestTransmissionStatement:
         assert result.exit_code == 0
         # Verify transmission panel and key information
         assert "Data Transmission" in result.stdout
-        assert "bqaudit server" in result.stdout
+        assert "bqcheck server" in result.stdout
         # Verify it mentions metadata only and anonymization
         assert "metadata only" in result.stdout.lower()
         assert "anonymized" in result.stdout.lower() or "SHA-256" in result.stdout

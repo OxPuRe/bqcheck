@@ -14,19 +14,19 @@ from unittest import mock
 
 import pytest
 
-from bqaudit.api.client import BQAuditAPIClient
-from bqaudit.license.storage import CredentialStore
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.api.client import BQCheckAPIClient
+from bqcheck.license.storage import CredentialStore
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 
 @pytest.fixture
 def mock_creds_path(tmp_path: Path, monkeypatch):
     """Mock CredentialStore path to use tmp_path."""
-    creds_path = tmp_path / ".bqaudit" / "credentials.json"
+    creds_path = tmp_path / ".bqcheck" / "credentials.json"
 
     # Mock the _get_credentials_path method to return our test path
     monkeypatch.setattr(
-        "bqaudit.license.storage.CredentialStore._get_credentials_path",
+        "bqcheck.license.storage.CredentialStore._get_credentials_path",
         lambda: creds_path,
     )
     return creds_path
@@ -39,7 +39,7 @@ def test_credentials(mock_creds_path):
         "master_key": "VALID-TEST-KEY-123",
         "ephemeral_token": "test-token-original",
         "token_pool_balance": 10,
-        "server_url": "https://api.bqaudit.com",
+        "server_url": "https://api.bqcheck.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
         "encryption_key": IdentifierEncryptor.key_to_base64(
             IdentifierEncryptor.generate_key()
@@ -57,9 +57,9 @@ def test_credentials(mock_creds_path):
 @pytest.fixture
 def mock_real_scan_mode(monkeypatch):
     """Force simulated scan mode and mock validation for unit tests."""
-    monkeypatch.setenv("BQAUDIT_REAL_SCAN", "false")
+    monkeypatch.setenv("BQCHECK_REAL_SCAN", "false")
     monkeypatch.setattr(
-        "bqaudit.scanner.bigquery_client.validate_multi_project_permissions",
+        "bqcheck.scanner.bigquery_client.validate_multi_project_permissions",
         lambda storage_project, query_project=None: None,
     )
 
@@ -69,8 +69,8 @@ def mock_bigquery_and_server(monkeypatch):
     """Mock BigQuery authentication and server responses for scan tests."""
     from unittest.mock import AsyncMock
 
-    # Set BQAUDIT_REAL_SCAN=true to enable real scan mode with mocked dependencies
-    monkeypatch.setenv("BQAUDIT_REAL_SCAN", "true")
+    # Set BQCHECK_REAL_SCAN=true to enable real scan mode with mocked dependencies
+    monkeypatch.setenv("BQCHECK_REAL_SCAN", "true")
 
     mock_bq_client = mock.Mock()
     mock_bq_client.list_datasets.return_value = []
@@ -89,7 +89,7 @@ def mock_bigquery_and_server(monkeypatch):
             "low_priority_count": 0,
             "categories_breakdown": {},
         },
-        "audit_id": "test-audit-id-123",
+        "check_id": "test-check-id-123",
         "new_ephemeral_token": "new-token-456",
     }
 
@@ -101,26 +101,26 @@ def mock_bigquery_and_server(monkeypatch):
 
     patches = [
         mock.patch(
-            "bqaudit.scanner.bigquery_client.authenticate_bigquery",
+            "bqcheck.scanner.bigquery_client.authenticate_bigquery",
             return_value=mock_bq_client,
         ),
         mock.patch(
-            "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
+            "bqcheck.scanner.authenticate_bigquery", return_value=mock_bq_client
         ),
         mock.patch(
-            "bqaudit.scanner.metadata_extractor.extract_table_metadata",
+            "bqcheck.scanner.metadata_extractor.extract_table_metadata",
             return_value=[],
         ),
         mock.patch(
-            "bqaudit.scanner.metadata_extractor.extract_query_metadata",
+            "bqcheck.scanner.metadata_extractor.extract_query_metadata",
             return_value=[],
         ),
         mock.patch(
-            "bqaudit.scanner.metadata_extractor.extract_access_patterns",
+            "bqcheck.scanner.metadata_extractor.extract_access_patterns",
             return_value=[],
         ),
         mock.patch(
-            "bqaudit.scanner.metadata_extractor.extract_table_schemas",
+            "bqcheck.scanner.metadata_extractor.extract_table_schemas",
             return_value={},
         ),
         mock.patch("httpx.AsyncClient", return_value=mock_async_client),
@@ -137,7 +137,7 @@ class TestScanExecutor:
 
     def test_executor_imports(self):
         """Verify ScanExecutor can be imported."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
         assert ScanExecutor is not None
 
@@ -145,9 +145,9 @@ class TestScanExecutor:
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC1: Execute scan loads credentials and runs simulated scan."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         result = executor.execute_scan_with_tokens("test-project")
@@ -161,11 +161,11 @@ class TestScanExecutor:
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC3: Successful scan renews ephemeral token."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
         original_token = test_credentials["ephemeral_token"]
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         executor.execute_scan_with_tokens("test-project")
@@ -181,9 +181,9 @@ class TestScanExecutor:
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC1: Successful scan decrements token pool balance by 1."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         executor.execute_scan_with_tokens("test-project")
@@ -198,12 +198,12 @@ class TestScanExecutor:
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC2: CRITICAL - Scan failure preserves token and balance."""
-        from bqaudit.scan.executor import ScanError, ScanExecutor
+        from bqcheck.scan.executor import ScanError, ScanExecutor
 
         original_token = test_credentials["ephemeral_token"]
         original_balance = test_credentials["token_pool_balance"]
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Mock the execute_real_scan method to simulate failure with ScanError
@@ -230,17 +230,17 @@ class TestScanExecutor:
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC6: Credential update failure preserves original credentials."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
         original_token = test_credentials["ephemeral_token"]
         original_balance = test_credentials["token_pool_balance"]
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Mock CredentialStore.update to fail
         with mock.patch(
-            "bqaudit.license.storage.CredentialStore.update",
+            "bqcheck.license.storage.CredentialStore.update",
             side_effect=IOError("Simulated write failure"),
         ):
             with pytest.raises(IOError):
@@ -255,7 +255,7 @@ class TestScanExecutor:
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC3: Token renewal returns new token different from old."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
         # Mock different responses for each scan
         mock_bigquery_and_server.json.side_effect = [
@@ -271,7 +271,7 @@ class TestScanExecutor:
                     "low_priority_count": 0,
                     "categories_breakdown": {},
                 },
-                "audit_id": "test-audit-id-1",
+                "check_id": "test-check-id-1",
                 "new_ephemeral_token": "token-1",
             },
             {
@@ -286,12 +286,12 @@ class TestScanExecutor:
                     "low_priority_count": 0,
                     "categories_breakdown": {},
                 },
-                "audit_id": "test-audit-id-2",
+                "check_id": "test-check-id-2",
                 "new_ephemeral_token": "token-2",
             },
         ]
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Execute 2 scans
@@ -312,9 +312,9 @@ class TestScanExecutor:
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC6: Credentials file maintains chmod 600 after update."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Execute scan (triggers credential update)
@@ -333,11 +333,11 @@ class TestScanExecutor:
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):
         """AC8: Old tokens marked as used (client-side tracking)."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
         original_token = test_credentials["ephemeral_token"]
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Execute scan
@@ -363,7 +363,7 @@ class TestMultiProjectPermissionValidation:
 
     def test_validation_function_exists(self):
         """Verify validate_multi_project_permissions can be imported."""
-        from bqaudit.scanner.bigquery_client import validate_multi_project_permissions
+        from bqcheck.scanner.bigquery_client import validate_multi_project_permissions
 
         assert validate_multi_project_permissions is not None
 
@@ -371,14 +371,14 @@ class TestMultiProjectPermissionValidation:
         self, test_credentials, mock_creds_path, mock_real_scan_mode
     ):
         """Test that validation runs before scan execution."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Mock validate_multi_project_permissions to avoid real BQ calls
         with mock.patch(
-            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions"
+            "bqcheck.scanner.bigquery_client.validate_multi_project_permissions"
         ) as mock_validate:
             executor.execute_scan_with_tokens(
                 "storage-project", query_project="query-project"
@@ -391,14 +391,14 @@ class TestMultiProjectPermissionValidation:
         self, test_credentials, mock_creds_path, mock_real_scan_mode
     ):
         """Test that validation works with single project (no query_project)."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Mock validate_multi_project_permissions
         with mock.patch(
-            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions"
+            "bqcheck.scanner.bigquery_client.validate_multi_project_permissions"
         ) as mock_validate:
             executor.execute_scan_with_tokens("my-project")
 
@@ -409,17 +409,17 @@ class TestMultiProjectPermissionValidation:
         self, test_credentials, mock_creds_path
     ):
         """CRITICAL: Permission errors prevent token consumption."""
-        from bqaudit.scan.executor import ScanExecutor
-        from bqaudit.scanner.bigquery_client import PermissionError as BQPermissionError
+        from bqcheck.scan.executor import ScanExecutor
+        from bqcheck.scanner.bigquery_client import PermissionError as BQPermissionError
 
         original_balance = test_credentials["token_pool_balance"]
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Mock validation to raise PermissionError
         with mock.patch(
-            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions",
+            "bqcheck.scanner.bigquery_client.validate_multi_project_permissions",
             side_effect=BQPermissionError("Missing permissions on query-project"),
         ):
             # Should exit with code 3 (caught by sys.exit in executor)
@@ -437,17 +437,17 @@ class TestMultiProjectPermissionValidation:
         self, test_credentials, mock_creds_path
     ):
         """CRITICAL: Project not found errors prevent token consumption."""
-        from bqaudit.scan.executor import ScanExecutor
-        from bqaudit.scanner.bigquery_client import ProjectNotFoundError
+        from bqcheck.scan.executor import ScanExecutor
+        from bqcheck.scanner.bigquery_client import ProjectNotFoundError
 
         original_balance = test_credentials["token_pool_balance"]
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Mock validation to raise ProjectNotFoundError
         with mock.patch(
-            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions",
+            "bqcheck.scanner.bigquery_client.validate_multi_project_permissions",
             side_effect=ProjectNotFoundError("Project 'fake-project' not found"),
         ):
             # Should exit with code 2
@@ -465,14 +465,14 @@ class TestMultiProjectPermissionValidation:
         self, test_credentials, mock_creds_path, mock_real_scan_mode
     ):
         """Test that successful validation allows scan to proceed."""
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.scan.executor import ScanExecutor
 
-        api_client = BQAuditAPIClient(mock_mode=True)
+        api_client = BQCheckAPIClient(mock_mode=True)
         executor = ScanExecutor(api_client)
 
         # Mock successful validation
         with mock.patch(
-            "bqaudit.scanner.bigquery_client.validate_multi_project_permissions"
+            "bqcheck.scanner.bigquery_client.validate_multi_project_permissions"
         ):
             result = executor.execute_scan_with_tokens(
                 "storage-project", query_project="query-project"

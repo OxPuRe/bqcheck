@@ -4,8 +4,8 @@ import logging
 
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
-from bqaudit.license.security import mask_key
+from bqcheck.cli import app
+from bqcheck.license.security import mask_key
 
 runner = CliRunner()
 

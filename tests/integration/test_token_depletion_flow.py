@@ -14,8 +14,8 @@ from unittest.mock import Mock, patch
 import pytest
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.cli import app
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 runner = CliRunner()
 
@@ -27,7 +27,7 @@ def mock_credentials(tmp_path: Path) -> dict:
         "master_key": "VALID-TEST-KEY-123",
         "ephemeral_token": "test-token-xyz-789",
         "token_pool_balance": 1,  # Start with 1 token
-        "server_url": "https://api.bqaudit.com",
+        "server_url": "https://api.bqcheck.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
         "encryption_key": IdentifierEncryptor.key_to_base64(
             IdentifierEncryptor.generate_key()
@@ -35,7 +35,7 @@ def mock_credentials(tmp_path: Path) -> dict:
     }
 
     # Create credentials file
-    creds_dir = tmp_path / ".bqaudit"
+    creds_dir = tmp_path / ".bqcheck"
     creds_dir.mkdir(parents=True, exist_ok=True)
     creds_file = creds_dir / "credentials.json"
     creds_file.write_text(json.dumps(credentials))
@@ -47,11 +47,11 @@ def mock_credentials(tmp_path: Path) -> dict:
 @pytest.fixture
 def mock_creds_path(tmp_path: Path, monkeypatch):
     """Mock CredentialStore path to use tmp_path."""
-    creds_path = tmp_path / ".bqaudit" / "credentials.json"
+    creds_path = tmp_path / ".bqcheck" / "credentials.json"
 
     # Mock the _get_credentials_path method to return our test path
     monkeypatch.setattr(
-        "bqaudit.license.storage.CredentialStore._get_credentials_path",
+        "bqcheck.license.storage.CredentialStore._get_credentials_path",
         lambda: creds_path,
     )
     return creds_path
@@ -63,7 +63,7 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
 
     This tests the complete token depletion lifecycle across multiple commands.
     """
-    monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
+    monkeypatch.setenv("BQCHECK_REAL_MODE", "false")  # Use mock mode
 
     # Arrange: Create credentials with balance = 1
     mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
@@ -89,7 +89,7 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
             "low_priority_count": 0,
             "categories_breakdown": {},
         },
-        "audit_id": "test-audit-id-123",
+        "check_id": "test-check-id-123",
         "new_ephemeral_token": "new-token-456",
     }
 
@@ -102,26 +102,26 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
     mock_async_client.__aexit__ = AsyncMock(return_value=None)
 
     with patch(
-        "bqaudit.scanner.bigquery_client.authenticate_bigquery",
+        "bqcheck.scanner.bigquery_client.authenticate_bigquery",
         return_value=mock_bq_client,
     ):
         with patch(
-            "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
+            "bqcheck.scanner.authenticate_bigquery", return_value=mock_bq_client
         ):
             with patch(
-                "bqaudit.scanner.metadata_extractor.extract_table_metadata",
+                "bqcheck.scanner.metadata_extractor.extract_table_metadata",
                 return_value=[],
             ):
                 with patch(
-                    "bqaudit.scanner.metadata_extractor.extract_query_metadata",
+                    "bqcheck.scanner.metadata_extractor.extract_query_metadata",
                     return_value=[],
                 ):
                     with patch(
-                        "bqaudit.scanner.metadata_extractor.extract_access_patterns",
+                        "bqcheck.scanner.metadata_extractor.extract_access_patterns",
                         return_value=[],
                     ):
                         with patch(
-                            "bqaudit.scanner.metadata_extractor.extract_table_schemas",
+                            "bqcheck.scanner.metadata_extractor.extract_table_schemas",
                             return_value={},
                         ):
                             with patch(
@@ -150,7 +150,7 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
                                 assert result2.exit_code == 4
                                 assert "Token pool depleted" in result2.stdout
                                 assert "0 scans remaining" in result2.stdout
-                                assert "bqaudit.com/pricing" in result2.stdout
+                                assert "bqcheck.com/pricing" in result2.stdout
 
                                 # Act 3: Validate still attempts to run (doesn't check token balance)
                                 # Note: validate will likely fail due to actual BigQuery API calls,
@@ -175,4 +175,4 @@ def test_full_depletion_flow(tmp_path, mock_credentials, mock_creds_path, monkey
     # Assert 4: Status shows DEPLETED
     assert result4.exit_code == 0
     assert "0 scans remaining (DEPLETED)" in result4.stdout
-    assert "bqaudit.com/pricing" in result4.stdout
+    assert "bqcheck.com/pricing" in result4.stdout

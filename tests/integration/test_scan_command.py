@@ -6,15 +6,15 @@ from unittest.mock import Mock, patch
 import httpx
 import pytest
 
-from bqaudit.api.client import BQAuditAPIClient
-from bqaudit.api.models import AuditRequest, AuditResponse, AuditSummary, Recommendation
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.api.client import BQCheckAPIClient
+from bqcheck.api.models import CheckRequest, CheckResponse, CheckSummary, Recommendation
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 
 @pytest.fixture
 def mock_credentials_file(tmp_path):
     """Create mock credentials file for testing."""
-    creds_dir = tmp_path / ".bqaudit"
+    creds_dir = tmp_path / ".bqcheck"
     creds_dir.mkdir()
     creds_file = creds_dir / "credentials"
 
@@ -22,7 +22,7 @@ def mock_credentials_file(tmp_path):
         "master_key": "sk_live_test_key",
         "ephemeral_token": "eph_test_token",
         "token_pool_balance": 5,
-        "server_url": "https://api.bqaudit.test",
+        "server_url": "https://api.bqcheck.test",
         "encryption_key": IdentifierEncryptor.key_to_base64(
             IdentifierEncryptor.generate_key()
         ),
@@ -35,9 +35,9 @@ def mock_credentials_file(tmp_path):
 
 
 @pytest.fixture
-def mock_audit_response():
-    """Create mock audit response for testing."""
-    return AuditResponse(
+def mock_check_response():
+    """Create mock check response for testing."""
+    return CheckResponse(
         recommendations=[
             Recommendation(
                 type="storage",
@@ -48,7 +48,7 @@ def mock_audit_response():
                 implementation_steps=["DROP TABLE dataset.table"],
             )
         ],
-        summary=AuditSummary(
+        summary=CheckSummary(
             total_recommendations=1,
             total_potential_savings_eur=150.0,
             high_priority_count=1,
@@ -56,7 +56,7 @@ def mock_audit_response():
             low_priority_count=0,
             categories_breakdown={"storage": 1},
         ),
-        audit_id="audit_test_123",
+        check_id="check_test_123",
         new_ephemeral_token="eph_new_token",
     )
 
@@ -65,11 +65,11 @@ class TestScanCommandIntegration:
     """Integration tests for scan command with mock server."""
 
     @pytest.mark.asyncio
-    async def test_successful_audit_consumes_token(
-        self, mock_credentials_file, mock_audit_response
+    async def test_successful_check_consumes_token(
+        self, mock_credentials_file, mock_check_response
     ):
         """
-        Test successful audit execution with token consumption.
+        Test successful check execution with token consumption.
 
         Scenario:
         - token_pool_balance = 5
@@ -79,10 +79,10 @@ class TestScanCommandIntegration:
 
         AC1, AC2
         """
-        # RED PHASE: This test should FAIL because execute_audit() doesn't exist yet
-        client = BQAuditAPIClient(mock_mode=False)
+        # RED PHASE: This test should FAIL because execute_check() doesn't exist yet
+        client = BQCheckAPIClient(mock_mode=False)
 
-        audit_request = AuditRequest(
+        check_request = CheckRequest(
             project_id="a" * 64, metadata={"tables": [], "queries": []}
         )
 
@@ -90,15 +90,15 @@ class TestScanCommandIntegration:
         with patch("httpx.AsyncClient.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = mock_audit_response.model_dump()
+            mock_response.json.return_value = mock_check_response.model_dump()
             mock_post.return_value = mock_response
 
             # This should fail - method doesn't exist yet
-            result = await client.execute_audit(
-                audit_request=audit_request, ephemeral_token="eph_test_token"
+            result = await client.execute_check(
+                check_request=check_request, ephemeral_token="eph_test_token"
             )
 
-            assert isinstance(result, AuditResponse)
+            assert isinstance(result, CheckResponse)
             assert result.new_ephemeral_token == "eph_new_token"
             assert result.summary.total_recommendations == 1
 
@@ -114,9 +114,9 @@ class TestScanCommandIntegration:
         - Exit code 1
         """
         # RED PHASE: This test should FAIL
-        client = BQAuditAPIClient(mock_mode=False)
+        client = BQCheckAPIClient(mock_mode=False)
 
-        audit_request = AuditRequest(
+        check_request = CheckRequest(
             project_id="a" * 64, metadata={"tables": [], "queries": []}
         )
 
@@ -126,8 +126,8 @@ class TestScanCommandIntegration:
 
             # Should raise NetworkError after retries
             with pytest.raises(Exception):  # Will be NetworkError once implemented
-                await client.execute_audit(
-                    audit_request=audit_request, ephemeral_token="eph_test_token"
+                await client.execute_check(
+                    check_request=check_request, ephemeral_token="eph_test_token"
                 )
 
             # Verify retries happened (at least 3 attempts)
@@ -144,9 +144,9 @@ class TestScanCommandIntegration:
         - Exit code 1
         """
         # RED PHASE: This test should FAIL
-        client = BQAuditAPIClient(mock_mode=False)
+        client = BQCheckAPIClient(mock_mode=False)
 
-        audit_request = AuditRequest(
+        check_request = CheckRequest(
             project_id="a" * 64, metadata={"tables": [], "queries": []}
         )
 
@@ -156,8 +156,8 @@ class TestScanCommandIntegration:
 
             # Should raise after retries
             with pytest.raises(Exception):
-                await client.execute_audit(
-                    audit_request=audit_request, ephemeral_token="eph_test_token"
+                await client.execute_check(
+                    check_request=check_request, ephemeral_token="eph_test_token"
                 )
 
             # Verify at least 3 retry attempts
@@ -176,7 +176,7 @@ class TestScanCommandIntegration:
         # RED PHASE: This test should FAIL - scan command doesn't exist yet
         # This will be implemented in Task 1.1-1.2
 
-        creds_dir = tmp_path / ".bqaudit"
+        creds_dir = tmp_path / ".bqcheck"
         creds_dir.mkdir()
         creds_file = creds_dir / "credentials"
 
@@ -185,7 +185,7 @@ class TestScanCommandIntegration:
             "master_key": "sk_live_test_key",
             "ephemeral_token": "eph_test_token",
             "token_pool_balance": 0,  # DEPLETED
-            "server_url": "https://api.bqaudit.test",
+            "server_url": "https://api.bqcheck.test",
             "encryption_key": IdentifierEncryptor.key_to_base64(
                 IdentifierEncryptor.generate_key()
             ),
@@ -201,18 +201,18 @@ class TestScanCommandIntegration:
 
 
 @pytest.mark.asyncio
-async def test_execute_audit_includes_correct_headers():
+async def test_execute_check_includes_correct_headers():
     """
-    Test that execute_audit sends correct headers (AC1).
+    Test that execute_check sends correct headers (AC1).
 
     Verify:
     - X-Ephemeral-Token header is included
     - Content-Type is application/json
     """
     # RED PHASE: This test should FAIL
-    client = BQAuditAPIClient(mock_mode=False)
+    client = BQCheckAPIClient(mock_mode=False)
 
-    audit_request = AuditRequest(
+    check_request = CheckRequest(
         project_id="a" * 64, metadata={"tables": [], "queries": []}
     )
 
@@ -229,13 +229,13 @@ async def test_execute_audit_includes_correct_headers():
                 "low_priority_count": 0,
                 "categories_breakdown": {},
             },
-            "audit_id": "test_123",
+            "check_id": "test_123",
             "new_ephemeral_token": "eph_new",
         }
         mock_post.return_value = mock_response
 
-        await client.execute_audit(
-            audit_request=audit_request, ephemeral_token="eph_test_token"
+        await client.execute_check(
+            check_request=check_request, ephemeral_token="eph_test_token"
         )
 
         # Verify headers
@@ -250,13 +250,13 @@ class TestScanCommandProgressIndicators:
     @pytest.mark.skip(reason="Flaky test - console output capture timing issues")
     @pytest.mark.asyncio
     async def test_scan_shows_progress_indicators(
-        self, mock_credentials_file, mock_audit_response
+        self, mock_credentials_file, mock_check_response
     ):
         """
         Test that scan command displays progress indicators (AC1-5).
 
         Scenario:
-        - Execute real scan with BQAUDIT_REAL_SCAN=true
+        - Execute real scan with BQCHECK_REAL_SCAN=true
         - Verify progress messages are displayed in correct order
         - Verify success message with recommendations count and savings
         """
@@ -265,28 +265,28 @@ class TestScanCommandProgressIndicators:
 
         from rich.console import Console
 
-        from bqaudit.api.client import BQAuditAPIClient
-        from bqaudit.scan.executor import ScanExecutor
+        from bqcheck.api.client import BQCheckAPIClient
+        from bqcheck.scan.executor import ScanExecutor
 
         # Create mock console to capture output
         console = Console(file=io.StringIO())
 
         # Mock BigQuery client and metadata extraction
-        with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
+        with patch("bqcheck.scanner.authenticate_bigquery") as mock_auth:
             with patch(
-                "bqaudit.scanner.metadata_extractor.extract_table_metadata"
+                "bqcheck.scanner.metadata_extractor.extract_table_metadata"
             ) as mock_tables:
                 with patch(
-                    "bqaudit.scanner.metadata_extractor.extract_query_metadata"
+                    "bqcheck.scanner.metadata_extractor.extract_query_metadata"
                 ) as mock_queries:
                     with patch(
-                        "bqaudit.scanner.metadata_extractor.extract_access_patterns"
+                        "bqcheck.scanner.metadata_extractor.extract_access_patterns"
                     ) as mock_access:
                         with patch(
-                            "bqaudit.scanner.metadata_extractor.extract_table_schemas"
+                            "bqcheck.scanner.metadata_extractor.extract_table_schemas"
                         ) as mock_schemas:
                             with patch("httpx.AsyncClient.post") as mock_post:
-                                with patch("bqaudit.console.console", console):
+                                with patch("bqcheck.console.console", console):
                                     # Setup mocks
                                     mock_auth.return_value = Mock()
                                     mock_tables.return_value = []
@@ -297,12 +297,12 @@ class TestScanCommandProgressIndicators:
                                 mock_response = Mock()
                                 mock_response.status_code = 200
                                 mock_response.json.return_value = (
-                                    mock_audit_response.model_dump()
+                                    mock_check_response.model_dump()
                                 )
                                 mock_post.return_value = mock_response
 
                                 # Execute scan
-                                client = BQAuditAPIClient(mock_mode=False)
+                                client = BQCheckAPIClient(mock_mode=False)
                                 executor = ScanExecutor(client)
 
                                 await executor.execute_real_scan(
@@ -312,7 +312,7 @@ class TestScanCommandProgressIndicators:
 
                                 # Verify output contains progress messages
                                 output = console.file.getvalue()
-                                assert "🔍 Starting BigQuery audit" in output
+                                assert "🔍 Starting BigQuery sanity check" in output
                                 assert "☁️  Sending anonymized metadata" in output
 
     @pytest.mark.asyncio
@@ -327,17 +327,17 @@ class TestScanCommandProgressIndicators:
         """
         from google.api_core.exceptions import PermissionDenied
 
-        from bqaudit.api.client import BQAuditAPIClient
-        from bqaudit.scan.executor import ScanError, ScanExecutor
+        from bqcheck.api.client import BQCheckAPIClient
+        from bqcheck.scan.executor import ScanError, ScanExecutor
 
         # Mock BigQuery to raise PermissionDenied
-        with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
+        with patch("bqcheck.scanner.authenticate_bigquery") as mock_auth:
             with patch("subprocess.check_output") as mock_gcloud:
                 mock_auth.side_effect = PermissionDenied("Access denied")
                 mock_gcloud.return_value = "user@example.com\n"
 
                 # Execute scan
-                client = BQAuditAPIClient(mock_mode=False)
+                client = BQCheckAPIClient(mock_mode=False)
                 executor = ScanExecutor(client)
 
                 # Story 5.3: Should raise ScanError with code 3 instead of sys.exit()
@@ -365,15 +365,15 @@ class TestScanCommandProgressIndicators:
         - Display actionable error message
         - Raises ScanError with exit code 1
         """
-        from bqaudit.api.client import BQAuditAPIClient
-        from bqaudit.scan.executor import ScanError, ScanExecutor
+        from bqcheck.api.client import BQCheckAPIClient
+        from bqcheck.scan.executor import ScanError, ScanExecutor
 
         # Mock credentials
         mock_creds = {
             "master_key": "sk_live_test_key",
             "ephemeral_token": "eph_test_token",
             "token_pool_balance": 5,
-            "server_url": "https://api.bqaudit.test",
+            "server_url": "https://api.bqcheck.test",
             "activated_at": "2024-01-01T00:00:00+00:00",
             "encryption_key": IdentifierEncryptor.key_to_base64(
                 IdentifierEncryptor.generate_key()
@@ -383,20 +383,20 @@ class TestScanCommandProgressIndicators:
 
         # Mock BigQuery and server responses
         with patch(
-            "bqaudit.license.storage.CredentialStore.load", return_value=mock_creds
+            "bqcheck.license.storage.CredentialStore.load", return_value=mock_creds
         ):
-            with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
+            with patch("bqcheck.scanner.authenticate_bigquery") as mock_auth:
                 with patch(
-                    "bqaudit.scanner.metadata_extractor.extract_table_metadata"
+                    "bqcheck.scanner.metadata_extractor.extract_table_metadata"
                 ) as mock_tables:
                     with patch(
-                        "bqaudit.scanner.metadata_extractor.extract_query_metadata"
+                        "bqcheck.scanner.metadata_extractor.extract_query_metadata"
                     ) as mock_queries:
                         with patch(
-                            "bqaudit.scanner.metadata_extractor.extract_access_patterns"
+                            "bqcheck.scanner.metadata_extractor.extract_access_patterns"
                         ) as mock_access:
                             with patch(
-                                "bqaudit.scanner.metadata_extractor.extract_table_schemas"
+                                "bqcheck.scanner.metadata_extractor.extract_table_schemas"
                             ) as mock_schemas:
                                 with patch("httpx.AsyncClient.post") as mock_post:
                                     # Setup mocks
@@ -412,7 +412,7 @@ class TestScanCommandProgressIndicators:
                                     )
 
                                     # Execute scan
-                                    client = BQAuditAPIClient(mock_mode=False)
+                                    client = BQCheckAPIClient(mock_mode=False)
                                     executor = ScanExecutor(client)
 
                                     # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
@@ -427,8 +427,8 @@ class TestScanCommandProgressIndicators:
                                     # Verify error message was printed
                                     captured = capsys.readouterr()
                                     assert (
-                                        "Unable to reach audit server" in captured.err
-                                        or "Unable to reach audit server"
+                                        "Unable to reach analysis server" in captured.err
+                                        or "Unable to reach analysis server"
                                         in captured.out
                                     )
 
@@ -443,22 +443,22 @@ class TestScanCommandProgressIndicators:
         - Display actionable error message
         - Raises ScanError with exit code 1
         """
-        from bqaudit.api.client import BQAuditAPIClient
-        from bqaudit.scan.executor import ScanError, ScanExecutor
+        from bqcheck.api.client import BQCheckAPIClient
+        from bqcheck.scan.executor import ScanError, ScanExecutor
 
         # Mock BigQuery and server responses
-        with patch("bqaudit.scanner.authenticate_bigquery") as mock_auth:
+        with patch("bqcheck.scanner.authenticate_bigquery") as mock_auth:
             with patch(
-                "bqaudit.scanner.metadata_extractor.extract_table_metadata"
+                "bqcheck.scanner.metadata_extractor.extract_table_metadata"
             ) as mock_tables:
                 with patch(
-                    "bqaudit.scanner.metadata_extractor.extract_query_metadata"
+                    "bqcheck.scanner.metadata_extractor.extract_query_metadata"
                 ) as mock_queries:
                     with patch(
-                        "bqaudit.scanner.metadata_extractor.extract_access_patterns"
+                        "bqcheck.scanner.metadata_extractor.extract_access_patterns"
                     ) as mock_access:
                         with patch(
-                            "bqaudit.scanner.metadata_extractor.extract_table_schemas"
+                            "bqcheck.scanner.metadata_extractor.extract_table_schemas"
                         ) as mock_schemas:
                             with patch("httpx.AsyncClient.post") as mock_post:
                                 # Setup mocks
@@ -474,7 +474,7 @@ class TestScanCommandProgressIndicators:
                                 )
 
                             # Execute scan
-                            client = BQAuditAPIClient(mock_mode=False)
+                            client = BQCheckAPIClient(mock_mode=False)
                             executor = ScanExecutor(client)
 
                             # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
@@ -489,6 +489,6 @@ class TestScanCommandProgressIndicators:
                             # Verify error message was printed
                             captured = capsys.readouterr()
                             assert (
-                                "Audit timeout" in captured.err
-                                or "Audit timeout" in captured.out
+                                "Sanity check timeout" in captured.err
+                                or "Sanity check timeout" in captured.out
                             )

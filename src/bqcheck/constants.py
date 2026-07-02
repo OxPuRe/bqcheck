@@ -1,4 +1,4 @@
-"""Exit codes and configuration constants for bqaudit CLI."""
+"""Exit codes and configuration constants for bqcheck CLI."""
 
 from enum import IntEnum
 
@@ -31,8 +31,8 @@ HTTP_RETRY_BACKOFF_MULTIPLIER = 1  # Exponential backoff: 1s, 2s, 4s
 HTTP_RETRY_MIN_WAIT = 1  # Minimum wait time (seconds)
 HTTP_RETRY_MAX_WAIT = 4  # Maximum wait time (seconds)
 
-# Audit execution configuration (Story 5.3)
-GLOBAL_AUDIT_TIMEOUT_SECONDS = 1200.0  # 20 minutes global timeout for execute_audit
+# Check execution configuration (Story 5.3)
+GLOBAL_CHECK_TIMEOUT_SECONDS = 1200.0  # 20 minutes global timeout for execute_check
 TIMER_CANCEL_TIMEOUT_SECONDS = 5.0  # Timeout for timer task cancellation
 
 # HTTP client sync timeouts (Story 5.3 -  Issue #5)
@@ -41,21 +41,21 @@ HTTP_SYNC_TIMEOUT_MUTATION = 10.0  # State-changing operations (activate, renew,
 
 # Environment variables for real vs mock mode (Story 5.3 -  Issue #3)
 ENV_VAR_REAL_MODE = (
-    "BQAUDIT_REAL_MODE"  # Controls API client mode (mock vs real server)
+    "BQCHECK_REAL_MODE"  # Controls API client mode (mock vs real server)
 )
-ENV_VAR_REAL_SCAN = "BQAUDIT_REAL_SCAN"  # Controls scan execution (simulated vs real)
+ENV_VAR_REAL_SCAN = "BQCHECK_REAL_SCAN"  # Controls scan execution (simulated vs real)
 
 
 # Helper functions for environment variable checks ( Issue #1 & #4)
 def is_real_mode() -> bool:
     """
-    Check if real mode is enabled via BQAUDIT_REAL_MODE environment variable.
+    Check if real mode is enabled via BQCHECK_REAL_MODE environment variable.
 
     Added validation and warnings for invalid values
     to prevent silent feature flag failures where users expect real mode but get mock.
 
     Returns:
-        True if BQAUDIT_REAL_MODE is not set or =true, False if =false (default: real mode)
+        True if BQCHECK_REAL_MODE is not set or =true, False if =false (default: real mode)
     """
     import logging
     import os
@@ -80,13 +80,13 @@ def is_real_mode() -> bool:
 
 def is_real_scan() -> bool:
     """
-    Check if real scan is enabled via BQAUDIT_REAL_SCAN environment variable.
+    Check if real scan is enabled via BQCHECK_REAL_SCAN environment variable.
 
     Added validation and warnings for invalid values
     to prevent silent feature flag failures where users expect real scan but get simulated.
 
     Returns:
-        True if BQAUDIT_REAL_SCAN is not set or =true, False if =false (default: real scan)
+        True if BQCHECK_REAL_SCAN is not set or =true, False if =false (default: real scan)
     """
     import logging
     import os

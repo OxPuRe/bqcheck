@@ -1,5 +1,5 @@
 """
-CLI entrypoint for bqaudit.
+CLI entrypoint for bqcheck.
 
 Provides commands: validate, scan, license (activate, status, revoke).
 """
@@ -20,28 +20,28 @@ from rich.panel import Panel
 from rich.table import Table
 from typing_extensions import Annotated
 
-from bqaudit import __version__
-from bqaudit.api.client import check_server_health
-from bqaudit.config import configure_logging
-from bqaudit.constants import ExitCode
-from bqaudit.queries import (
+from bqcheck import __version__
+from bqcheck.api.client import check_server_health
+from bqcheck.config import configure_logging
+from bqcheck.constants import ExitCode
+from bqcheck.queries import (
     get_sample_queries_query,
     get_simple_test_query,
     get_table_count_query,
     get_tables_query,
 )
-from bqaudit.scanner import (
+from bqcheck.scanner import (
     AuthenticationError,
     authenticate_bigquery,
 )
-from bqaudit.scanner.anonymizer import (
+from bqcheck.scanner.anonymizer import (
     anonymize_query_pattern,
     anonymize_table_name,
 )
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 app = typer.Typer(
-    name="bqaudit", help="BigQuery cost optimization audit tool", no_args_is_help=True
+    name="bqcheck", help="BigQuery sanity check CLI", no_args_is_help=True
 )
 
 console = Console()
@@ -195,7 +195,7 @@ def validate(
         elif results[0].table_count == 0:
             console.print(
                 "[yellow]⚠ Project has no tables - "
-                "audit will have limited value[/yellow]"
+                "sanity check will have limited value[/yellow]"
             )
             validation_results.append(("Project Data", "⚠", "0 tables (limited value)"))
         else:
@@ -336,7 +336,7 @@ def validate(
 
             # Display transmission statement
             transmission_panel = Panel(
-                "[bold]This is what will be sent to bqaudit server:[/bold]\n"
+                "[bold]This is what will be sent to bqcheck server:[/bold]\n"
                 "• Metadata only (no table data)\n"
                 "• All identifiers encrypted with AES-256\n"
                 "• Only statistical information (sizes, counts, patterns)",
@@ -361,7 +361,7 @@ def validate(
             console.print(f"[dim]  Response: {health}[/dim]")
 
         console.print("[green]✓ Server connectivity OK[/green]")
-        validation_results.append(("Server Health", "✓", "api.bqaudit.com reachable"))
+        validation_results.append(("Server Health", "✓", "api.bqcheck.com reachable"))
 
         # Version compatibility check
         min_version = health.get("min_client_version")
@@ -388,7 +388,7 @@ def validate(
                     console.print(f"[dim]  Version check failed: {e}[/dim]")
 
     except httpx.ConnectError:
-        console.print("[red]❌ Cannot reach bqaudit server[/red]")
+        console.print("[red]❌ Cannot reach bqcheck server[/red]")
         _handle_validation_error("server_unreachable", project, 1)
 
     except httpx.TimeoutException:
@@ -502,11 +502,11 @@ To list available projects:
     gcloud projects list"""
 
     elif error_type == "server_unreachable":
-        return """❌ Cannot reach bqaudit server (api.bqaudit.com)
+        return """❌ Cannot reach bqcheck server (api.bqcheck.com)
 
 Possible causes:
 - Check internet connectivity
-- Verify firewall/proxy settings allow HTTPS to api.bqaudit.com
+- Verify firewall/proxy settings allow HTTPS to api.bqcheck.com
 - Server may be temporarily down (try again in a few minutes)"""
 
     elif error_type == "server_timeout":
@@ -523,7 +523,7 @@ Try again in a few minutes."""
         return """❌ Server returned an error response
 
 Possible causes:
-- Server is experiencing issues (check https://status.bqaudit.com)
+- Server is experiencing issues (check https://status.bqcheck.com)
 - API endpoint may be temporarily unavailable
 - Your request may have triggered a server-side error
 
@@ -551,7 +551,7 @@ def scan(
         typer.Option(
             "--output",
             "-o",
-            help="Custom output file path for audit report",
+            help="Custom output file path for sanity check report",
             dir_okay=False,
             writable=True,
         ),
@@ -566,10 +566,10 @@ def scan(
     ] = False,
 ) -> None:
     """
-    Run full audit scan (consumes 1 token).
+    Run full sanity check scan (consumes 1 token).
 
-    Executes complete BigQuery audit with server integration (Epic 5).
-    Extracts metadata from INFORMATION_SCHEMA, sends to audit server,
+    Executes complete BigQuery sanity check with server integration (Epic 5).
+    Extracts metadata from INFORMATION_SCHEMA, sends to the analysis server,
     and generates Markdown report with cost-saving recommendations.
 
     Multi-Project Support:
@@ -580,12 +580,12 @@ def scan(
         If --query-project is omitted, queries are extracted from --project.
 
         Example:
-            bqaudit scan --project roam-staging-dt-cur-0 \\
+            bqcheck scan --project roam-staging-dt-cur-0 \\
                          --query-project roam-staging-dt-prc-0
 
     Mode Selection:
         - Default: Simulated scan (Epic 3 compatibility)
-        - BQAUDIT_REAL_SCAN=true: Real BigQuery extraction + server analysis
+        - BQCHECK_REAL_SCAN=true: Real BigQuery extraction + server analysis
 
     Security:
         - Uses ephemeral token (auto-renewed after success)
@@ -599,15 +599,15 @@ def scan(
         2: File error (permission denied, file exists and user declined)
         4: Token pool depleted (Story 3.5)
     """
-    from bqaudit.api.client import BQAuditAPIClient
-    from bqaudit.license.storage import CredentialStore
-    from bqaudit.scan.executor import ScanExecutor
+    from bqcheck.api.client import BQCheckAPIClient
+    from bqcheck.license.storage import CredentialStore
+    from bqcheck.scan.executor import ScanExecutor
 
     try:
         # Step 1: Check credentials exist
         if not CredentialStore.exists():
             console.print("\n[yellow]No active license found.[/yellow]\n")
-            console.print("Run: [cyan]bqaudit license activate <key>[/cyan]")
+            console.print("Run: [cyan]bqcheck license activate <key>[/cyan]")
             raise typer.Exit(ExitCode.FILE_ERROR)
 
         # Step 2: Load credentials and check balance (AC1, Story 3.5)
@@ -616,7 +616,7 @@ def scan(
         if credentials["token_pool_balance"] == 0:
             # AC1, AC5: Token depletion error
             console.print("\n[red]❌ Token pool depleted (0 scans remaining).[/red]\n")
-            console.print("💰 Purchase more tokens at https://bqaudit.com/pricing\n")
+            console.print("💰 Purchase more tokens at https://bqcheck.com/pricing\n")
             raise typer.Exit(ExitCode.NO_TOKENS)
 
         # Step 3: Check if this is last token (AC2, Story 3.5)
@@ -624,10 +624,10 @@ def scan(
 
         # Step 4: Execute scan with token management
         # Mock mode: True (default for Epic 3)
-        from bqaudit.constants import is_real_mode
+        from bqcheck.constants import is_real_mode
 
         mock_mode = not is_real_mode()
-        api_client = BQAuditAPIClient(mock_mode=mock_mode)
+        api_client = BQCheckAPIClient(mock_mode=mock_mode)
         executor = ScanExecutor(api_client)
         executor.execute_scan_with_tokens(
             project, query_project=query_project, output_path=output, force=force
@@ -637,7 +637,7 @@ def scan(
         if is_last_token:
             console.print("\n[yellow]⚠️  Warning: This was your last token.[/yellow]")
             console.print(
-                "💰 Purchase more tokens to continue audits: https://bqaudit.com/pricing\n"
+                "💰 Purchase more tokens to continue running sanity checks: https://bqcheck.com/pricing\n"
             )
 
         # Success - exit 0
@@ -666,8 +666,8 @@ def scan(
                 "(e.g., negative balance).[/red]\n"
             )
             console.print(
-                "Run: [cyan]bqaudit license revoke && "
-                "bqaudit license activate <key>[/cyan]\n"
+                "Run: [cyan]bqcheck license revoke && "
+                "bqcheck license activate <key>[/cyan]\n"
             )
             raise typer.Exit(ExitCode.FILE_ERROR)
 
@@ -689,12 +689,12 @@ def license_activate(
     Activate license with master license key (one-time setup).
 
     Exchanges your master license key for ephemeral credentials and stores
-    them securely at ~/.bqaudit/credentials.json with chmod 600.
+    them securely at ~/.bqcheck/credentials.json with chmod 600.
 
     After activation, you can run scans without manually entering tokens.
 
     Example:
-        bqaudit license activate VALID-ABC-XYZ-123
+        bqcheck license activate VALID-ABC-XYZ-123
 
     Security:
         - Credentials stored with chmod 600 (owner read/write only)
@@ -705,15 +705,15 @@ def license_activate(
         0: Activation successful
         1: Invalid key, network error, or other failure
     """
-    from bqaudit.api.exceptions import InvalidLicenseKeyError, NetworkError
-    from bqaudit.license.activate import activate_license
-    from bqaudit.license.security import mask_key
+    from bqcheck.api.exceptions import InvalidLicenseKeyError, NetworkError
+    from bqcheck.license.activate import activate_license
+    from bqcheck.license.security import mask_key
 
     try:
         # AC4: Check for existing credentials
         # activate_license will raise FileExistsError if already activated
-        # Mock mode: True (default for Epic 3), False if BQAUDIT_REAL_MODE=true
-        from bqaudit.constants import is_real_mode
+        # Mock mode: True (default for Epic 3), False if BQCHECK_REAL_MODE=true
+        from bqcheck.constants import is_real_mode
 
         mock_mode = not is_real_mode()
         result = activate_license(master_key, mock_mode=mock_mode)
@@ -726,8 +726,8 @@ def license_activate(
         )
         console.print(f"Activated: {result['activated_at']}\n")
         console.print(
-            "You can now run audits with: "
-            "[cyan]bqaudit scan --project <project-id>[/cyan]"
+            "You can now run sanity checks with: "
+            "[cyan]bqcheck scan --project <project-id>[/cyan]"
         )
 
         # Success - no raise needed, typer will exit with 0
@@ -778,8 +778,8 @@ def license_status() -> None:
     import json
     from datetime import datetime, timezone
 
-    from bqaudit.license.security import mask_key
-    from bqaudit.license.storage import (
+    from bqcheck.license.security import mask_key
+    from bqcheck.license.storage import (
         CredentialNotFoundError,
         CredentialStore,
         UnsafePermissionsError,
@@ -813,7 +813,7 @@ def license_status() -> None:
             console.print(
                 f"Token Pool Balance: {balance} scans remaining [red](DEPLETED)[/red]"
             )
-            console.print("\n💰 Purchase more tokens at https://bqaudit.com/pricing\n")
+            console.print("\n💰 Purchase more tokens at https://bqcheck.com/pricing\n")
         else:
             console.print(f"Token Pool Balance: {balance} scans remaining")
 
@@ -827,14 +827,14 @@ def license_status() -> None:
         # AC2: No credentials found
         console.print("\n[yellow]No active license found.[/yellow]\n")
         console.print("To activate your license, run:")
-        console.print("  [cyan]bqaudit license activate <your-license-key>[/cyan]")
-        console.print("\nDon't have a license key? Visit https://bqaudit.com/pricing\n")
+        console.print("  [cyan]bqcheck license activate <your-license-key>[/cyan]")
+        console.print("\nDon't have a license key? Visit https://bqcheck.com/pricing\n")
         raise typer.Exit(ExitCode.FILE_ERROR)
 
     except UnsafePermissionsError:
         # AC3: Wrong file permissions
         console.print("\n[red]Credentials file has unsafe permissions.[/red]\n")
-        console.print("Run: [cyan]chmod 600 ~/.bqaudit/credentials.json[/cyan]\n")
+        console.print("Run: [cyan]chmod 600 ~/.bqcheck/credentials.json[/cyan]\n")
         raise typer.Exit(ExitCode.FILE_ERROR)
 
     except (json.JSONDecodeError, KeyError, ValueError):
@@ -844,8 +844,8 @@ def license_status() -> None:
             "Please re-activate your license.[/red]\n"
         )
         console.print(
-            "Run: [cyan]bqaudit license revoke && "
-            "bqaudit license activate <key>[/cyan]\n"
+            "Run: [cyan]bqcheck license revoke && "
+            "bqcheck license activate <key>[/cyan]\n"
         )
         raise typer.Exit(ExitCode.FILE_ERROR)
 
@@ -860,8 +860,8 @@ def license_status() -> None:
                 "(e.g., negative balance).[/red]\n"
             )
             console.print(
-                "Run: [cyan]bqaudit license revoke && "
-                "bqaudit license activate <key>[/cyan]\n"
+                "Run: [cyan]bqcheck license revoke && "
+                "bqcheck license activate <key>[/cyan]\n"
             )
             raise typer.Exit(ExitCode.FILE_ERROR)
         # Re-raise unexpected errors
@@ -882,7 +882,7 @@ def license_revoke(
     """
     Revoke stored license credentials.
 
-    Deletes the local credentials file (~/.bqaudit/credentials.json).
+    Deletes the local credentials file (~/.bqcheck/credentials.json).
     This deactivates the license on this machine.
 
     Use Cases:
@@ -893,17 +893,17 @@ def license_revoke(
 
     Examples:
         # Revoke with confirmation prompt
-        bqaudit license revoke
+        bqcheck license revoke
 
         # Revoke without confirmation (automation-friendly)
-        bqaudit license revoke -y
-        bqaudit license revoke --yes
+        bqcheck license revoke -y
+        bqcheck license revoke --yes
 
     Exit Codes:
         0: Revocation successful (or user cancelled)
         1: No active license to revoke
     """
-    from bqaudit.license.storage import (
+    from bqcheck.license.storage import (
         CredentialNotFoundError,
         CredentialStore,
     )
@@ -926,7 +926,7 @@ def license_revoke(
 
     # Delete credentials (required for both AC1 and AC2)
     try:
-        # Audit logging for security trail
+        # Activity logging for security trail
         logger = logging.getLogger(__name__)
         logger.info(
             "Revoking license credentials at %s",
@@ -939,7 +939,7 @@ def license_revoke(
         console.print("\n[green]✅ License revoked successfully.[/green]\n")
         console.print("Credentials removed from this machine.\n")
         console.print("To activate a new license, run:")
-        console.print("  [cyan]bqaudit license activate <key>[/cyan]\n")
+        console.print("  [cyan]bqcheck license activate <key>[/cyan]\n")
         # Exit code 0 (success) - no raise needed
 
     except CredentialNotFoundError:

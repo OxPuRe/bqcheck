@@ -1,5 +1,5 @@
 """
-HTTP client for bqaudit server API communication.
+HTTP client for bqcheck server API communication.
 
 Security Note:
 Master key transmitted in Authorization header relies on HTTPS security.
@@ -16,18 +16,18 @@ from typing import Any, Dict, TypedDict
 
 import httpx
 
-from bqaudit.api.exceptions import (
+from bqcheck.api.exceptions import (
     HTTPSRequiredError,
     InvalidLicenseKeyError,
     NetworkError,
 )
-from bqaudit.api.models import (
+from bqcheck.api.models import (
     ActivationResponse,
-    AuditRequest,
-    AuditResponse,
+    CheckRequest,
+    CheckResponse,
     TokenRenewalResponse,
 )
-from bqaudit.constants import HTTP_SYNC_TIMEOUT_CHECK, HTTP_SYNC_TIMEOUT_MUTATION
+from bqcheck.constants import HTTP_SYNC_TIMEOUT_CHECK, HTTP_SYNC_TIMEOUT_MUTATION
 
 # Mock mode test keys (Epic 3)
 # Use exact keys instead of prefix matching
@@ -144,7 +144,7 @@ def _validate_response_size_and_parse_json(response: httpx.Response) -> Any:
         ValueError: If response exceeds size limit
         NetworkError: If Content-Length is invalid
     """
-    # Maximum response size: 50MB (plenty for audit responses)
+    # Maximum response size: 50MB (plenty for check responses)
     max_response_size = 50 * 1024 * 1024  # 50MB
 
     # Check Content-Length header before parsing
@@ -194,7 +194,7 @@ class ServerHealthResponse(TypedDict, total=False):
 
 def check_server_health() -> Dict[str, Any]:
     """
-    Check bqaudit server health endpoint (zero tokens consumed).
+    Check bqcheck server health endpoint (zero tokens consumed).
 
     This function performs a GET request to the server's health endpoint
     to verify connectivity and retrieve version compatibility information.
@@ -224,17 +224,17 @@ def check_server_health() -> Dict[str, Any]:
     # Validate API URL from environment variable
     from urllib.parse import urlparse
 
-    base_url = os.getenv("BQAUDIT_API_URL", "https://api.bqaudit.com")
+    base_url = os.getenv("BQCHECK_API_URL", "https://api.bqcheck.com")
 
     # Validate URL format before use
     try:
         parsed = urlparse(base_url)
         if not parsed.scheme or not parsed.netloc or parsed.scheme != "https":
             raise ValueError(
-                f"Invalid BQAUDIT_API_URL: must be https:// URL, got {base_url}"
+                f"Invalid BQCHECK_API_URL: must be https:// URL, got {base_url}"
             )
     except (ValueError, AttributeError) as e:
-        raise ValueError(f"Invalid BQAUDIT_API_URL environment variable: {e}")
+        raise ValueError(f"Invalid BQCHECK_API_URL environment variable: {e}")
 
     health_url = f"{base_url}/v1/health"
 
@@ -259,7 +259,7 @@ def check_server_health() -> Dict[str, Any]:
     except httpx.ConnectError:
         # Don't expose internal exception details
         # Original exception may contain DNS lookup info, IP addresses, etc.
-        raise httpx.ConnectError("Cannot reach bqaudit server (network error)")
+        raise httpx.ConnectError("Cannot reach bqcheck server (network error)")
     except httpx.TimeoutException:
         raise httpx.TimeoutException("Server timeout (5s)")
     except httpx.HTTPStatusError as e:
@@ -274,9 +274,9 @@ def check_server_health() -> Dict[str, Any]:
         raise NetworkError(f"Server returned invalid response (expected JSON): {e}")
 
 
-class BQAuditAPIClient:
+class BQCheckAPIClient:
     """
-    API client for bqaudit server communication.
+    API client for bqcheck server communication.
 
     Epic 3: Returns mocked responses for testing (mock_mode=True)
     Future Epic: Switches to real HTTP calls (mock_mode=False)
@@ -288,8 +288,8 @@ class BQAuditAPIClient:
 
     Architecture Note:
     Uses both sync (activate_license, renew_token, report_scan) and async
-    (execute_audit) methods. Sync for quick CLI commands, async for long-running
-    audit operations with progress indicators.
+    (execute_check) methods. Sync for quick CLI commands, async for long-running
+    sanity check operations with progress indicators.
     """
 
     def __init__(self, mock_mode: bool = True):
@@ -306,10 +306,10 @@ class BQAuditAPIClient:
         if mock_mode:
             logging.getLogger(__name__).info(
                 "API client initialized in MOCK MODE - using test responses. "
-                "Set BQAUDIT_REAL_MODE=true for production use."
+                "Set BQCHECK_REAL_MODE=true for production use."
             )
         server_url_raw = os.getenv(
-            "BQAUDIT_API_URL", "https://bqaudit-server-evyc2k5v5a-ew.a.run.app"
+            "BQCHECK_API_URL", "https://bqcheck-server-evyc2k5v5a-ew.a.run.app"
         )
 
         # Validate API URL from environment variable
@@ -327,7 +327,7 @@ class BQAuditAPIClient:
             if parsed.scheme != "https":
                 raise HTTPSRequiredError(
                     f"HTTPS required (got {parsed.scheme}://). "
-                    f"Set BQAUDIT_API_URL to https:// URL"
+                    f"Set BQCHECK_API_URL to https:// URL"
                 )
 
             # Validate no path traversal attempts
@@ -339,7 +339,7 @@ class BQAuditAPIClient:
             self.server_url = server_url_raw
         except (ValueError, AttributeError) as e:
             raise ValueError(
-                f"Invalid BQAUDIT_API_URL environment variable: {e}. "
+                f"Invalid BQCHECK_API_URL environment variable: {e}. "
                 "Must be a valid https:// URL."
             )
 
@@ -627,20 +627,20 @@ class BQAuditAPIClient:
                 f"Invalid response during token renewal (expected JSON): {e}"
             )
 
-    async def execute_audit(
-        self, audit_request: AuditRequest, ephemeral_token: str
-    ) -> AuditResponse:
+    async def execute_check(
+        self, check_request: CheckRequest, ephemeral_token: str
+    ) -> CheckResponse:
         """
-        Execute audit by sending request to server.
+        Execute a sanity check by sending request to server.
 
         Story 5.1 - Task 2: HTTP client for server communication with retry logic.
 
         Args:
-            audit_request: Audit request with anonymized metadata
+            check_request: Check request with anonymized metadata
             ephemeral_token: Ephemeral token for authentication
 
         Returns:
-            AuditResponse with recommendations and new ephemeral token
+            CheckResponse with recommendations and new ephemeral token
 
         Raises:
             NetworkError: If network communication fails after retries
@@ -665,7 +665,7 @@ class BQAuditAPIClient:
             wait_exponential,
         )
 
-        from bqaudit.constants import (
+        from bqcheck.constants import (
             HTTP_MAX_RETRIES,
             HTTP_RETRY_MAX_WAIT,
             HTTP_RETRY_MIN_WAIT,
@@ -694,8 +694,8 @@ class BQAuditAPIClient:
                 timeout=timeout, follow_redirects=True
             ) as client:
                 response = await client.post(
-                    f"{self.server_url}/v1/audit",
-                    json=audit_request.model_dump(),
+                    f"{self.server_url}/v1/check",
+                    json=check_request.model_dump(),
                     headers={
                         "X-Ephemeral-Token": ephemeral_token,
                         "Content-Type": "application/json",
@@ -711,7 +711,7 @@ class BQAuditAPIClient:
 
         try:
             response_data = await _send_request()
-            return AuditResponse(**response_data)
+            return CheckResponse(**response_data)
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
                 raise InvalidLicenseKeyError(
@@ -725,20 +725,20 @@ class BQAuditAPIClient:
                 except Exception:
                     detail_msg = "Request validation failed"
                 raise NetworkError(
-                    f"Server rejected audit request (validation error). "
+                    f"Server rejected check request (validation error). "
                     f"This may indicate the payload is too large or malformed. "
                     f"Details: {detail_msg}"
                 )
             raise NetworkError(
-                f"Server error during audit. Status: {e.response.status_code}"
+                f"Server error during sanity check. Status: {e.response.status_code}"
             )
         except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as e:
             # After max retries exhausted
             raise NetworkError(
-                f"Network error during audit after {HTTP_MAX_RETRIES} retries: {e}"
+                f"Network error during sanity check after {HTTP_MAX_RETRIES} retries: {e}"
             )
         except ValueError as e:
             # JSONDecodeError is a subclass of ValueError
             raise NetworkError(
-                f"Server returned invalid response during audit (expected JSON): {e}"
+                f"Server returned invalid response during sanity check (expected JSON): {e}"
             )

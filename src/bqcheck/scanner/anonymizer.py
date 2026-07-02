@@ -17,8 +17,8 @@ Coverage Target: >90% (CRITICAL - privacy code must be thoroughly tested)
 import re
 from typing import Any, Dict, List, Optional
 
-from bqaudit.scanner.encryption import IdentifierEncryptor
-from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
+from bqcheck.scanner.encryption import IdentifierEncryptor
+from bqcheck.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 
 # Public API
 __all__ = [
@@ -97,7 +97,7 @@ def generate_salt() -> str:
     This function is deprecated and exists only for backward compatibility.
     Use encryption keys from credentials instead.
 
-    The encryption key should be loaded from ~/.bqaudit/credentials.json
+    The encryption key should be loaded from ~/.bqcheck/credentials.json
     (encryption_key field) rather than generated per-scan.
 
     Returns:
@@ -132,7 +132,7 @@ def anonymize_table_name(name: str, encryption_key: bytes) -> str:
         ValueError: If table name is empty, too long, or encryption_key is invalid
 
     Example:
-        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> from bqcheck.scanner.encryption import IdentifierEncryptor
         >>> key = IdentifierEncryptor.generate_key()
         >>> enc1 = anonymize_table_name("users", key)
         >>> enc2 = anonymize_table_name("users", key)
@@ -171,7 +171,7 @@ def anonymize_dataset_name(name: str, encryption_key: bytes) -> str:
         ValueError: If dataset name is empty, too long, or encryption_key is invalid
 
     Example:
-        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> from bqcheck.scanner.encryption import IdentifierEncryptor
         >>> key = IdentifierEncryptor.generate_key()
         >>> enc1 = anonymize_dataset_name("analytics", key)
         >>> len(enc1) > 0
@@ -210,7 +210,7 @@ def anonymize_project_id(project_id: str, encryption_key: bytes) -> str:
         ValueError: If project ID is empty, too long, or encryption_key is invalid
 
     Example:
-        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> from bqcheck.scanner.encryption import IdentifierEncryptor
         >>> key = IdentifierEncryptor.generate_key()
         >>> enc1 = anonymize_project_id("echo-analytics-prod", key)
         >>> len(enc1) > 0
@@ -329,7 +329,7 @@ def anonymize_query_pattern(query: Optional[str], encryption_key: bytes) -> str:
         Anonymized query string with encrypted table references
 
     Example:
-        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> from bqcheck.scanner.encryption import IdentifierEncryptor
         >>> key = IdentifierEncryptor.generate_key()
         >>> query = "SELECT * FROM project.dataset.table"
         >>> anonymized = anonymize_query_pattern(query, key)
@@ -402,7 +402,7 @@ def anonymize_metadata(
         New dictionary with encrypted sensitive fields
 
     Example:
-        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> from bqcheck.scanner.encryption import IdentifierEncryptor
         >>> key = IdentifierEncryptor.generate_key()
         >>> metadata = {
         ...     "table_catalog": "my-project",
@@ -524,7 +524,7 @@ def merge_table_metadata(
     """
     import re
 
-    from bqaudit.scanner.query_analyzer import aggregate_filtered_columns_all_tables
+    from bqcheck.scanner.query_analyzer import aggregate_filtered_columns_all_tables
 
     # Build lookup maps
     access_map = {}
@@ -608,8 +608,8 @@ def anonymize_table_list(
         List of anonymized dictionaries
 
     Example:
-        >>> from bqaudit.scanner.models import TableMetadata
-        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> from bqcheck.scanner.models import TableMetadata
+        >>> from bqcheck.scanner.encryption import IdentifierEncryptor
         >>> tables = [
         ...     TableMetadata(
         ...         table_catalog="my-project",
@@ -663,8 +663,8 @@ def anonymize_query_list(
         List of anonymized dictionaries with query text table references encrypted
 
     Example:
-        >>> from bqaudit.scanner.models import QueryMetadata
-        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> from bqcheck.scanner.models import QueryMetadata
+        >>> from bqcheck.scanner.encryption import IdentifierEncryptor
         >>> queries = [
         ...     QueryMetadata(
         ...         job_id="project:location.job_abc123",
@@ -722,8 +722,8 @@ def anonymize_access_patterns(
         List of anonymized dictionaries
 
     Example:
-        >>> from bqaudit.scanner.models import AccessPattern
-        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> from bqcheck.scanner.models import AccessPattern
+        >>> from bqcheck.scanner.encryption import IdentifierEncryptor
         >>> patterns = [
         ...     AccessPattern(
         ...         table_catalog="my-project",

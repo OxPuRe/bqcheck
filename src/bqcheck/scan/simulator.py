@@ -1,7 +1,7 @@
 """
 Simulated BigQuery scan for Epic 3 testing (Story 3.4, Task 5).
 
-This simulator mimics a real BigQuery audit scan without actually querying
+This simulator mimics a real BigQuery sanity check scan without actually querying
 INFORMATION_SCHEMA. The real implementation will come in Epic 4.
 """
 
@@ -11,14 +11,14 @@ import time
 
 import typer
 
-from bqaudit.scan.models import ScanResult
+from bqcheck.scan.models import ScanResult
 
 logger = logging.getLogger(__name__)
 
 
 def _get_simulation_delay() -> float:
     """Get simulation delay from environment variable."""
-    return float(os.getenv("BQAUDIT_SIMULATED_SCAN_DELAY", "2.0"))
+    return float(os.getenv("BQCHECK_SIMULATED_SCAN_DELAY", "2.0"))
 
 
 # Configurable simulation delay (default 2 seconds for realistic UX, 0.1 for tests)
@@ -55,7 +55,7 @@ def simulate_scan(project_id: str, ephemeral_token: str) -> ScanResult:
 
     typer.echo("✅ [SIMULATED] Scan completed successfully!")
     typer.echo("\n📝 Note: This is a simulated scan for Epic 3 token testing.")
-    typer.echo("   Full BigQuery audit coming in Epic 4.")
+    typer.echo("   Full BigQuery sanity check coming in Epic 4.")
 
     return ScanResult(
         success=True,

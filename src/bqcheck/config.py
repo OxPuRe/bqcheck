@@ -1,7 +1,7 @@
 """
 Configuration priority: CLI flags > env vars > config file > defaults.
 
-Supports: ~/.bqaudit/config.yaml and ./.bqaudit.yaml
+Supports: ~/.bqcheck/config.yaml and ./.bqcheck.yaml
 """
 
 import logging
@@ -9,7 +9,7 @@ import logging
 
 def configure_logging(verbose: bool = False) -> logging.Logger:
     """
-    Configure logging for bqaudit CLI.
+    Configure logging for bqcheck CLI.
 
     Sets up logging with appropriate level based on verbose flag.
     - verbose=True: DEBUG level (detailed logging)
@@ -19,7 +19,7 @@ def configure_logging(verbose: bool = False) -> logging.Logger:
         verbose: Enable verbose (DEBUG) logging. Defaults to False.
 
     Returns:
-        Configured logger instance for bqaudit
+        Configured logger instance for bqcheck
 
     Example:
         >>> logger = configure_logging(verbose=True)
@@ -28,7 +28,7 @@ def configure_logging(verbose: bool = False) -> logging.Logger:
         >>> logger.debug("This will be hidden")
     """
     # Get or create logger
-    logger = logging.getLogger("bqaudit")
+    logger = logging.getLogger("bqcheck")
 
     # Set logging level based on verbose flag
     if verbose:

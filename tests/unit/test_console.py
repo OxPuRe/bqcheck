@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
-from bqaudit.console import (
+from bqcheck.console import (
     show_analysis_progress,
     show_extraction_progress,
     show_server_upload,
@@ -26,13 +26,13 @@ class TestProgressMessages:
 
         # When: Display start message
         console = Console(file=io.StringIO())
-        with patch("bqaudit.console.console", console):
+        with patch("bqcheck.console.console", console):
             show_start_message(project_id)
 
         # Then: Message includes emoji and project ID
         output = console.file.getvalue()
         assert "🔍" in output
-        assert "Starting BigQuery audit" in output
+        assert "Starting BigQuery sanity check" in output
         assert "my-gcp-project" in output
 
     def test_extraction_progress_context_manager(self):
@@ -41,7 +41,7 @@ class TestProgressMessages:
         console = Console(file=io.StringIO())
 
         # When: Get extraction progress context
-        with patch("bqaudit.console.console", console):
+        with patch("bqcheck.console.console", console):
             context = show_extraction_progress()
 
         # Then: Context is a status manager
@@ -54,7 +54,7 @@ class TestProgressMessages:
         console = Console(file=io.StringIO())
 
         # When: Display server upload message
-        with patch("bqaudit.console.console", console):
+        with patch("bqcheck.console.console", console):
             show_server_upload()
 
         # Then: Message includes emoji and text
@@ -64,13 +64,13 @@ class TestProgressMessages:
 
     def test_success_message_formatting(self):
         """Test success message includes count and formatted savings (AC5)."""
-        # Given: Audit results
+        # Given: Check results
         count = 5
         savings = 1234.56
 
         # When: Display success message
         console = Console(file=io.StringIO())
-        with patch("bqaudit.console.console", console):
+        with patch("bqcheck.console.console", console):
             show_success_message(count, savings)
 
         # Then: Message includes count and formatted savings
@@ -87,7 +87,7 @@ class TestProgressMessages:
 
         # When: Display success message
         console = Console(file=io.StringIO())
-        with patch("bqaudit.console.console", console):
+        with patch("bqcheck.console.console", console):
             show_success_message(count, savings)
 
         # Then: Message handles zero correctly
@@ -103,7 +103,7 @@ class TestProgressMessages:
 
         # When: Display success message
         console = Console(file=io.StringIO())
-        with patch("bqaudit.console.console", console):
+        with patch("bqcheck.console.console", console):
             show_success_message(count, savings)
 
         # Then: Message includes thousand separator
@@ -139,7 +139,7 @@ class TestElapsedTimer:
                 console.print(f"⏱️  Elapsed: {minutes}m {seconds}s")
 
         # When: Run timer task
-        with patch("bqaudit.console.console", console):
+        with patch("bqcheck.console.console", console):
             timer_task = asyncio.create_task(mock_analysis_progress())
             await timer_task
 
@@ -172,7 +172,7 @@ class TestElapsedTimer:
             console.print(f"⏱️  Elapsed: {minutes}m {seconds}s")
 
         # When: Run timer
-        with patch("bqaudit.console.console", console):
+        with patch("bqcheck.console.console", console):
             timer_task = asyncio.create_task(mock_long_analysis())
             await timer_task
 
@@ -198,7 +198,7 @@ class TestElapsedTimer:
         console = Console(file=io.StringIO())
 
         # When: Start timer, let it run briefly, then cancel
-        with patch("bqaudit.console.console", console):
+        with patch("bqcheck.console.console", console):
             timer_task = asyncio.create_task(show_analysis_progress())
 
             # Let timer start

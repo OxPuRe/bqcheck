@@ -1,13 +1,13 @@
-"""License activation logic for bqaudit."""
+"""License activation logic for bqcheck."""
 
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from bqaudit.api.client import BQAuditAPIClient
-from bqaudit.api.exceptions import InvalidLicenseKeyError, NetworkError
-from bqaudit.license.storage import CredentialStore
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.api.client import BQCheckAPIClient
+from bqcheck.api.exceptions import InvalidLicenseKeyError, NetworkError
+from bqcheck.license.storage import CredentialStore
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def activate_license(master_key: str, mock_mode: bool = True) -> Dict[str, Any]:
     Process:
     1. Check if credentials already exist (AC4) → early return
     2. Call API to activate license (mocked in Epic 3)
-    3. Save credentials to ~/.bqaudit/credentials.json with chmod 600
+    3. Save credentials to ~/.bqcheck/credentials.json with chmod 600
     4. Return success data with balance
 
     Args:
@@ -41,11 +41,11 @@ def activate_license(master_key: str, mock_mode: bool = True) -> Dict[str, Any]:
         logger.warning("License activation attempted but credentials already exist")
         raise FileExistsError(
             "License already activated. "
-            "Use 'bqaudit license revoke' first to re-activate."
+            "Use 'bqcheck license revoke' first to re-activate."
         )
 
     # Call API to activate (mocked for Epic 3)
-    api_client = BQAuditAPIClient(mock_mode=mock_mode)
+    api_client = BQCheckAPIClient(mock_mode=mock_mode)
 
     try:
         # AC1: Valid activation

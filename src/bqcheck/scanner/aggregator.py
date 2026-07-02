@@ -16,9 +16,9 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List
 
-from bqaudit.scanner.anonymizer import anonymize_query_pattern
-from bqaudit.scanner.encryption import IdentifierEncryptor
-from bqaudit.scanner.models import QueryMetadata
+from bqcheck.scanner.anonymizer import anonymize_query_pattern
+from bqcheck.scanner.encryption import IdentifierEncryptor
+from bqcheck.scanner.models import QueryMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -152,8 +152,8 @@ def aggregate_query_metadata(
         - has_materialized_view: Whether materialized view exists (always False for now)
 
     Example:
-        >>> from bqaudit.scanner.models import QueryMetadata
-        >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+        >>> from bqcheck.scanner.models import QueryMetadata
+        >>> from bqcheck.scanner.encryption import IdentifierEncryptor
         >>> queries = [
         ...     QueryMetadata(
         ...         job_id="project:us.job1",

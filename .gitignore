@@ -72,7 +72,7 @@ credentials.json
 .secrets/
 .env.local
 .env.*.local
-~/.bqaudit/credentials
+~/.bqcheck/credentials
 
 # Logs
 *.log
@@ -86,9 +86,9 @@ logs/
 # Output files
 *.pdf
 *.csv
-audit-reports/
+sanity-check-reports/
 exports/
-audit-report-*.md  # Generated audit reports from tests/CLI
+sanity-check-report-*.md  # Generated reports from tests/CLI
 
 # OS
 Thumbs.db

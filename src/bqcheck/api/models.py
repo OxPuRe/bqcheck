@@ -44,12 +44,12 @@ class TokenRenewalResponse(BaseModel):
     token_pool_balance: int = Field(description="Updated token balance", ge=0)
 
 
-# Audit Request/Response Models (Story 5.1)
+# Check Request/Response Models (Story 5.1)
 
 
-class AuditMetadata(BaseModel):
+class CheckMetadata(BaseModel):
     """
-    Structured metadata for audit request (Story 5.3).
+    Structured metadata for check request (Story 5.3).
 
     Validates BigQuery metadata structure to prevent server-side errors.
 
@@ -121,8 +121,8 @@ class AuditMetadata(BaseModel):
         return value
 
 
-class AuditRequest(BaseModel):
-    """Request payload for audit execution."""
+class CheckRequest(BaseModel):
+    """Request payload for check execution."""
 
     project_id: str = Field(
         min_length=64,
@@ -130,7 +130,7 @@ class AuditRequest(BaseModel):
         pattern="^[a-f0-9]{64}$",
         description="Anonymized GCP project ID (SHA-256 hash)",
     )
-    metadata: AuditMetadata = Field(
+    metadata: CheckMetadata = Field(
         description="Anonymized BigQuery metadata (tables, queries, access_patterns)"
     )
 
@@ -149,8 +149,8 @@ class Recommendation(BaseModel):
     implementation_steps: List[str] = Field(description="Steps to implement")
 
 
-class AuditSummary(BaseModel):
-    """Summary statistics for audit results."""
+class CheckSummary(BaseModel):
+    """Summary statistics for check results."""
 
     total_recommendations: int = Field(ge=0, description="Total recommendation count")
     total_potential_savings_eur: float = Field(
@@ -164,14 +164,14 @@ class AuditSummary(BaseModel):
     )
 
 
-class AuditResponse(BaseModel):
-    """Response payload for audit execution."""
+class CheckResponse(BaseModel):
+    """Response payload for check execution."""
 
     recommendations: List[Recommendation] = Field(
         description="List of cost-saving recommendations"
     )
-    summary: AuditSummary = Field(description="Audit summary statistics")
-    audit_id: str = Field(description="Unique audit identifier")
+    summary: CheckSummary = Field(description="Check summary statistics")
+    check_id: str = Field(description="Unique check identifier")
     new_ephemeral_token: Optional[str] = Field(
         default=None, description="New ephemeral token for next scan"
     )

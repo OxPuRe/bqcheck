@@ -27,9 +27,9 @@ import httpx
 import typer
 from google.api_core.exceptions import Forbidden, NotFound, PermissionDenied
 
-from bqaudit.api.client import BQAuditAPIClient
-from bqaudit.api.models import AuditResponse
-from bqaudit.console import (
+from bqcheck.api.client import BQCheckAPIClient
+from bqcheck.api.models import CheckResponse
+from bqcheck.console import (
     console,
     show_analysis_progress,
     show_extraction_progress,
@@ -37,20 +37,20 @@ from bqaudit.console import (
     show_start_message,
     show_success_message,
 )
-from bqaudit.error_handlers import (
+from bqcheck.error_handlers import (
     handle_bigquery_forbidden_error,
     handle_bigquery_not_found_error,
     handle_bigquery_permission_error,
     handle_network_error,
     handle_timeout_error,
 )
-from bqaudit.license.storage import (
+from bqcheck.license.storage import (
     CredentialNotFoundError,
     CredentialStore,
     UnsafePermissionsError,
 )
-from bqaudit.scan.models import ScanResult
-from bqaudit.scan.simulator import simulate_scan
+from bqcheck.scan.models import ScanResult
+from bqcheck.scan.simulator import simulate_scan
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ class ScanExecutor:
     - Update credentials atomically (AC6)
     """
 
-    def __init__(self, api_client: BQAuditAPIClient):
+    def __init__(self, api_client: BQCheckAPIClient):
         """
         Initialize scan executor.
 
@@ -103,7 +103,7 @@ class ScanExecutor:
 
         Process:
         1. Load credentials
-        2. Execute scan (simulated or real based on BQAUDIT_REAL_SCAN env var)
+        2. Execute scan (simulated or real based on BQCHECK_REAL_SCAN env var)
         3. On success: renew token + decrement balance + save
         4. On failure: preserve token (atomic consumption)
 
@@ -122,7 +122,7 @@ class ScanExecutor:
             Exception: If scan fails (token preserved - AC2)
 
         Environment Variables:
-            BQAUDIT_REAL_SCAN: Set to 'true' to execute real audit with server.
+            BQCHECK_REAL_SCAN: Set to 'true' to execute a real sanity check with server analysis.
                               Default: 'false' (simulated scan for Epic 3)
 
         Security:
@@ -134,11 +134,11 @@ class ScanExecutor:
             credentials = CredentialStore.load()
         except CredentialNotFoundError:
             typer.echo("❌ Error: No active license found.")
-            typer.echo("Run: bqaudit license activate <your-license-key>")
+            typer.echo("Run: bqcheck license activate <your-license-key>")
             raise
         except UnsafePermissionsError:
             typer.echo("❌ Error: Credentials file has unsafe permissions.")
-            typer.echo("Run: chmod 600 ~/.bqaudit/credentials.json")
+            typer.echo("Run: chmod 600 ~/.bqcheck/credentials.json")
             raise
         except Exception as e:
             # Handle Pydantic ValidationError for corrupted credentials
@@ -150,7 +150,7 @@ class ScanExecutor:
                     "(e.g., negative balance)."
                 )
                 typer.echo(
-                    "Run: bqaudit license revoke && bqaudit license activate <key>"
+                    "Run: bqcheck license revoke && bqcheck license activate <key>"
                 )
                 raise
             # Unexpected errors - log and re-raise to preserve stack trace
@@ -160,10 +160,10 @@ class ScanExecutor:
         # Step 1.5: Validate BigQuery permissions BEFORE consuming token
         # This ensures we fail fast if permissions are missing
         try:
-            from bqaudit.scanner.bigquery_client import (
+            from bqcheck.scanner.bigquery_client import (
                 PermissionError as BQPermissionError,
             )
-            from bqaudit.scanner.bigquery_client import (
+            from bqcheck.scanner.bigquery_client import (
                 ProjectNotFoundError,
                 validate_multi_project_permissions,
             )
@@ -179,7 +179,7 @@ class ScanExecutor:
 
         except BQPermissionError as e:
             typer.echo(f"\n❌ {e.message}")
-            typer.echo("\n💡 Tip: Run 'bqaudit validate' to check permissions")
+            typer.echo("\n💡 Tip: Run 'bqcheck validate' to check permissions")
             sys.exit(3)
 
         # Step 2: Execute scan (SIMULATED for Epic 3, or REAL for Epic 5)
@@ -187,24 +187,24 @@ class ScanExecutor:
             # AC1, AC7: Simulated scan
             # AC4: Token never logged - passed to simulator but not logged
             # Choose scan mode based on environment variable
-            # Note: BQAUDIT_REAL_SCAN controls scan execution (simulated vs real)
-            # Note: BQAUDIT_REAL_MODE controls API client mode (mock vs real server)
-            from bqaudit.constants import is_real_scan
+            # Note: BQCHECK_REAL_SCAN controls scan execution (simulated vs real)
+            # Note: BQCHECK_REAL_MODE controls API client mode (mock vs real server)
+            from bqcheck.constants import is_real_scan
 
             use_real_scan = is_real_scan()
 
             if use_real_scan:
-                # Epic 5: Execute real audit with server
-                from bqaudit.constants import ENV_VAR_REAL_SCAN
+                # Epic 5: Execute real check with server
+                from bqcheck.constants import ENV_VAR_REAL_SCAN
 
-                logger.info(f"Executing REAL audit ({ENV_VAR_REAL_SCAN}=true)")
+                logger.info(f"Executing REAL check ({ENV_VAR_REAL_SCAN}=true)")
                 import asyncio
 
                 # Note: Using asyncio.run() in sync context. This creates a new event loop.
                 # LIMITATION: Cannot be called from existing async context (would raise RuntimeError).
                 # This is acceptable for CLI entry point but limits future async refactoring.
                 try:
-                    audit_response = asyncio.run(
+                    check_response = asyncio.run(
                         self.execute_real_scan(
                             project_id, credentials["ephemeral_token"], query_project
                         )
@@ -214,15 +214,15 @@ class ScanExecutor:
                     # Error handlers already displayed messages, just exit with code
                     sys.exit(e.exit_code)
 
-                # AC5: Display audit results immediately (credentials updated later atomically)
+                # AC5: Display check results immediately (credentials updated later atomically)
                 show_success_message(
-                    audit_response.summary.total_recommendations,
-                    audit_response.summary.total_potential_savings_eur,
+                    check_response.summary.total_recommendations,
+                    check_response.summary.total_potential_savings_eur,
                 )
 
                 # Generate and save Markdown report (Story 5.2, 5.4)
-                from bqaudit.report_generator import MarkdownReportGenerator
-                from bqaudit.scanner.encryption import IdentifierEncryptor
+                from bqcheck.report_generator import MarkdownReportGenerator
+                from bqcheck.scanner.encryption import IdentifierEncryptor
 
                 # Load encryption key for report decryption
                 encryption_key_b64 = credentials.get("encryption_key")
@@ -233,7 +233,7 @@ class ScanExecutor:
                     )
 
                 generator = MarkdownReportGenerator(
-                    audit_response,
+                    check_response,
                     project_name=project_id,
                     encryption_key=encryption_key,  # Pass encryption key for decryption
                 )
@@ -249,7 +249,7 @@ class ScanExecutor:
                     )
                 else:
                     console.print(
-                        f"[green]✅ Audit report saved to:[/green] {report_path}"
+                        f"[green]✅ Sanity check report saved to:[/green] {report_path}"
                     )
 
                 # Create a ScanResult wrapper for compatibility
@@ -257,24 +257,24 @@ class ScanExecutor:
                     simulated=False,
                     success=True,
                     project_id=project_id,
-                    audit_response=audit_response,
+                    check_response=check_response,
                 )
             else:
                 # Epic 3: Simulated scan (original behavior)
-                logger.info("Executing SIMULATED audit (Epic 3)")
+                logger.info("Executing SIMULATED check (Epic 3)")
                 result = self._execute_simulated_scan(
                     project_id, credentials["ephemeral_token"]
                 )
 
-            # Step 3: Get renewed token from audit response
-            # Server should return new_ephemeral_token in /v1/audit response
+            # Step 3: Get renewed token from check response
+            # Server should return new_ephemeral_token in /v1/check response
             # If not available (server not implemented yet), use mock renewal
-            if result.audit_response and result.audit_response.new_ephemeral_token:
-                new_ephemeral_token = result.audit_response.new_ephemeral_token
+            if result.check_response and result.check_response.new_ephemeral_token:
+                new_ephemeral_token = result.check_response.new_ephemeral_token
                 new_balance = credentials["token_pool_balance"] - 1
             else:
                 # Fallback: Mock renewal until server implements token rotation
-                # TODO: Remove when server populates new_ephemeral_token in /v1/audit
+                # TODO: Remove when server populates new_ephemeral_token in /v1/check
                 logger.warning(
                     "Server did not return new_ephemeral_token. Using mock renewal."
                 )
@@ -303,12 +303,12 @@ class ScanExecutor:
 
             # Validate used_tokens length before append
             # Prevent unbounded growth and log when truncation occurs
-            max_used_tokens = 100  # Reasonable limit for audit trail
+            max_used_tokens = 100  # Reasonable limit for usage trail
 
             if len(credentials["used_tokens"]) >= max_used_tokens:
                 logger.warning(
                     f"used_tokens list at maximum capacity ({max_used_tokens}). "
-                    "Keeping only last 5 tokens for recent audit trail."
+                    "Keeping only last 5 tokens for recent usage trail."
                 )
                 credentials["used_tokens"] = credentials["used_tokens"][
                     -4:
@@ -387,7 +387,7 @@ class ScanExecutor:
 
     async def execute_real_scan(
         self, project_id: str, ephemeral_token: str, query_project: "str | None" = None
-    ) -> AuditResponse:
+    ) -> CheckResponse:
         """
         Execute REAL BigQuery scan with server integration (Story 5.1 + 5.3).
 
@@ -395,8 +395,8 @@ class ScanExecutor:
         1. Display start message (AC1)
         2. Extract metadata from BigQuery INFORMATION_SCHEMA with spinner (AC2)
         3. Anonymize project_id (SHA-256)
-        4. Send to POST /v1/audit with progress indicators (AC3, AC4)
-        5. Return AuditResponse with recommendations
+        4. Send to POST /v1/check with progress indicators (AC3, AC4)
+        5. Return CheckResponse with recommendations
 
         Args:
             project_id: GCP project ID to scan for table metadata
@@ -405,7 +405,7 @@ class ScanExecutor:
                           If None, uses project_id for both tables and queries.
 
         Returns:
-            AuditResponse with recommendations and new ephemeral token
+            CheckResponse with recommendations and new ephemeral token
 
         Raises:
             SystemExit: Via error handlers (AC6, AC7, AC8)
@@ -421,8 +421,8 @@ class ScanExecutor:
         import asyncio
         import hashlib
 
-        from bqaudit.api.models import AuditRequest
-        from bqaudit.scanner import authenticate_bigquery
+        from bqcheck.api.models import CheckRequest
+        from bqcheck.scanner import authenticate_bigquery
 
         # AC1: Display start message
         show_start_message(project_id)
@@ -436,14 +436,14 @@ class ScanExecutor:
                 client = authenticate_bigquery(project_id)
 
                 # Epic 2 Integration: Extract real metadata
-                from bqaudit.scanner.aggregator import aggregate_query_metadata
-                from bqaudit.scanner.anonymizer import (
+                from bqcheck.scanner.aggregator import aggregate_query_metadata
+                from bqcheck.scanner.anonymizer import (
                     anonymize_access_patterns,
                     anonymize_metadata,
                     merge_table_metadata,
                 )
-                from bqaudit.scanner.encryption import IdentifierEncryptor
-                from bqaudit.scanner.metadata_extractor import (
+                from bqcheck.scanner.encryption import IdentifierEncryptor
+                from bqcheck.scanner.metadata_extractor import (
                     extract_access_patterns,
                     extract_query_metadata,
                     extract_table_metadata,
@@ -482,7 +482,7 @@ class ScanExecutor:
                 raise ValueError(
                     "Encryption key not found in credentials. "
                     "Please revoke and re-activate your license: "
-                    "bqaudit license revoke && bqaudit license activate <key>"
+                    "bqcheck license revoke && bqcheck license activate <key>"
                 )
             encryption_key = IdentifierEncryptor.key_from_base64(encryption_key_b64)
 
@@ -502,10 +502,10 @@ class ScanExecutor:
                 access_patterns, encryption_key
             )
 
-            # Convert Pydantic models to dicts and create validated AuditMetadata
-            from bqaudit.api.models import AuditMetadata
+            # Convert Pydantic models to dicts and create validated CheckMetadata
+            from bqcheck.api.models import CheckMetadata
 
-            metadata = AuditMetadata(
+            metadata = CheckMetadata(
                 tables=anonymized_tables,
                 queries=aggregated_queries,
                 access_patterns=anonymized_patterns,
@@ -575,8 +575,8 @@ class ScanExecutor:
                 f"Invalid SHA-256 hash format (expected 64 hex chars): {project_id_hash}"
             )
 
-        # Step 3: Create audit request
-        audit_request = AuditRequest(
+        # Step 3: Create check request
+        check_request = CheckRequest(
             project_id=project_id_hash,
             metadata=metadata,
         )
@@ -584,10 +584,10 @@ class ScanExecutor:
         # Log payload size for debugging (helps diagnose 422 validation errors)
         import json
 
-        payload_json = json.dumps(audit_request.model_dump())
+        payload_json = json.dumps(check_request.model_dump())
         payload_size_mb = len(payload_json.encode("utf-8")) / (1024 * 1024)
         logger.info(
-            f"Audit request payload size: {payload_size_mb:.2f} MB "
+            f"Check request payload size: {payload_size_mb:.2f} MB "
             f"({len(metadata.tables)} tables, {len(metadata.queries)} queries, "
             f"{len(metadata.access_patterns)} access patterns)"
         )
@@ -598,26 +598,26 @@ class ScanExecutor:
             show_server_upload()
 
             # AC4: Start timer task for analysis progress
-            logger.info("Sending audit request to server...")
+            logger.info("Sending check request to server...")
             timer_task = asyncio.create_task(show_analysis_progress())
 
             try:
-                # Story 5.3: Global timeout for execute_audit
+                # Story 5.3: Global timeout for execute_check
                 # Prevents indefinite waits during retries or server-side processing
-                from bqaudit.constants import GLOBAL_AUDIT_TIMEOUT_SECONDS
+                from bqcheck.constants import GLOBAL_CHECK_TIMEOUT_SECONDS
 
                 response = await asyncio.wait_for(
-                    self.api_client.execute_audit(
-                        audit_request=audit_request,
+                    self.api_client.execute_check(
+                        check_request=check_request,
                         ephemeral_token=ephemeral_token,
                     ),
-                    timeout=GLOBAL_AUDIT_TIMEOUT_SECONDS,
+                    timeout=GLOBAL_CHECK_TIMEOUT_SECONDS,
                 )
             finally:
                 # IMPORTANT: This finally block executes BEFORE exception handlers below.
                 # Timer is guaranteed to be cancelled before any error handler runs.
                 # This prevents resource leaks (timer keeps running after error).
-                from bqaudit.constants import TIMER_CANCEL_TIMEOUT_SECONDS
+                from bqcheck.constants import TIMER_CANCEL_TIMEOUT_SECONDS
 
                 # Robust task cancellation with exception handling
                 if not timer_task.done():
@@ -641,12 +641,12 @@ class ScanExecutor:
                     # Catch unexpected timer exceptions
                     # Timer task might raise from run_in_executor() or other failures
                     logger.error(f"Unexpected timer task exception during cleanup: {e}")
-                    # Don't re-raise - we're in cleanup, audit error takes precedence
+                    # Don't re-raise - we're in cleanup, check error takes precedence
 
         except asyncio.TimeoutError:
             # Story 5.3: Global timeout exceeded (20 minutes)
             exit_code = handle_timeout_error(console)
-            raise ScanError(exit_code, "Audit timeout exceeded")
+            raise ScanError(exit_code, "Check timeout exceeded")
 
         except httpx.TimeoutException:
             # AC8: Timeout error
@@ -675,10 +675,10 @@ class ScanExecutor:
                         exit_code = handle_network_error(console)
                         raise ScanError(exit_code, "Network error after retries")
             # Unexpected error - log with full traceback before re-raising
-            logger.exception("Unexpected error during audit execution")
+            logger.exception("Unexpected error during check execution")
             raise
 
         logger.info(
-            f"Audit complete: {response.summary.total_recommendations} recommendations"
+            f"Check complete: {response.summary.total_recommendations} recommendations"
         )
         return response

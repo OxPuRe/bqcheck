@@ -1,6 +1,6 @@
-"""Markdown audit report generator (Story 5.2).
+"""Markdown sanity check report generator (Story 5.2).
 
-Generates well-formatted Markdown reports from AuditResponse data.
+Generates well-formatted Markdown reports from CheckResponse data.
 """
 
 from __future__ import annotations
@@ -11,15 +11,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from bqaudit.api.models import AuditResponse
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.api.models import CheckResponse
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 logger = logging.getLogger(__name__)
 
 
 class MarkdownReportGenerator:
     """
-    Generate Markdown audit reports from AuditResponse.
+    Generate Markdown sanity check reports from CheckResponse.
 
     Features:
     - Executive Summary with aggregate statistics
@@ -28,14 +28,14 @@ class MarkdownReportGenerator:
     - Zero-recommendations handling
 
     Usage:
-        >>> response = AuditResponse(...)
+        >>> response = CheckResponse(...)
         >>> generator = MarkdownReportGenerator(response, project_name="my-project")
         >>> report_path = generator.generate_and_save()
     """
 
     def __init__(
         self,
-        audit_response: AuditResponse,
+        check_response: CheckResponse,
         project_name: str = "Unknown",
         encryption_key: Optional[bytes] = None,
     ):
@@ -43,13 +43,13 @@ class MarkdownReportGenerator:
         Initialize report generator.
 
         Args:
-            audit_response: AuditResponse from server
+            check_response: CheckResponse from server
             project_name: GCP project name for report title
             encryption_key: Optional 32-byte AES-256 encryption key for decrypting identifiers.
                           If provided, encrypted table/dataset names in recommendations
                           will be decrypted to human-readable names.
         """
-        self.audit_response = audit_response
+        self.check_response = check_response
         self.project_name = project_name
         self.timestamp = datetime.now(timezone.utc)
         self.encryption_key = encryption_key
@@ -76,7 +76,7 @@ class MarkdownReportGenerator:
             Text with identifiers decrypted (if encryption key available)
 
         Example:
-            >>> from bqaudit.scanner.encryption import IdentifierEncryptor
+            >>> from bqcheck.scanner.encryption import IdentifierEncryptor
             >>> key = IdentifierEncryptor.generate_key()
             >>> encryptor = IdentifierEncryptor(key)
             >>> dataset_enc = encryptor.encrypt_with_nonce("analytics", "dataset")
@@ -456,12 +456,12 @@ class MarkdownReportGenerator:
         Returns:
             Markdown-formatted header
         """
-        audit_date = self.timestamp.strftime("%Y-%m-%d")
+        check_date = self.timestamp.strftime("%Y-%m-%d")
         timestamp_iso = self.timestamp.isoformat()
 
-        return f"""# BigQuery Audit Report - {self.project_name}
+        return f"""# BigQuery Sanity Check Report - {self.project_name}
 
-**Audit Date:** {audit_date}
+**Check Date:** {check_date}
 **Generated:** {timestamp_iso}
 
 ---
@@ -474,7 +474,7 @@ class MarkdownReportGenerator:
         Returns:
             Markdown-formatted Executive Summary
         """
-        summary = self.audit_response.summary
+        summary = self.check_response.summary
 
         # Build summary table
         exec_summary = f"""
@@ -493,7 +493,7 @@ class MarkdownReportGenerator:
         if summary.categories_breakdown:
             # Calculate savings per category from recommendations
             category_savings = {}
-            for rec in self.audit_response.recommendations:
+            for rec in self.check_response.recommendations:
                 category = rec.type  # Use type as category proxy
                 if category not in category_savings:
                     category_savings[category] = 0.0
@@ -522,7 +522,7 @@ class MarkdownReportGenerator:
         """
         # Filter HIGH priority and sort by savings
         high_priority = [
-            rec for rec in self.audit_response.recommendations if rec.priority == "HIGH"
+            rec for rec in self.check_response.recommendations if rec.priority == "HIGH"
         ]
         high_priority_sorted = sorted(
             high_priority, key=lambda r: r.savings_eur, reverse=True
@@ -571,7 +571,7 @@ Top high-priority optimizations for immediate impact:
         Returns:
             Markdown-formatted Detailed Recommendations section
         """
-        if not self.audit_response.recommendations:
+        if not self.check_response.recommendations:
             return """
 ## Detailed Recommendations
 
@@ -583,7 +583,7 @@ Top high-priority optimizations for immediate impact:
 
         # Sort recommendations
         sorted_recs = sorted(
-            self.audit_response.recommendations,
+            self.check_response.recommendations,
             key=lambda r: (priority_order.get(r.priority, 3), -r.savings_eur),
         )
 
@@ -678,7 +678,7 @@ Top high-priority optimizations for immediate impact:
         until an available name is found.
 
         Args:
-            base_path: Original file path (e.g., audit-report-2026-02-03.md)
+            base_path: Original file path (e.g., sanity-check-report-2026-02-03.md)
 
         Returns:
             Available file path (may be same as base_path if it doesn't exist)
@@ -718,11 +718,11 @@ Top high-priority optimizations for immediate impact:
         Returns:
             Markdown-formatted Implementation Guidance section
         """
-        if not self.audit_response.recommendations:
+        if not self.check_response.recommendations:
             return ""
 
         # Detect which recommendation types are present
-        rec_types = set(rec.type for rec in self.audit_response.recommendations)
+        rec_types = set(rec.type for rec in self.check_response.recommendations)
 
         guidance = """
 ## Implementation Guidance
@@ -998,7 +998,7 @@ For tables with historical data that's rarely accessed:
             if str(output_path).endswith("/") or str(output_path).endswith("\\"):
                 raise ValueError(
                     f"output_path appears to be a directory (ends with slash): {output_path}. "
-                    "Please specify a filename, e.g., 'reports/audit.md' not 'reports/'"
+                    "Please specify a filename, e.g., 'reports/sanity-check.md' not 'reports/'"
                 )
 
             # Custom path provided - resolve to absolute
@@ -1017,7 +1017,7 @@ For tables with historical data that's rarely accessed:
             # Default behavior - use output_dir (legacy) or cwd
             # Include full timestamp to avoid naming conflicts
             timestamp_str = self.timestamp.strftime("%Y-%m-%d-%H%M%S")
-            filename = f"audit-report-{timestamp_str}.md"
+            filename = f"sanity-check-report-{timestamp_str}.md"
 
             if output_dir is None:
                 output_dir = current_dir

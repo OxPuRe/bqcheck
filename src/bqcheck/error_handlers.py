@@ -14,7 +14,7 @@ from typing import Optional
 
 from rich.console import Console
 
-from bqaudit.constants import (
+from bqcheck.constants import (
     EXIT_AUTH_ERROR,
     EXIT_FILE_ERROR,
     EXIT_NETWORK_ERROR,
@@ -60,7 +60,7 @@ def handle_network_error(console: Console) -> int:
         EXIT_NETWORK_ERROR code (1)
     """
     console.print(
-        "[red]❌ Error: Unable to reach audit server. Check your internet connection.[/red]"
+        "[red]❌ Error: Unable to reach analysis server. Check your internet connection.[/red]"
     )
     console.print("\nRetry the scan when connection is restored.")
     console.print("[dim]Your token was not consumed.[/dim]")
@@ -78,7 +78,7 @@ def handle_timeout_error(console: Console) -> int:
         EXIT_NETWORK_ERROR code (1)
     """
     console.print(
-        "[red]❌ Error: Audit timeout (>15 minutes). This may indicate a very large project.[/red]"
+        "[red]❌ Error: Sanity check timeout (>15 minutes). This may indicate a very large project.[/red]"
     )
     console.print("\nContact support if the issue persists.")
     console.print("[dim]Your token was not consumed.[/dim]")

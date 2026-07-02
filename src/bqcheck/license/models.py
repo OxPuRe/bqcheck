@@ -10,7 +10,7 @@ class Credentials(BaseModel):
     """
     Stored credentials data model.
 
-    Persisted to ~/.bqaudit/credentials.json with chmod 600.
+    Persisted to ~/.bqcheck/credentials.json with chmod 600.
 
     This model validates credentials data and ensures type safety.
     Accepts activated_at as either datetime object or ISO8601 string.

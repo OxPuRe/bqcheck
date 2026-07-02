@@ -1,5 +1,5 @@
 """
-Tests for bqaudit.license.
+Tests for bqcheck.license.
 
 Placeholder tests to verify pytest infrastructure.
 """

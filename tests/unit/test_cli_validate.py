@@ -22,7 +22,7 @@ from google.api_core.exceptions import Forbidden, NotFound
 from google.auth.exceptions import DefaultCredentialsError
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
+from bqcheck.cli import app
 
 runner = CliRunner()
 
@@ -109,9 +109,9 @@ def mock_health_response():
 
 def test_validate_gcp_auth_success(mock_bq_client, mock_health_response):
     """Test successful GCP authentication."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "✓ Authentication successful" in result.stdout
@@ -120,7 +120,7 @@ def test_validate_gcp_auth_success(mock_bq_client, mock_health_response):
 
 def test_validate_gcp_auth_failure_default_credentials():
     """Test GCP authentication failure with DefaultCredentialsError."""
-    with patch("bqaudit.cli.authenticate_bigquery") as mock_auth:
+    with patch("bqcheck.cli.authenticate_bigquery") as mock_auth:
         mock_auth.side_effect = DefaultCredentialsError("No credentials")
         result = runner.invoke(app, ["validate", "--project", "test-project"])
         assert "❌ GCP authentication failed" in result.stdout
@@ -130,9 +130,9 @@ def test_validate_gcp_auth_failure_default_credentials():
 
 def test_validate_gcp_auth_failure_auth_error():
     """Test GCP authentication failure with AuthenticationError."""
-    from bqaudit.scanner import AuthenticationError
+    from bqcheck.scanner import AuthenticationError
 
-    with patch("bqaudit.cli.authenticate_bigquery") as mock_auth:
+    with patch("bqcheck.cli.authenticate_bigquery") as mock_auth:
         mock_auth.side_effect = AuthenticationError("Auth failed")
         result = runner.invoke(app, ["validate", "--project", "test-project"])
         assert "❌ GCP authentication failed" in result.stdout
@@ -146,9 +146,9 @@ def test_validate_gcp_auth_failure_auth_error():
 
 def test_validate_api_enabled(mock_bq_client, mock_health_response):
     """Test BigQuery API enabled successfully."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "✓ BigQuery API enabled" in result.stdout
@@ -160,7 +160,7 @@ def test_validate_api_disabled():
     client = Mock()
     client.query.side_effect = Forbidden("BigQuery API has not been used in project")
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "test-project"])
         assert "❌ BigQuery API not enabled" in result.stdout
         assert "gcloud services enable bigquery.googleapis.com" in result.stdout
@@ -174,9 +174,9 @@ def test_validate_api_disabled():
 
 def test_validate_permissions_success(mock_bq_client, mock_health_response):
     """Test successful IAM permissions verification."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "✓ Permissions verified (bigquery.metadataViewer)" in result.stdout
@@ -198,7 +198,7 @@ def test_validate_missing_permissions():
     # Configure client.query to succeed first, then fail
     client.query.side_effect = [mock_query_job1, mock_query_job2]
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "test-project"])
         assert "❌ Missing required permissions" in result.stdout
         assert "roles/bigquery.metadataViewer" in result.stdout
@@ -212,9 +212,9 @@ def test_validate_missing_permissions():
 
 def test_validate_test_query_success(mock_bq_client, mock_health_response):
     """Test successful INFORMATION_SCHEMA query."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "✓ Test query successful" in result.stdout
@@ -236,7 +236,7 @@ def test_validate_project_not_found():
     client.query.side_effect = [mock_success, mock_success, mock_fail]
     client.list_jobs.return_value = []
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "test-project"])
         assert "❌ Project not found" in result.stdout
         assert "gcloud projects list" in result.stdout
@@ -280,9 +280,9 @@ def test_validate_project_has_tables(mock_health_response):
     client.query.side_effect = query_side_effect
     client.list_jobs.return_value = []
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "✓ Project has 42 tables" in result.stdout
@@ -321,13 +321,13 @@ def test_validate_project_no_tables(mock_health_response):
     client.query.side_effect = query_side_effect
     client.list_jobs.return_value = []
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "⚠ Project has no tables" in result.stdout
-            assert "audit will have limited value" in result.stdout
+            assert "sanity check will have limited value" in result.stdout
             # Still exits 0 (warning, not error)
             assert result.exit_code == 0
 
@@ -351,9 +351,9 @@ def test_validate_project_count_query_fails(mock_bq_client, mock_health_response
     ]
     mock_bq_client.list_jobs.return_value = []
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "⚠ Could not count tables" in result.stdout
@@ -370,8 +370,8 @@ def test_validate_server_connectivity_success(mock_bq_client):
     """Test successful server health check."""
     health_response = {"status": "ok", "min_client_version": "0.1.0"}
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
-        with patch("bqaudit.cli.check_server_health", return_value=health_response):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
+        with patch("bqcheck.cli.check_server_health", return_value=health_response):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "✓ Server connectivity OK" in result.stdout
             assert result.exit_code == 0
@@ -379,19 +379,19 @@ def test_validate_server_connectivity_success(mock_bq_client):
 
 def test_validate_server_unreachable(mock_bq_client):
     """Test server connectivity failure with ConnectError."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
-        with patch("bqaudit.cli.check_server_health") as mock_health:
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
+        with patch("bqcheck.cli.check_server_health") as mock_health:
             mock_health.side_effect = httpx.ConnectError("Connection refused")
             result = runner.invoke(app, ["validate", "--project", "test-project"])
-            assert "❌ Cannot reach bqaudit server" in result.stdout
+            assert "❌ Cannot reach bqcheck server" in result.stdout
             assert "Check internet connectivity" in result.stdout
             assert result.exit_code == 1
 
 
 def test_validate_server_timeout(mock_bq_client):
     """Test server timeout error."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
-        with patch("bqaudit.cli.check_server_health") as mock_health:
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
+        with patch("bqcheck.cli.check_server_health") as mock_health:
             mock_health.side_effect = httpx.TimeoutException("Timeout")
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert "❌ Server timeout" in result.stdout
@@ -400,8 +400,8 @@ def test_validate_server_timeout(mock_bq_client):
 
 def test_validate_server_http_error(mock_bq_client):
     """Test server HTTP error (4xx/5xx) is handled correctly."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
-        with patch("bqaudit.cli.check_server_health") as mock_health:
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
+        with patch("bqcheck.cli.check_server_health") as mock_health:
             # Simulate 500 Internal Server Error
             mock_response = Mock()
             mock_response.status_code = 500
@@ -424,9 +424,9 @@ def test_validate_server_http_error(mock_bq_client):
 
 def test_validate_rich_output_formatting(mock_bq_client, mock_health_response):
     """Test Rich console formatting (checkmarks, table)."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             # Verify Rich formatting elements
@@ -438,9 +438,9 @@ def test_validate_rich_output_formatting(mock_bq_client, mock_health_response):
 
 def test_validate_verbose_mode(mock_bq_client, mock_health_response):
     """Test verbose flag shows detailed steps."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(
                 app, ["validate", "--project", "test-project", "--verbose"]
@@ -475,7 +475,7 @@ def test_validate_exit_codes(error, expected_code):
 
     if isinstance(error, DefaultCredentialsError):
         # Auth error happens first
-        with patch("bqaudit.cli.authenticate_bigquery") as mock_auth:
+        with patch("bqcheck.cli.authenticate_bigquery") as mock_auth:
             mock_auth.side_effect = error
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert result.exit_code == expected_code
@@ -483,7 +483,7 @@ def test_validate_exit_codes(error, expected_code):
     elif isinstance(error, Forbidden):
         # API disabled error - needs specific message to trigger right code path
         client.query.side_effect = error
-        with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+        with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert result.exit_code == expected_code
 
@@ -498,16 +498,16 @@ def test_validate_exit_codes(error, expected_code):
         client.query.side_effect = [mock_success, mock_success, mock_fail]
         client.list_jobs.return_value = []
 
-        with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+        with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert result.exit_code == expected_code
 
 
 def test_validate_success_exit_code(mock_bq_client, mock_health_response):
     """Test exit code 0 on successful validation."""
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert result.exit_code == 0
@@ -525,9 +525,9 @@ def test_validate_zero_token_consumption(mock_bq_client, mock_health_response):
     CRITICAL: Verify NO calls to token-consuming endpoints.
     Only local GCP checks + /health endpoint allowed.
     """
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=mock_bq_client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=mock_bq_client):
         with patch(
-            "bqaudit.cli.check_server_health", return_value=mock_health_response
+            "bqcheck.cli.check_server_health", return_value=mock_health_response
         ) as mock_health:
             result = runner.invoke(app, ["validate", "--project", "test-project"])
 
@@ -553,7 +553,7 @@ def test_validate_zero_token_consumption(mock_bq_client, mock_health_response):
 
 def test_validate_error_guidance_auth_fail():
     """Test authentication failure shows actionable error guidance."""
-    with patch("bqaudit.cli.authenticate_bigquery") as mock_auth:
+    with patch("bqcheck.cli.authenticate_bigquery") as mock_auth:
         mock_auth.side_effect = DefaultCredentialsError("No credentials")
         result = runner.invoke(app, ["validate", "--project", "test-project"])
 
@@ -568,7 +568,7 @@ def test_validate_error_guidance_api_disabled():
     client = Mock()
     client.query.side_effect = Forbidden("BigQuery API has not been used")
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "my-project"])
 
         # Verify exact fix command with project ID
@@ -591,7 +591,7 @@ def test_validate_error_guidance_permissions():
 
     client.query.side_effect = [mock_success, mock_fail]
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "my-project"])
 
         # Verify exact fix command
@@ -608,8 +608,8 @@ def test_validate_error_guidance_permissions():
 
 def test_handle_validation_error_auth_exit_code():
     """Test _handle_validation_error uses correct exit code for auth errors."""
-    with patch("bqaudit.cli.authenticate_bigquery") as mock_auth:
-        from bqaudit.scanner import AuthenticationError
+    with patch("bqcheck.cli.authenticate_bigquery") as mock_auth:
+        from bqcheck.scanner import AuthenticationError
 
         mock_auth.side_effect = AuthenticationError("Auth failed")
         result = runner.invoke(app, ["validate", "--project", "test-project"])
@@ -624,7 +624,7 @@ def test_handle_validation_error_bigquery_exit_code():
     client = Mock()
     client.query.side_effect = Forbidden("BigQuery API has not been used")
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "test-project"])
 
         # Verify exit code 4 for BigQuery API errors
@@ -634,8 +634,8 @@ def test_handle_validation_error_bigquery_exit_code():
 
 def test_handle_validation_error_displays_panel():
     """Test _handle_validation_error displays Rich Panel with error message."""
-    with patch("bqaudit.cli.authenticate_bigquery") as mock_auth:
-        from bqaudit.scanner import AuthenticationError
+    with patch("bqcheck.cli.authenticate_bigquery") as mock_auth:
+        from bqcheck.scanner import AuthenticationError
 
         mock_auth.side_effect = AuthenticationError("Auth failed")
         result = runner.invoke(app, ["validate", "--project", "test-project"])
@@ -653,7 +653,7 @@ def test_handle_validation_error_includes_project_context():
         "BigQuery API has not been used in project my-test-project"
     )
 
-    with patch("bqaudit.cli.authenticate_bigquery", return_value=client):
+    with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "my-test-project"])
 
         # Verify project ID appears in error guidance

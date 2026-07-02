@@ -19,7 +19,7 @@ pytestmark = pytest.mark.privacy_critical
 # Test helper for encryption key generation
 def _generate_test_key():
     """Generate encryption key for tests (replaces old _generate_test_key())."""
-    from bqaudit.scanner.encryption import IdentifierEncryptor
+    from bqcheck.scanner.encryption import IdentifierEncryptor
 
     return IdentifierEncryptor.generate_key()
 
@@ -45,7 +45,7 @@ class TestTableNameAnonymization:
 
     def test_anonymize_table_name_output_format(self):
         """Test that encrypted table name is base64-encoded string."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         encryption_key = _generate_test_key()
         table_name = "users_2024"
@@ -62,7 +62,7 @@ class TestTableNameAnonymization:
 
     def test_anonymize_table_name_determinism(self):
         """Test that same input produces same hash (deterministic)."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         salt = _generate_test_key()
         table_name = "users_2024"
@@ -74,7 +74,7 @@ class TestTableNameAnonymization:
 
     def test_anonymize_table_name_uniqueness(self):
         """Test that different inputs produce different hashes."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         salt = _generate_test_key()
 
@@ -85,7 +85,7 @@ class TestTableNameAnonymization:
 
     def test_anonymize_table_name_with_special_characters(self):
         """Test table names with dashes and underscores."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         salt = _generate_test_key()
 
@@ -98,7 +98,7 @@ class TestTableNameAnonymization:
 
     def test_anonymize_table_name_empty_string(self):
         """Test that empty string raises ValueError."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         salt = _generate_test_key()
 
@@ -111,7 +111,7 @@ class TestDatasetNameAnonymization:
 
     def test_anonymize_dataset_name_output_length(self):
         """Test that anonymized dataset name is 64-character hex hash."""
-        from bqaudit.scanner.anonymizer import anonymize_dataset_name
+        from bqcheck.scanner.anonymizer import anonymize_dataset_name
 
         salt = _generate_test_key()
         dataset_name = "analytics"
@@ -121,7 +121,7 @@ class TestDatasetNameAnonymization:
 
     def test_anonymize_dataset_name_determinism(self):
         """Test that same dataset name produces same hash."""
-        from bqaudit.scanner.anonymizer import anonymize_dataset_name
+        from bqcheck.scanner.anonymizer import anonymize_dataset_name
 
         salt = _generate_test_key()
         dataset_name = "analytics"
@@ -137,7 +137,7 @@ class TestProjectIdAnonymization:
 
     def test_anonymize_project_id_output_length(self):
         """Test that anonymized project ID is 64-character hex hash."""
-        from bqaudit.scanner.anonymizer import anonymize_project_id
+        from bqcheck.scanner.anonymizer import anonymize_project_id
 
         salt = _generate_test_key()
         project_id = "my-gcp-project-123"
@@ -147,7 +147,7 @@ class TestProjectIdAnonymization:
 
     def test_anonymize_project_id_determinism(self):
         """Test that same project ID produces same hash."""
-        from bqaudit.scanner.anonymizer import anonymize_project_id
+        from bqcheck.scanner.anonymizer import anonymize_project_id
 
         salt = _generate_test_key()
         project_id = "my-gcp-project-123"
@@ -163,7 +163,7 @@ class TestCardinalityPreservation:
 
     def test_cardinality_preservation_with_duplicates(self):
         """Test that duplicate table names produce identical hashes."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         salt = _generate_test_key()
 
@@ -182,7 +182,7 @@ class TestCardinalityPreservation:
 
     def test_hash_collision_resistance(self):
         """Test collision resistance with 10,000 unique table names."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         salt = _generate_test_key()
 
@@ -202,7 +202,7 @@ class TestQueryPatternAnonymization:
 
     def test_anonymize_query_pattern_simple_select(self):
         """Test anonymization of simple SELECT with FROM clause."""
-        from bqaudit.scanner.anonymizer import anonymize_query_pattern
+        from bqcheck.scanner.anonymizer import anonymize_query_pattern
 
         salt = _generate_test_key()
         query = "SELECT * FROM project.dataset.table"
@@ -217,7 +217,7 @@ class TestQueryPatternAnonymization:
 
     def test_anonymize_query_pattern_with_join(self):
         """Test anonymization of SELECT with JOIN clause."""
-        from bqaudit.scanner.anonymizer import anonymize_query_pattern
+        from bqcheck.scanner.anonymizer import anonymize_query_pattern
 
         salt = _generate_test_key()
         query = "SELECT a.* FROM dataset.table_a a JOIN dataset.table_b b"
@@ -233,7 +233,7 @@ class TestQueryPatternAnonymization:
 
     def test_anonymize_query_pattern_with_backticks(self):
         """Test anonymization of query with backtick syntax."""
-        from bqaudit.scanner.anonymizer import anonymize_query_pattern
+        from bqcheck.scanner.anonymizer import anonymize_query_pattern
 
         salt = _generate_test_key()
         query = "SELECT * FROM `project.dataset.table`"
@@ -246,7 +246,7 @@ class TestQueryPatternAnonymization:
 
     def test_anonymize_query_pattern_null_query(self):
         """Test that NULL/None query returns empty string."""
-        from bqaudit.scanner.anonymizer import anonymize_query_pattern
+        from bqcheck.scanner.anonymizer import anonymize_query_pattern
 
         salt = _generate_test_key()
 
@@ -255,7 +255,7 @@ class TestQueryPatternAnonymization:
 
     def test_anonymize_query_pattern_empty_query(self):
         """Test that empty query returns empty string."""
-        from bqaudit.scanner.anonymizer import anonymize_query_pattern
+        from bqcheck.scanner.anonymizer import anonymize_query_pattern
 
         salt = _generate_test_key()
 
@@ -264,7 +264,7 @@ class TestQueryPatternAnonymization:
 
     def test_anonymize_query_pattern_no_tables(self):
         """Test query with no table references returns original."""
-        from bqaudit.scanner.anonymizer import anonymize_query_pattern
+        from bqcheck.scanner.anonymizer import anonymize_query_pattern
 
         salt = _generate_test_key()
         query = "SELECT 1 as one"
@@ -275,7 +275,7 @@ class TestQueryPatternAnonymization:
 
     def test_anonymize_query_pattern_determinism(self):
         """Test that same query produces same anonymized output."""
-        from bqaudit.scanner.anonymizer import anonymize_query_pattern
+        from bqcheck.scanner.anonymizer import anonymize_query_pattern
 
         salt = _generate_test_key()
         query = "SELECT * FROM project.dataset.table"
@@ -291,8 +291,8 @@ class TestMetadataBatchAnonymization:
 
     def test_anonymize_table_list(self):
         """Test batch anonymization of table metadata list."""
-        from bqaudit.scanner.anonymizer import anonymize_table_list
-        from bqaudit.scanner.models import TableMetadata
+        from bqcheck.scanner.anonymizer import anonymize_table_list
+        from bqcheck.scanner.models import TableMetadata
 
         salt = _generate_test_key()
 
@@ -340,8 +340,8 @@ class TestMetadataBatchAnonymization:
 
     def test_anonymize_access_patterns(self):
         """Test batch anonymization of access pattern list."""
-        from bqaudit.scanner.anonymizer import anonymize_access_patterns
-        from bqaudit.scanner.models import AccessPattern
+        from bqcheck.scanner.anonymizer import anonymize_access_patterns
+        from bqcheck.scanner.models import AccessPattern
 
         salt = _generate_test_key()
 
@@ -378,8 +378,8 @@ class TestMetadataBatchAnonymization:
 
     def test_anonymize_query_list(self):
         """Test batch anonymization of query list with query anonymization."""
-        from bqaudit.scanner.anonymizer import anonymize_query_list
-        from bqaudit.scanner.models import QueryMetadata
+        from bqcheck.scanner.anonymizer import anonymize_query_list
+        from bqcheck.scanner.models import QueryMetadata
 
         salt = _generate_test_key()
 
@@ -433,35 +433,35 @@ class TestValidationAndSecurity:
 
     def test_encryption_key_validation_wrong_type(self):
         """Test that non-bytes encryption key is rejected."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         with pytest.raises(TypeError, match="Encryption key must be bytes"):
             anonymize_table_name("users", "not_bytes")
 
     def test_encryption_key_validation_short(self):
         """Test that short encryption key is rejected."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         with pytest.raises(ValueError, match="Encryption key must be exactly 32 bytes"):
             anonymize_table_name("users", b"short")
 
     def test_encryption_key_validation_empty(self):
         """Test that empty encryption key is rejected."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         with pytest.raises(ValueError, match="Encryption key must be exactly 32 bytes"):
             anonymize_table_name("users", b"")
 
     def test_encryption_key_validation_int_type(self):
         """Test that integer encryption key is rejected."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         with pytest.raises(TypeError, match="Encryption key must be bytes"):
             anonymize_table_name("users", 12345)
 
     def test_identifier_type_validation_integer(self):
         """Test that integer table name is rejected."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         salt = _generate_test_key()
 
@@ -470,7 +470,7 @@ class TestValidationAndSecurity:
 
     def test_identifier_type_validation_none(self):
         """Test that None table name is rejected."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         salt = _generate_test_key()
 
@@ -479,7 +479,7 @@ class TestValidationAndSecurity:
 
     def test_identifier_length_validation(self):
         """Test that too-long identifier is rejected."""
-        from bqaudit.scanner.anonymizer import anonymize_table_name
+        from bqcheck.scanner.anonymizer import anonymize_table_name
 
         salt = _generate_test_key()
         long_name = "a" * 2000  # Exceeds 1024 char limit
@@ -489,7 +489,7 @@ class TestValidationAndSecurity:
 
     def test_hash_correlation_prevention(self):
         """Test that same identifier produces different hashes for different types."""
-        from bqaudit.scanner.anonymizer import (
+        from bqcheck.scanner.anonymizer import (
             anonymize_dataset_name,
             anonymize_project_id,
             anonymize_table_name,
@@ -509,7 +509,7 @@ class TestValidationAndSecurity:
 
     def test_metadata_extra_fields_not_leaked(self):
         """Test that extra fields in metadata dict are NOT leaked."""
-        from bqaudit.scanner.anonymizer import anonymize_metadata
+        from bqcheck.scanner.anonymizer import anonymize_metadata
 
         salt = _generate_test_key()
 

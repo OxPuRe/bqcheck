@@ -1,6 +1,6 @@
 """Tests for query pattern analysis and filtered column extraction."""
 
-from bqaudit.scanner.query_analyzer import (
+from bqcheck.scanner.query_analyzer import (
     aggregate_filtered_columns_all_tables,
     aggregate_filtered_columns_by_table,
     extract_filtered_columns,

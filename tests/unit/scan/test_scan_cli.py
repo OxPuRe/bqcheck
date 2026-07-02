@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
-from bqaudit.constants import ExitCode
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.cli import app
+from bqcheck.constants import ExitCode
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 runner = CliRunner()
 
@@ -29,7 +29,7 @@ def mock_credentials(tmp_path: Path) -> dict:
         "master_key": "VALID-TEST-KEY-123",
         "ephemeral_token": "test-token-xyz-789",
         "token_pool_balance": 10,
-        "server_url": "https://api.bqaudit.com",
+        "server_url": "https://api.bqcheck.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
         "encryption_key": IdentifierEncryptor.key_to_base64(
             IdentifierEncryptor.generate_key()
@@ -37,7 +37,7 @@ def mock_credentials(tmp_path: Path) -> dict:
     }
 
     # Create credentials file
-    creds_dir = tmp_path / ".bqaudit"
+    creds_dir = tmp_path / ".bqcheck"
     creds_dir.mkdir(parents=True, exist_ok=True)
     creds_file = creds_dir / "credentials.json"
     creds_file.write_text(json.dumps(credentials))
@@ -49,11 +49,11 @@ def mock_credentials(tmp_path: Path) -> dict:
 @pytest.fixture
 def mock_creds_path(tmp_path: Path, monkeypatch):
     """Mock CredentialStore path to use tmp_path."""
-    creds_path = tmp_path / ".bqaudit" / "credentials.json"
+    creds_path = tmp_path / ".bqcheck" / "credentials.json"
 
     # Mock the _get_credentials_path method to return our test path
     monkeypatch.setattr(
-        "bqaudit.license.storage.CredentialStore._get_credentials_path",
+        "bqcheck.license.storage.CredentialStore._get_credentials_path",
         lambda: creds_path,
     )
     return creds_path
@@ -64,11 +64,11 @@ def mock_bq_validation(monkeypatch):
     """Mock BigQuery multi-project validation to avoid real API calls."""
     # Mock the validation function
     monkeypatch.setattr(
-        "bqaudit.scanner.bigquery_client.validate_multi_project_permissions",
+        "bqcheck.scanner.bigquery_client.validate_multi_project_permissions",
         lambda storage_project, query_project=None: None,
     )
     # Force simulated scan mode for unit tests
-    monkeypatch.setenv("BQAUDIT_REAL_SCAN", "false")
+    monkeypatch.setenv("BQCHECK_REAL_SCAN", "false")
 
 
 class TestScanCommand:
@@ -80,7 +80,7 @@ class TestScanCommand:
 
         assert result.exit_code == ExitCode.FILE_ERROR
         assert "No active license found" in result.stdout
-        assert "bqaudit license activate" in result.stdout
+        assert "bqcheck license activate" in result.stdout
 
     def test_scan_with_credentials_executes_simulated_scan(
         self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
@@ -234,7 +234,7 @@ class TestScanCommand:
         assert result.exit_code == 4  # Specific depletion exit code
         assert "Token pool depleted" in result.stdout
         assert "0 scans remaining" in result.stdout
-        assert "bqaudit.com/pricing" in result.stdout
+        assert "bqcheck.com/pricing" in result.stdout
         # Verify scan NOT executed
         assert "[SIMULATED]" not in result.stdout
 
@@ -255,7 +255,7 @@ class TestScanCommand:
         assert result.exit_code == 0  # Scan succeeded
         assert "This was your last token" in result.stdout
         assert "Purchase more tokens" in result.stdout
-        assert "bqaudit.com/pricing" in result.stdout
+        assert "bqcheck.com/pricing" in result.stdout
 
         # Verify balance now 0
         updated_creds = json.loads(mock_creds_path.read_text())
@@ -277,7 +277,7 @@ class TestScanCommand:
             "master_key": "VALID-TEST-KEY-123",
             "ephemeral_token": "test-token-xyz-789",
             "token_pool_balance": -5,  # Invalid negative balance
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
             "activated_at": "2024-01-01T00:00:00+00:00",
             "encryption_key": IdentifierEncryptor.key_to_base64(
                 IdentifierEncryptor.generate_key()

@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 from google.api_core.exceptions import GoogleAPIError
 from google.cloud import bigquery
 
-from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
+from bqcheck.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@
 
 This module provides deterministic encryption/decryption of BigQuery identifiers
 (table names, dataset names, project IDs, column names) for privacy-preserving
-audit scans.
+check scans.
 
 Key Features:
 - Deterministic encryption: Same input + same key → same ciphertext

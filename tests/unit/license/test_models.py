@@ -2,8 +2,8 @@
 
 from datetime import datetime, timezone
 
-from bqaudit.license.models import Credentials
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.license.models import Credentials
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 
 class TestCredentialsModel:
@@ -17,7 +17,7 @@ class TestCredentialsModel:
             master_key="TEST-KEY",
             token_pool_balance=50,
             ephemeral_token="token123",
-            server_url="https://api.bqaudit.com",
+            server_url="https://api.bqcheck.com",
             activated_at=dt,  # Pass datetime object directly
             encryption_key=IdentifierEncryptor.key_to_base64(
                 IdentifierEncryptor.generate_key()
@@ -32,7 +32,7 @@ class TestCredentialsModel:
             master_key="SECRET-MASTER-KEY",
             token_pool_balance=50,
             ephemeral_token="secret-token-123",
-            server_url="https://api.bqaudit.com",
+            server_url="https://api.bqcheck.com",
             activated_at="2026-01-30T10:00:00+00:00",
             encryption_key="secret-encryption-key-base64",
         )
@@ -46,5 +46,5 @@ class TestCredentialsModel:
 
         # Verify non-sensitive fields are intact
         assert safe_dict["token_pool_balance"] == 50
-        assert safe_dict["server_url"] == "https://api.bqaudit.com"
+        assert safe_dict["server_url"] == "https://api.bqcheck.com"
         assert "activated_at" in safe_dict

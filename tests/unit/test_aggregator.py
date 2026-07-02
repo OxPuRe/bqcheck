@@ -6,13 +6,13 @@ into aggregated statistics required by server detection algorithms.
 
 import pytest
 
-from bqaudit.scanner.aggregator import (
+from bqcheck.scanner.aggregator import (
     _calculate_days_in_period,
     _parse_iso_timestamp,
     aggregate_query_metadata,
 )
-from bqaudit.scanner.encryption import IdentifierEncryptor
-from bqaudit.scanner.models import QueryMetadata
+from bqcheck.scanner.encryption import IdentifierEncryptor
+from bqcheck.scanner.models import QueryMetadata
 
 
 class TestTimestampParsing:

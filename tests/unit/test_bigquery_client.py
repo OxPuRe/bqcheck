@@ -6,15 +6,15 @@ import pytest
 from google.api_core.exceptions import NotFound
 from google.auth.exceptions import DefaultCredentialsError
 
-from bqaudit.scanner.bigquery_client import (
+from bqcheck.scanner.bigquery_client import (
     AuthenticationError,
     ProjectNotFoundError,
     authenticate_bigquery,
 )
 
 
-@patch("bqaudit.scanner.bigquery_client.default")
-@patch("bqaudit.scanner.bigquery_client.bigquery.Client")
+@patch("bqcheck.scanner.bigquery_client.default")
+@patch("bqcheck.scanner.bigquery_client.bigquery.Client")
 def test_successful_authentication(mock_client_class, mock_default):
     """Test successful BigQuery client initialization."""
     # Mock credentials
@@ -41,7 +41,7 @@ def test_successful_authentication(mock_client_class, mock_default):
     assert client == mock_bq_client
 
 
-@patch("bqaudit.scanner.bigquery_client.default")
+@patch("bqcheck.scanner.bigquery_client.default")
 def test_authentication_failure(mock_default):
     """Test authentication failure handling."""
     # Mock credentials error
@@ -55,8 +55,8 @@ def test_authentication_failure(mock_default):
     assert exc_info.value.message == "GCP authentication failed - no credentials found"
 
 
-@patch("bqaudit.scanner.bigquery_client.default")
-@patch("bqaudit.scanner.bigquery_client.bigquery.Client")
+@patch("bqcheck.scanner.bigquery_client.default")
+@patch("bqcheck.scanner.bigquery_client.bigquery.Client")
 def test_invalid_project_handling(mock_client_class, mock_default):
     """Test invalid project ID handling."""
     # Mock credentials
@@ -79,8 +79,8 @@ def test_invalid_project_handling(mock_client_class, mock_default):
     )
 
 
-@patch("bqaudit.scanner.bigquery_client.default")
-@patch("bqaudit.scanner.bigquery_client.bigquery.Client")
+@patch("bqcheck.scanner.bigquery_client.default")
+@patch("bqcheck.scanner.bigquery_client.bigquery.Client")
 def test_project_verification(mock_client_class, mock_default):
     """Test that project verification is actually performed."""
     # Mock credentials

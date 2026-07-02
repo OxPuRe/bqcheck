@@ -1,5 +1,5 @@
 """
-Tests for bqaudit.client.
+Tests for bqcheck.client.
 
 Placeholder tests to verify pytest infrastructure.
 """

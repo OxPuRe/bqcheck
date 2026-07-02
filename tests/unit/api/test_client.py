@@ -2,20 +2,20 @@
 
 import pytest
 
-from bqaudit.api.client import BQAuditAPIClient
-from bqaudit.api.exceptions import (
+from bqcheck.api.client import BQCheckAPIClient
+from bqcheck.api.exceptions import (
     HTTPSRequiredError,
     InvalidLicenseKeyError,
     NetworkError,
 )
 
 
-class TestBQAuditAPIClient:
-    """Test suite for BQAuditAPIClient class."""
+class TestBQCheckAPIClient:
+    """Test suite for BQCheckAPIClient class."""
 
     def test_mock_mode_default_true(self):
         """Test that mock_mode defaults to True for Epic 3."""
-        client = BQAuditAPIClient()
+        client = BQCheckAPIClient()
         assert client.mock_mode is True
 
     def test_https_enforcement_in_real_mode(self, monkeypatch):
@@ -37,11 +37,11 @@ class TestBQAuditAPIClient:
         certificate rejection, but this is not explicitly tested here.
         """
         # Set HTTP server URL
-        monkeypatch.setenv("BQAUDIT_API_URL", "http://insecure.com")
+        monkeypatch.setenv("BQCHECK_API_URL", "http://insecure.com")
 
         # Should raise HTTPSRequiredError when mock_mode=False
         with pytest.raises(HTTPSRequiredError) as exc_info:
-            BQAuditAPIClient(mock_mode=False)
+            BQCheckAPIClient(mock_mode=False)
 
         assert "https" in str(exc_info.value).lower()
 
@@ -53,26 +53,26 @@ class TestBQAuditAPIClient:
 
     def test_https_enforced_in_all_modes(self, monkeypatch):
         """Test that HTTPS check enforced even in mock mode (Round 8, Issue #2)."""
-        monkeypatch.setenv("BQAUDIT_API_URL", "http://localhost:8000")
+        monkeypatch.setenv("BQCHECK_API_URL", "http://localhost:8000")
 
         # Code Review Round 8: HTTPS now required in ALL modes for security
         with pytest.raises(HTTPSRequiredError, match="HTTPS required"):
-            BQAuditAPIClient(mock_mode=True)
+            BQCheckAPIClient(mock_mode=True)
 
     def test_activate_license_success_with_valid_key(self):
         """AC1: Test activation success with VALID- prefix."""
-        client = BQAuditAPIClient(mock_mode=True)
+        client = BQCheckAPIClient(mock_mode=True)
 
         response = client.activate_license("VALID-TEST-KEY-123")
 
         assert response.token_pool_balance == 50
         assert response.ephemeral_token == "mock-ephemeral-token-xyz"
-        assert "bqaudit" in response.server_url
+        assert "bqcheck" in response.server_url
         assert response.activated_at is not None
 
     def test_activate_license_invalid_key(self):
         """AC2: Test activation failure with invalid key."""
-        client = BQAuditAPIClient(mock_mode=True)
+        client = BQCheckAPIClient(mock_mode=True)
 
         with pytest.raises(InvalidLicenseKeyError) as exc_info:
             client.activate_license("INVALID-KEY-123")
@@ -81,7 +81,7 @@ class TestBQAuditAPIClient:
 
     def test_activate_license_network_error(self):
         """AC3: Test network error simulation."""
-        client = BQAuditAPIClient(mock_mode=True)
+        client = BQCheckAPIClient(mock_mode=True)
 
         with pytest.raises(NetworkError) as exc_info:
             client.activate_license("NETWORK-ERROR-TEST")
@@ -90,7 +90,7 @@ class TestBQAuditAPIClient:
 
     def test_renew_token_returns_new_token(self):
         """Test token renewal returns new ephemeral token."""
-        client = BQAuditAPIClient(mock_mode=True)
+        client = BQCheckAPIClient(mock_mode=True)
 
         response = client.renew_token("VALID-TEST-KEY", current_balance=50)
 
@@ -99,7 +99,7 @@ class TestBQAuditAPIClient:
 
     def test_renew_token_different_each_time(self):
         """Test that renewed tokens are unique."""
-        client = BQAuditAPIClient(mock_mode=True)
+        client = BQCheckAPIClient(mock_mode=True)
 
         token1 = client.renew_token(
             "VALID-TEST-KEY", current_balance=50

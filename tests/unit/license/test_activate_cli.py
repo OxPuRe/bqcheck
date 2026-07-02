@@ -2,13 +2,13 @@
 
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
+from bqcheck.cli import app
 
 runner = CliRunner()
 
 
 class TestLicenseActivateCommand:
-    """Test suite for 'bqaudit license activate' command."""
+    """Test suite for 'bqcheck license activate' command."""
 
     def test_license_command_group_exists(self):
         """Test that 'license' command group is registered in CLI."""
@@ -34,7 +34,7 @@ class TestLicenseActivateCommand:
         """Test that activate command with key calls activation logic."""
         # Set credentials path to temp location
         monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")  # Use mock mode
+        monkeypatch.setenv("BQCHECK_REAL_MODE", "false")  # Use mock mode
 
         # Use VALID- prefix for mock success
         result = runner.invoke(app, ["license", "activate", "VALID-TEST-KEY-123"])
@@ -55,7 +55,7 @@ class TestLicenseActivateCommand:
     ):
         """AC4: Prevent re-activation if credentials already exist."""
         # Create mock credentials file
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(parents=True)
         cred_file = cred_dir / "credentials.json"
         cred_file.write_text('{"master_key": "EXISTING-KEY"}')

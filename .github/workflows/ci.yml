@@ -54,7 +54,7 @@ jobs:
 
       - name: Run tests with coverage
         env:
-          BQAUDIT_REAL_MODE: "false"
-          BQAUDIT_REAL_SCAN: "false"
+          BQCHECK_REAL_MODE: "false"
+          BQCHECK_REAL_SCAN: "false"
         run: |
           uv run pytest --cov --cov-report=xml --cov-report=term

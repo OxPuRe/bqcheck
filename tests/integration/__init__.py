@@ -1,1 +1,1 @@
-"""Integration tests for bqaudit."""
+"""Integration tests for bqcheck."""

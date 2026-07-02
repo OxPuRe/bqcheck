@@ -14,13 +14,13 @@ class TestScanSimulator:
 
     def test_simulator_imports(self):
         """Verify simulator module can be imported."""
-        from bqaudit.scan.simulator import simulate_scan
+        from bqcheck.scan.simulator import simulate_scan
 
         assert simulate_scan is not None
 
     def test_simulate_scan_takes_configured_time(self):
         """AC7: Simulated scan takes configured delay time."""
-        from bqaudit.scan.simulator import DEFAULT_SIMULATION_DELAY, simulate_scan
+        from bqcheck.scan.simulator import DEFAULT_SIMULATION_DELAY, simulate_scan
 
         start_time = time.time()
         simulate_scan("test-project", "mock-token-xyz")
@@ -31,12 +31,12 @@ class TestScanSimulator:
         expected_delay = DEFAULT_SIMULATION_DELAY
         assert expected_delay * 0.9 <= elapsed <= expected_delay * 1.5, (
             f"Scan took {elapsed:.2f}s "
-            f"(expected ~{expected_delay}s with BQAUDIT_SIMULATED_SCAN_DELAY)"
+            f"(expected ~{expected_delay}s with BQCHECK_SIMULATED_SCAN_DELAY)"
         )
 
     def test_simulate_scan_returns_success_result(self):
         """AC1: Simulated scan returns successful ScanResult."""
-        from bqaudit.scan.simulator import simulate_scan
+        from bqcheck.scan.simulator import simulate_scan
 
         result = simulate_scan("my-gcp-project", "mock-token-abc")
 
@@ -49,7 +49,7 @@ class TestScanSimulator:
         """AC4: Simulator never logs ephemeral token."""
         import logging
 
-        from bqaudit.scan.simulator import simulate_scan
+        from bqcheck.scan.simulator import simulate_scan
 
         token = "secret-token-should-never-appear"
 
@@ -62,7 +62,7 @@ class TestScanSimulator:
 
     def test_simulator_displays_simulation_messages(self, capsys):
         """AC7: Simulator displays [SIMULATED] messages."""
-        from bqaudit.scan.simulator import simulate_scan
+        from bqcheck.scan.simulator import simulate_scan
 
         result = simulate_scan("my-test-project", "mock-token")
 
@@ -78,7 +78,7 @@ class TestScanSimulator:
 
     def test_simulate_scan_with_different_projects(self):
         """AC1: Simulator works with different project IDs."""
-        from bqaudit.scan.simulator import simulate_scan
+        from bqcheck.scan.simulator import simulate_scan
 
         projects = ["project-a", "project-b", "project-c"]
 

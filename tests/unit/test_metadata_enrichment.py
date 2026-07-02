@@ -2,9 +2,9 @@
 
 from unittest.mock import Mock
 
-from bqaudit.scanner.anonymizer import merge_table_metadata
-from bqaudit.scanner.metadata_extractor import extract_table_schemas
-from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
+from bqcheck.scanner.anonymizer import merge_table_metadata
+from bqcheck.scanner.metadata_extractor import extract_table_schemas
+from bqcheck.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 
 
 def test_merge_table_metadata_basic():

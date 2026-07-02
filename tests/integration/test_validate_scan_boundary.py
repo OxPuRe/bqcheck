@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.cli import app
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 runner = CliRunner()
 
@@ -27,17 +27,17 @@ def test_validate_succeeds_but_scan_fails_when_token_depleted(tmp_path: Path):
     Integration test: validate works, scan fails when balance=0.
 
     This validates the critical boundary between validate (pre-flight check)
-    and scan (actual audit execution) when token pool is depleted.
+    and scan (actual check execution) when token pool is depleted.
     """
     # Setup: Create credentials with balance = 0
-    mock_creds_path = tmp_path / ".bqaudit" / "credentials.json"
+    mock_creds_path = tmp_path / ".bqcheck" / "credentials.json"
     mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
 
     mock_credentials = {
         "master_key": "VALID-DEPLETED-KEY",
         "token_pool_balance": 0,  # DEPLETED
         "ephemeral_token": "mock-token-xyz",
-        "server_url": "https://api.bqaudit.com",
+        "server_url": "https://api.bqcheck.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
         "used_tokens": [],
         "encryption_key": IdentifierEncryptor.key_to_base64(
@@ -100,14 +100,14 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
     This validates normal operation when tokens are available.
     """
     # Setup: Create credentials with balance = 5
-    mock_creds_path = tmp_path / ".bqaudit" / "credentials.json"
+    mock_creds_path = tmp_path / ".bqcheck" / "credentials.json"
     mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
 
     mock_credentials = {
         "master_key": "VALID-KEY-ABC",
         "token_pool_balance": 5,  # Tokens available
         "ephemeral_token": "mock-token-xyz",
-        "server_url": "https://api.bqaudit.com",
+        "server_url": "https://api.bqcheck.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
         "used_tokens": [],
         "encryption_key": IdentifierEncryptor.key_to_base64(
@@ -137,7 +137,7 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
             "low_priority_count": 0,
             "categories_breakdown": {},
         },
-        "audit_id": "test-audit-id-123",
+        "check_id": "test-check-id-123",
         "new_ephemeral_token": "new-token-456",
     }
 
@@ -151,26 +151,26 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
     with patch.dict("os.environ", {"HOME": str(tmp_path)}):
         # Patch BigQuery and HTTP for scan
         with patch(
-            "bqaudit.scanner.bigquery_client.authenticate_bigquery",
+            "bqcheck.scanner.bigquery_client.authenticate_bigquery",
             return_value=mock_bq_client,
         ):
             with patch(
-                "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
+                "bqcheck.scanner.authenticate_bigquery", return_value=mock_bq_client
             ):
                 with patch(
-                    "bqaudit.scanner.metadata_extractor.extract_table_metadata",
+                    "bqcheck.scanner.metadata_extractor.extract_table_metadata",
                     return_value=[],
                 ):
                     with patch(
-                        "bqaudit.scanner.metadata_extractor.extract_query_metadata",
+                        "bqcheck.scanner.metadata_extractor.extract_query_metadata",
                         return_value=[],
                     ):
                         with patch(
-                            "bqaudit.scanner.metadata_extractor.extract_access_patterns",
+                            "bqcheck.scanner.metadata_extractor.extract_access_patterns",
                             return_value=[],
                         ):
                             with patch(
-                                "bqaudit.scanner.metadata_extractor.extract_table_schemas",
+                                "bqcheck.scanner.metadata_extractor.extract_table_schemas",
                                 return_value={},
                             ):
                                 with patch(

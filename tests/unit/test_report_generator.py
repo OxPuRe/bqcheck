@@ -4,8 +4,8 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from bqaudit.api.models import AuditResponse, AuditSummary, Recommendation
-from bqaudit.report_generator import MarkdownReportGenerator
+from bqcheck.api.models import CheckResponse, CheckSummary, Recommendation
+from bqcheck.report_generator import MarkdownReportGenerator
 
 
 @pytest.fixture
@@ -47,11 +47,11 @@ def sample_recommendations():
 
 
 @pytest.fixture
-def sample_audit_response(sample_recommendations):
-    """Create sample AuditResponse for testing."""
-    return AuditResponse(
+def sample_check_response(sample_recommendations):
+    """Create sample CheckResponse for testing."""
+    return CheckResponse(
         recommendations=sample_recommendations,
-        summary=AuditSummary(
+        summary=CheckSummary(
             total_recommendations=3,
             total_potential_savings_eur=250.0,
             high_priority_count=1,
@@ -59,7 +59,7 @@ def sample_audit_response(sample_recommendations):
             low_priority_count=1,
             categories_breakdown={"storage": 1, "partitioning": 1, "clustering": 1},
         ),
-        audit_id="test_audit_123",
+        check_id="test_check_123",
         new_ephemeral_token="eph_new_token",
     )
 
@@ -67,28 +67,28 @@ def sample_audit_response(sample_recommendations):
 class TestReportHeader:
     """Test report header generation (Task 1.2)."""
 
-    def test_header_includes_project_name(self, sample_audit_response):
+    def test_header_includes_project_name(self, sample_check_response):
         """Test that header includes project name."""
         generator = MarkdownReportGenerator(
-            sample_audit_response, project_name="test-project"
+            sample_check_response, project_name="test-project"
         )
 
         header = generator.generate_header()
 
-        assert "# BigQuery Audit Report - test-project" in header
+        assert "# BigQuery Sanity Check Report - test-project" in header
 
-    def test_header_includes_audit_date(self, sample_audit_response):
-        """Test that header includes audit date."""
-        generator = MarkdownReportGenerator(sample_audit_response)
+    def test_header_includes_check_date(self, sample_check_response):
+        """Test that header includes check date."""
+        generator = MarkdownReportGenerator(sample_check_response)
 
         header = generator.generate_header()
 
-        # Should contain **Audit Date:** line
-        assert "**Audit Date:**" in header
+        # Should contain **Check Date:** line
+        assert "**Check Date:**" in header
 
-    def test_header_includes_timestamp(self, sample_audit_response):
+    def test_header_includes_timestamp(self, sample_check_response):
         """Test that header includes ISO timestamp."""
-        generator = MarkdownReportGenerator(sample_audit_response)
+        generator = MarkdownReportGenerator(sample_check_response)
 
         header = generator.generate_header()
 
@@ -100,50 +100,50 @@ class TestReportHeader:
 class TestReportGeneration:
     """Test complete report generation."""
 
-    def test_generate_report_returns_string(self, sample_audit_response):
+    def test_generate_report_returns_string(self, sample_check_response):
         """Test that generate_report returns a string."""
-        generator = MarkdownReportGenerator(sample_audit_response)
+        generator = MarkdownReportGenerator(sample_check_response)
 
         report = generator.generate_report()
 
         assert isinstance(report, str)
         assert len(report) > 0
 
-    def test_generate_report_includes_header(self, sample_audit_response):
+    def test_generate_report_includes_header(self, sample_check_response):
         """Test that report includes header."""
         generator = MarkdownReportGenerator(
-            sample_audit_response, project_name="my-project"
+            sample_check_response, project_name="my-project"
         )
 
         report = generator.generate_report()
 
-        assert "# BigQuery Audit Report - my-project" in report
+        assert "# BigQuery Sanity Check Report - my-project" in report
 
 
 class TestExecutiveSummary:
     """Test Executive Summary generation (Task 2)."""
 
     def test_executive_summary_includes_total_recommendations(
-        self, sample_audit_response
+        self, sample_check_response
     ):
         """Test that Executive Summary includes total count."""
-        generator = MarkdownReportGenerator(sample_audit_response)
+        generator = MarkdownReportGenerator(sample_check_response)
 
         summary = generator.generate_executive_summary()
 
         assert "Total Recommendations | 3" in summary
 
-    def test_executive_summary_includes_total_savings(self, sample_audit_response):
+    def test_executive_summary_includes_total_savings(self, sample_check_response):
         """Test that Executive Summary includes total potential savings."""
-        generator = MarkdownReportGenerator(sample_audit_response)
+        generator = MarkdownReportGenerator(sample_check_response)
 
         summary = generator.generate_executive_summary()
 
         assert "Potential Monthly Savings | €250.00" in summary
 
-    def test_executive_summary_includes_priority_breakdown(self, sample_audit_response):
+    def test_executive_summary_includes_priority_breakdown(self, sample_check_response):
         """Test that Executive Summary includes priority counts."""
-        generator = MarkdownReportGenerator(sample_audit_response)
+        generator = MarkdownReportGenerator(sample_check_response)
 
         summary = generator.generate_executive_summary()
 
@@ -153,9 +153,9 @@ class TestExecutiveSummary:
 
     def test_executive_summary_zero_recommendations(self):
         """Test Executive Summary with 0 recommendations."""
-        empty_response = AuditResponse(
+        empty_response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -163,7 +163,7 @@ class TestExecutiveSummary:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test_audit_empty",
+            check_id="test_check_empty",
             new_ephemeral_token="eph_token",
         )
         generator = MarkdownReportGenerator(empty_response)
@@ -191,9 +191,9 @@ class TestQuickWins:
             )
             for i in range(7)
         ]
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=recommendations,
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=7,
                 total_potential_savings_eur=700.0,
                 high_priority_count=7,
@@ -201,7 +201,7 @@ class TestQuickWins:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
         generator = MarkdownReportGenerator(response)
@@ -233,9 +233,9 @@ class TestQuickWins:
                 implementation_steps=["Step 1"],
             ),
         ]
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=recommendations,
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=2,
                 total_potential_savings_eur=150.0,
                 high_priority_count=2,
@@ -243,7 +243,7 @@ class TestQuickWins:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
         generator = MarkdownReportGenerator(response)
@@ -278,9 +278,9 @@ class TestQuickWins:
                 implementation_steps=["Step 1"],
             )
         ]
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=recommendations,
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=8,
                 total_potential_savings_eur=200.0,
                 high_priority_count=0,
@@ -288,7 +288,7 @@ class TestQuickWins:
                 low_priority_count=1,
                 categories_breakdown={},
             ),
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
         generator = MarkdownReportGenerator(response)
@@ -304,9 +304,9 @@ class TestDetailedRecommendations:
 
     def test_detailed_recs_sorted_by_priority(self, sample_recommendations):
         """Test that recommendations are sorted by priority."""
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=sample_recommendations,
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=3,
                 total_potential_savings_eur=250.0,
                 high_priority_count=1,
@@ -314,7 +314,7 @@ class TestDetailedRecommendations:
                 low_priority_count=1,
                 categories_breakdown={},
             ),
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
         generator = MarkdownReportGenerator(response)
@@ -330,9 +330,9 @@ class TestDetailedRecommendations:
 
     def test_detailed_recs_includes_all_fields(self, sample_recommendations):
         """Test that all recommendation fields are included."""
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=sample_recommendations[:1],  # Just first one
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=1,
                 total_potential_savings_eur=150.0,
                 high_priority_count=1,
@@ -340,7 +340,7 @@ class TestDetailedRecommendations:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
         generator = MarkdownReportGenerator(response)
@@ -357,46 +357,46 @@ class TestDetailedRecommendations:
 class TestFileSaving:
     """Test file saving logic (Task 5)."""
 
-    def test_save_report_creates_file(self, sample_audit_response, tmp_path):
+    def test_save_report_creates_file(self, sample_check_response, tmp_path):
         """Test that save_report creates a file."""
-        generator = MarkdownReportGenerator(sample_audit_response)
+        generator = MarkdownReportGenerator(sample_check_response)
 
         output_path = generator.save_report(output_dir=tmp_path)
 
         assert output_path.exists()
         assert output_path.is_file()
 
-    def test_save_report_filename_format(self, sample_audit_response, tmp_path):
-        """Test that filename follows audit-report-YYYY-MM-DD.md format."""
-        generator = MarkdownReportGenerator(sample_audit_response)
+    def test_save_report_filename_format(self, sample_check_response, tmp_path):
+        """Test that filename follows sanity-check-report-YYYY-MM-DD.md format."""
+        generator = MarkdownReportGenerator(sample_check_response)
 
         output_path = generator.save_report(output_dir=tmp_path)
 
         # Should match pattern
-        assert output_path.name.startswith("audit-report-")
+        assert output_path.name.startswith("sanity-check-report-")
         assert output_path.name.endswith(".md")
 
-    def test_save_report_contains_full_report(self, sample_audit_response, tmp_path):
+    def test_save_report_contains_full_report(self, sample_check_response, tmp_path):
         """Test that saved file contains complete report."""
         generator = MarkdownReportGenerator(
-            sample_audit_response, project_name="test-project"
+            sample_check_response, project_name="test-project"
         )
 
         output_path = generator.save_report(output_dir=tmp_path)
         content = output_path.read_text()
 
         # Should contain all sections
-        assert "# BigQuery Audit Report - test-project" in content
+        assert "# BigQuery Sanity Check Report - test-project" in content
         assert "## Executive Summary" in content
         assert "## Quick Wins" in content
         assert "## Detailed Recommendations" in content
 
     def test_save_report_auto_suffix_when_file_exists(
-        self, sample_audit_response, tmp_path
+        self, sample_check_response, tmp_path
     ):
         """Test that save_report adds suffix when file exists (non-interactive)."""
 
-        generator = MarkdownReportGenerator(sample_audit_response)
+        generator = MarkdownReportGenerator(sample_check_response)
         output_file = tmp_path / "test-report.md"
 
         # Save first report (interactive=False, force=False)
@@ -424,11 +424,11 @@ class TestFileSaving:
         assert path2.exists()
 
     def test_save_report_force_overwrites_existing(
-        self, sample_audit_response, tmp_path
+        self, sample_check_response, tmp_path
     ):
         """Test that force=True overwrites existing file without suffix."""
 
-        generator = MarkdownReportGenerator(sample_audit_response)
+        generator = MarkdownReportGenerator(sample_check_response)
         output_file = tmp_path / "test-report.md"
 
         # Create existing file with different content
@@ -438,7 +438,7 @@ class TestFileSaving:
         path = generator.save_report(output_path=output_file, force=True)
         assert path == output_file
         assert "old content" not in path.read_text()
-        assert "# BigQuery Audit Report" in path.read_text()
+        assert "# BigQuery Sanity Check Report" in path.read_text()
 
 
 class TestFindAvailablePath:
@@ -492,12 +492,12 @@ class TestFindAvailablePath:
     def test_find_available_path_preserves_extension(self, tmp_path):
         """Test that file extension is preserved correctly."""
 
-        base_path = tmp_path / "audit-report-2026-02-03.md"
+        base_path = tmp_path / "sanity-check-report-2026-02-03.md"
         base_path.write_text("existing")
 
         available = MarkdownReportGenerator._find_available_path(base_path)
 
-        assert available == tmp_path / "audit-report-2026-02-03-1.md"
+        assert available == tmp_path / "sanity-check-report-2026-02-03-1.md"
         assert available.suffix == ".md"
 
 
@@ -585,9 +585,9 @@ class TestEdgeCases:
 
     def test_zero_recommendations_message(self):
         """Test report with 0 recommendations shows optimized message."""
-        empty_response = AuditResponse(
+        empty_response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -595,7 +595,7 @@ class TestEdgeCases:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
         generator = MarkdownReportGenerator(empty_response)
@@ -623,9 +623,9 @@ class TestEdgeCases:
                 )
             )
 
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=recommendations,
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=150,
                 total_potential_savings_eur=sum(r.savings_eur for r in recommendations),
                 high_priority_count=50,
@@ -639,7 +639,7 @@ class TestEdgeCases:
                     "temporal": 10,
                 },
             ),
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
         generator = MarkdownReportGenerator(response)
@@ -647,7 +647,7 @@ class TestEdgeCases:
         report = generator.generate_report()
 
         # Verify report generates successfully
-        assert "# BigQuery Audit Report" in report
+        assert "# BigQuery Sanity Check Report" in report
         assert "Total Recommendations | 150" in report
         assert "## Quick Wins" in report
         assert "## Detailed Recommendations" in report
@@ -661,7 +661,7 @@ class TestJobIdHandling:
 
     def test_job_id_decryption_failure_handled_gracefully(self):
         """Test that corrupted/invalid encrypted job_id doesn't break report generation."""
-        from bqaudit.scanner.encryption import IdentifierEncryptor
+        from bqcheck.scanner.encryption import IdentifierEncryptor
 
         # Create a recommendation with an encrypted job_id in implementation steps
         # Use a corrupted/invalid encrypted string to trigger decryption failure
@@ -678,11 +678,11 @@ class TestJobIdHandling:
             ],
         )
 
-        response = AuditResponse(
+        response = CheckResponse(
             project_id="test-project",
-            audit_date=date.today(),
+            check_date=date.today(),
             generated_at=datetime.now(timezone.utc),
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=1,
                 total_potential_savings_eur=100.0,
                 high_priority_count=0,
@@ -691,7 +691,7 @@ class TestJobIdHandling:
                 category_breakdown={"queries": {"count": 1, "savings": 100.0}},
             ),
             recommendations=[rec],
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
 
@@ -703,7 +703,7 @@ class TestJobIdHandling:
         report = generator.generate_report()
 
         # Verify report was generated successfully
-        assert "# BigQuery Audit Report" in report
+        assert "# BigQuery Sanity Check Report" in report
         assert "Test query recommendation" in report
         # Job ID link should be skipped (not included) due to decryption failure
         assert "CORRUPTED_INVALID_BASE64_STRING" not in report
@@ -714,7 +714,7 @@ class TestTableNameDecryption:
 
     def test_double_format_decryption(self):
         """Test decryption of dataset.table format (existing functionality)."""
-        from bqaudit.scanner.encryption import IdentifierEncryptor
+        from bqcheck.scanner.encryption import IdentifierEncryptor
 
         encryption_key = IdentifierEncryptor.generate_key()
         encryptor = IdentifierEncryptor(encryption_key)
@@ -734,11 +734,11 @@ class TestTableNameDecryption:
             implementation_steps=["Step 1"],
         )
 
-        response = AuditResponse(
+        response = CheckResponse(
             project_id="test-project",
-            audit_date=date.today(),
+            check_date=date.today(),
             generated_at=datetime.now(timezone.utc),
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=1,
                 total_potential_savings_eur=50.0,
                 high_priority_count=0,
@@ -747,7 +747,7 @@ class TestTableNameDecryption:
                 category_breakdown={"queries": {"count": 1, "savings": 50.0}},
             ),
             recommendations=[rec],
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
 
@@ -762,7 +762,7 @@ class TestTableNameDecryption:
 
     def test_triple_format_decryption(self):
         """Test decryption of project.dataset.table format (new functionality)."""
-        from bqaudit.scanner.encryption import IdentifierEncryptor
+        from bqcheck.scanner.encryption import IdentifierEncryptor
 
         encryption_key = IdentifierEncryptor.generate_key()
         encryptor = IdentifierEncryptor(encryption_key)
@@ -783,11 +783,11 @@ class TestTableNameDecryption:
             implementation_steps=["Create materialized view"],
         )
 
-        response = AuditResponse(
+        response = CheckResponse(
             project_id="test-project",
-            audit_date=date.today(),
+            check_date=date.today(),
             generated_at=datetime.now(timezone.utc),
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=1,
                 total_potential_savings_eur=100.0,
                 high_priority_count=0,
@@ -796,7 +796,7 @@ class TestTableNameDecryption:
                 category_breakdown={"queries": {"count": 1, "savings": 100.0}},
             ),
             recommendations=[rec],
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
 
@@ -811,7 +811,7 @@ class TestTableNameDecryption:
 
     def test_mixed_format_decryption(self):
         """Test that both double and triple format decryption work together."""
-        from bqaudit.scanner.encryption import IdentifierEncryptor
+        from bqcheck.scanner.encryption import IdentifierEncryptor
 
         encryption_key = IdentifierEncryptor.generate_key()
         encryptor = IdentifierEncryptor(encryption_key)
@@ -836,11 +836,11 @@ class TestTableNameDecryption:
             implementation_steps=["Optimize join"],
         )
 
-        response = AuditResponse(
+        response = CheckResponse(
             project_id="test-project",
-            audit_date=date.today(),
+            check_date=date.today(),
             generated_at=datetime.now(timezone.utc),
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=1,
                 total_potential_savings_eur=200.0,
                 high_priority_count=0,
@@ -849,7 +849,7 @@ class TestTableNameDecryption:
                 category_breakdown={"queries": {"count": 1, "savings": 200.0}},
             ),
             recommendations=[rec],
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
 
@@ -866,7 +866,7 @@ class TestTableNameDecryption:
 
     def test_decryption_failure_preserves_original_text(self):
         """Test that decryption failures don't corrupt the report."""
-        from bqaudit.scanner.encryption import IdentifierEncryptor
+        from bqcheck.scanner.encryption import IdentifierEncryptor
 
         encryption_key = IdentifierEncryptor.generate_key()
 
@@ -886,11 +886,11 @@ class TestTableNameDecryption:
             implementation_steps=["Step 1"],
         )
 
-        response = AuditResponse(
+        response = CheckResponse(
             project_id="test-project",
-            audit_date=date.today(),
+            check_date=date.today(),
             generated_at=datetime.now(timezone.utc),
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=1,
                 total_potential_savings_eur=50.0,
                 high_priority_count=0,
@@ -899,7 +899,7 @@ class TestTableNameDecryption:
                 category_breakdown={"queries": {"count": 1, "savings": 50.0}},
             ),
             recommendations=[rec],
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
 
@@ -907,7 +907,7 @@ class TestTableNameDecryption:
         report = generator.generate_report()
 
         # Verify report generation succeeds
-        assert "# BigQuery Audit Report" in report
+        assert "# BigQuery Sanity Check Report" in report
         # Original text should be preserved when decryption fails
         assert (
             "INVALID_BASE64_PROJECT_STRING_XXXXX.INVALID_BASE64_DATASET_STRING_YYYYY.table_name"
@@ -916,7 +916,7 @@ class TestTableNameDecryption:
 
     def test_standalone_identifier_decryption(self):
         """Test decryption of standalone encrypted identifiers in description text."""
-        from bqaudit.scanner.encryption import IdentifierEncryptor
+        from bqcheck.scanner.encryption import IdentifierEncryptor
 
         encryption_key = IdentifierEncryptor.generate_key()
         encryptor = IdentifierEncryptor(encryption_key)
@@ -937,11 +937,11 @@ class TestTableNameDecryption:
             implementation_steps=["Verify table is unused", "Drop table"],
         )
 
-        response = AuditResponse(
+        response = CheckResponse(
             project_id="test-project",
-            audit_date=date.today(),
+            check_date=date.today(),
             generated_at=datetime.now(timezone.utc),
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=1,
                 total_potential_savings_eur=75.0,
                 high_priority_count=0,
@@ -950,7 +950,7 @@ class TestTableNameDecryption:
                 category_breakdown={"storage": {"count": 1, "savings": 75.0}},
             ),
             recommendations=[rec],
-            audit_id="test",
+            check_id="test",
             new_ephemeral_token="token",
         )
 

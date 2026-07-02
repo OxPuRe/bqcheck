@@ -6,14 +6,14 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
-from bqaudit.constants import ExitCode
+from bqcheck.cli import app
+from bqcheck.constants import ExitCode
 
 runner = CliRunner()
 
 
 class TestLicenseRevokeCLI:
-    """Test suite for `bqaudit license revoke` command."""
+    """Test suite for `bqcheck license revoke` command."""
 
     def test_revoke_with_confirmation_yes(self, tmp_path, monkeypatch):
         """
@@ -28,7 +28,7 @@ class TestLicenseRevokeCLI:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create valid credentials file
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -36,7 +36,7 @@ class TestLicenseRevokeCLI:
             "master_key": "ABC-XYZ-123",
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
             "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
@@ -51,7 +51,7 @@ class TestLicenseRevokeCLI:
         assert result.exit_code == 0
         assert "revoked successfully" in result.stdout.lower()
         assert "credentials removed" in result.stdout.lower()
-        assert "bqaudit license activate" in result.stdout.lower()
+        assert "bqcheck license activate" in result.stdout.lower()
 
         # AC4: Verify file deleted
         assert not cred_file.exists()
@@ -68,7 +68,7 @@ class TestLicenseRevokeCLI:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -76,7 +76,7 @@ class TestLicenseRevokeCLI:
             "master_key": "ABC-XYZ-123",
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
             "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
@@ -107,7 +107,7 @@ class TestLicenseRevokeCLI:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -115,7 +115,7 @@ class TestLicenseRevokeCLI:
             "master_key": "ABC-XYZ-123",
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
             "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
@@ -141,7 +141,7 @@ class TestLicenseRevokeCLI:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -149,7 +149,7 @@ class TestLicenseRevokeCLI:
             "master_key": "ABC-XYZ-123",
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
             "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
@@ -187,12 +187,12 @@ class TestLicenseRevokeCLI:
 
         Tests that after revocation:
         - File no longer exists
-        - `bqaudit license status` shows "No active license found"
+        - `bqcheck license status` shows "No active license found"
         """
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -200,7 +200,7 @@ class TestLicenseRevokeCLI:
             "master_key": "ABC-XYZ-123",
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
             "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
@@ -233,23 +233,23 @@ class TestLicenseRevokeCLI:
         from datetime import datetime
 
         # Mock API client responses (called by activate_license internally)
-        from bqaudit.api.models import ActivationResponse
-        from bqaudit.license.storage import CredentialStore
+        from bqcheck.api.models import ActivationResponse
+        from bqcheck.license.storage import CredentialStore
 
         mock_api_response_1 = ActivationResponse(
             ephemeral_token="ephemeral-token-old",
             token_pool_balance=50,
-            server_url="https://api.bqaudit.com",
+            server_url="https://api.bqcheck.com",
             activated_at=datetime.fromisoformat("2026-01-28T10:30:00+00:00"),
         )
         mock_api_response_2 = ActivationResponse(
             ephemeral_token="ephemeral-token-new",
             token_pool_balance=100,
-            server_url="https://api.bqaudit.com",
+            server_url="https://api.bqcheck.com",
             activated_at=datetime.fromisoformat("2026-01-30T14:00:00+00:00"),
         )
 
-        with patch("bqaudit.api.client.BQAuditAPIClient.activate_license") as mock_api:
+        with patch("bqcheck.api.client.BQCheckAPIClient.activate_license") as mock_api:
             # First activation with OLD-KEY-123
             mock_api.return_value = mock_api_response_1
             result1 = runner.invoke(app, ["license", "activate", "OLD-KEY-123"])
@@ -302,7 +302,7 @@ class TestLicenseRevokeCLI:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -310,7 +310,7 @@ class TestLicenseRevokeCLI:
             "master_key": "ABC-XYZ-123",
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
             "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
@@ -339,10 +339,10 @@ class TestCredentialStoreDelete:
         """Test CredentialStore.exists() returns True when file exists."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        from bqaudit.license.storage import CredentialStore
+        from bqcheck.license.storage import CredentialStore
 
         # Create credentials
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -350,7 +350,7 @@ class TestCredentialStoreDelete:
             "master_key": "ABC-XYZ-123",
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
             "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
@@ -363,7 +363,7 @@ class TestCredentialStoreDelete:
         """Test CredentialStore.exists() returns False when file missing."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        from bqaudit.license.storage import CredentialStore
+        from bqcheck.license.storage import CredentialStore
 
         # No credentials file created
         assert CredentialStore.exists() is False
@@ -372,10 +372,10 @@ class TestCredentialStoreDelete:
         """Test CredentialStore.delete() removes credentials file."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        from bqaudit.license.storage import CredentialStore
+        from bqcheck.license.storage import CredentialStore
 
         # Create credentials
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -383,7 +383,7 @@ class TestCredentialStoreDelete:
             "master_key": "ABC-XYZ-123",
             "token_pool_balance": 50,
             "ephemeral_token": "token-xyz",
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
             "activated_at": "2026-01-28T10:30:00+00:00",
         }
 
@@ -401,7 +401,7 @@ class TestCredentialStoreDelete:
         """Test CredentialStore.delete() raises error when file missing."""
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        from bqaudit.license.storage import (
+        from bqcheck.license.storage import (
             CredentialNotFoundError,
             CredentialStore,
         )

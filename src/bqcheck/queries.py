@@ -7,7 +7,7 @@ All queries use consistent formatting with SQL injection protection.
 
 import logging
 
-from bqaudit.scanner.metadata_extractor import _validate_project_id
+from bqcheck.scanner.metadata_extractor import _validate_project_id
 
 logger = logging.getLogger(__name__)
 

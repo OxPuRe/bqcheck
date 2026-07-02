@@ -5,13 +5,13 @@ from unittest.mock import Mock, patch
 import pytest
 from google.api_core.exceptions import GoogleAPIError
 
-from bqaudit.scanner.metadata_extractor import (
+from bqcheck.scanner.metadata_extractor import (
     _validate_project_id,
     extract_access_patterns,
     extract_query_metadata,
     extract_table_metadata,
 )
-from bqaudit.scanner.models import AccessPattern, QueryMetadata, TableMetadata
+from bqcheck.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 
 
 def _setup_dataset_mocks(mock_client, datasets=None):
@@ -46,7 +46,7 @@ def _setup_dataset_mocks(mock_client, datasets=None):
     mock_client.get_dataset.side_effect = get_dataset_side_effect
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_success(mock_client):
     """Test successful extraction of table metadata with various table types."""
 
@@ -137,7 +137,7 @@ def test_extract_table_metadata_success(mock_client):
     assert tables[2].row_count is None
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_empty_project(mock_client):
     """Test extraction from project with 0 tables."""
 
@@ -157,7 +157,7 @@ def test_extract_table_metadata_empty_project(mock_client):
     assert isinstance(tables, list)
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_api_error(mock_client):
     """Test BigQuery API error handling."""
 
@@ -172,7 +172,7 @@ def test_extract_table_metadata_api_error(mock_client):
     # Code Review Round 8, Issue #4: project_id removed from error to prevent info disclosure
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_pagination(mock_client):
     """Test extraction handles pagination for 100+ tables."""
 
@@ -213,7 +213,7 @@ def test_extract_table_metadata_pagination(mock_client):
     assert tables[149].table_name == "table_0"  # Smallest (1MB)
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_with_hour_partitioning(mock_client):
     """Test extraction of table with HOUR partitioning."""
 
@@ -248,7 +248,7 @@ def test_extract_table_metadata_with_hour_partitioning(mock_client):
     assert tables[0].partition_expiration_days == 7
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_clustered_only(mock_client):
     """Test extraction of table with clustering but no partitioning."""
 
@@ -283,7 +283,7 @@ def test_extract_table_metadata_clustered_only(mock_client):
     assert tables[0].time_partitioning_type is None
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_external_table(mock_client):
     """Test extraction of EXTERNAL table type."""
 
@@ -361,7 +361,7 @@ def test_table_metadata_pydantic_validation():
         TableMetadata(table_catalog="test", table_schema="test")
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_query_called(mock_client):
     """Test that BigQuery query is called with correct SQL."""
 
@@ -433,7 +433,7 @@ def test_validate_project_id_invalid():
         assert "Invalid project_id format" in str(exc_info.value)
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_table_metadata_invalid_project_id(mock_client):
     """Test that extract_table_metadata validates project_id."""
     mock_bq_client = Mock()
@@ -511,7 +511,7 @@ def test_access_pattern_pydantic_validation():
         AccessPattern(table_catalog="test", table_schema="test")
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_success(mock_client):
     """Test successful extraction of query metadata with filtering."""
 
@@ -578,7 +578,7 @@ def test_extract_query_metadata_success(mock_client):
     mock_bq_client.query.assert_called_once()
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_job_id_format_handling(mock_client):
     """Test that job_id is correctly formatted regardless of input format."""
 
@@ -624,7 +624,7 @@ def test_extract_query_metadata_job_id_format_handling(mock_client):
     assert queries[1].job_id == "my-project:EU.script_job_def456"
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_job_type_filter(mock_client):
     """Test that extract_query_metadata filters to job_type='QUERY' only."""
 
@@ -663,7 +663,7 @@ def test_extract_query_metadata_job_type_filter(mock_client):
     assert queries[0].job_type == "QUERY"
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_days_parameter(mock_client):
     """Test that days parameter affects SQL WHERE clause."""
 
@@ -690,7 +690,7 @@ def test_extract_query_metadata_days_parameter(mock_client):
     assert "INTERVAL 90 DAY" in query_sql
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_limit_clause(mock_client):
     """Test that max_queries parameter adds LIMIT clause."""
 
@@ -709,7 +709,7 @@ def test_extract_query_metadata_limit_clause(mock_client):
     assert "LIMIT 10000" in query_sql or "LIMIT\n    10000" in query_sql
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_null_query_handling(mock_client):
     """Test that NULL query field is filtered out."""
 
@@ -733,7 +733,7 @@ def test_extract_query_metadata_null_query_handling(mock_client):
     assert queries == []
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_empty_project(mock_client):
     """Test extraction from project with 0 queries."""
 
@@ -753,7 +753,7 @@ def test_extract_query_metadata_empty_project(mock_client):
     assert isinstance(queries, list)
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_invalid_project_id(mock_client):
     """Test that extract_query_metadata validates project_id."""
     mock_bq_client = Mock()
@@ -767,7 +767,7 @@ def test_extract_query_metadata_invalid_project_id(mock_client):
     mock_bq_client.query.assert_not_called()
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_api_error(mock_client):
     """Test BigQuery API error handling for query extraction returns empty list."""
 
@@ -783,7 +783,7 @@ def test_extract_query_metadata_api_error(mock_client):
     assert result == []
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_access_patterns_success(mock_client):
     """Test successful extraction of access patterns."""
 
@@ -840,7 +840,7 @@ def test_extract_access_patterns_success(mock_client):
     assert "ASC" in query_sql or "last_modified_time\n" in query_sql
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_access_patterns_empty_project(mock_client):
     """Test extraction from project with no access data."""
 
@@ -860,7 +860,7 @@ def test_extract_access_patterns_empty_project(mock_client):
     assert isinstance(patterns, list)
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_access_patterns_invalid_project_id(mock_client):
     """Test that extract_access_patterns validates project_id."""
     mock_bq_client = Mock()
@@ -874,7 +874,7 @@ def test_extract_access_patterns_invalid_project_id(mock_client):
     mock_bq_client.query.assert_not_called()
 
 
-@patch("bqaudit.scanner.metadata_extractor.bigquery.Client")
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_access_patterns_api_error(mock_client):
     """Test BigQuery API error handling for access pattern extraction returns empty list."""
 

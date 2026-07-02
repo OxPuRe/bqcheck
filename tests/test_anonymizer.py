@@ -1,5 +1,5 @@
 """
-Tests for bqaudit.anonymizer.
+Tests for bqcheck.anonymizer.
 
 PRIVACY-CRITICAL CODE: 100% mutation testing score required in future.
 """

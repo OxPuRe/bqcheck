@@ -1,12 +1,12 @@
-# bqaudit
+# bqcheck
 
-[![CI](https://github.com/OxPuRe/bqaudit/actions/workflows/ci.yml/badge.svg)](https://github.com/OxPuRe/bqaudit/actions/workflows/ci.yml)
+[![CI](https://github.com/OxPuRe/bqcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/OxPuRe/bqcheck/actions/workflows/ci.yml)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
 
-**Open-source CLI client** for BigQuery cost optimization audits with privacy-first architecture.
+**Open-source CLI client** for BigQuery sanity checks with privacy-first architecture.
 
 ## Features
 
@@ -14,15 +14,15 @@
 - 🔐 **Client-side anonymization**: SHA-256 hashing of project/table IDs
 - 🎫 **Token-based licensing**: Pay-per-scan model
 - 💰 **Actionable recommendations**: Storage, partitioning, clustering, query optimizations
-- 📊 **Markdown reports**: Well-formatted audit reports with savings breakdown
+- 📊 **Markdown reports**: Well-formatted sanity check reports with savings breakdown
 - ✅ **Free validation**: Check BigQuery access before purchasing tokens
 
 ## Architecture
 
-bqaudit is a client-server architecture:
+bqcheck is a client-server architecture:
 
 - **Client** (this repo): Open-source CLI tool that extracts BigQuery metadata locally
-- **Server** ([bqaudit-server](https://github.com/OxPuRe/bqaudit-server)): Proprietary audit engine that analyzes metadata and generates recommendations
+- **Server** ([bqcheck-server](https://github.com/OxPuRe/bqcheck-server)): Proprietary analysis engine that analyzes metadata and generates recommendations
 
 The client anonymizes all project and table identifiers before sending metadata to the server, ensuring your data stays private.
 
@@ -31,13 +31,13 @@ The client anonymizes all project and table identifiers before sending metadata 
 ### Using UV (Recommended)
 
 ```bash
-uv pip install bqaudit
+uv pip install bqcheck
 ```
 
 ### Using pip
 
 ```bash
-pip install bqaudit
+pip install bqcheck
 ```
 
 ## Usage
@@ -47,31 +47,31 @@ pip install bqaudit
 Check BigQuery access and permissions without consuming tokens:
 
 ```bash
-bqaudit validate --project my-gcp-project
+bqcheck validate --project my-gcp-project
 ```
 
 Validate multi-project setup:
 
 ```bash
-bqaudit validate --project storage-project --query-project processing-project
+bqcheck validate --project storage-project --query-project processing-project
 ```
 
 Show detailed validation steps:
 
 ```bash
-bqaudit validate --project my-gcp-project --verbose
+bqcheck validate --project my-gcp-project --verbose
 ```
 
-### Run Audit (Consumes 1 Token)
+### Run Sanity Check (Consumes 1 Token)
 
 **Single-project scan:**
 ```bash
-bqaudit scan --project my-gcp-project
+bqcheck scan --project my-gcp-project
 ```
 
 **Multi-project scan** (for separated storage/processing architectures):
 ```bash
-bqaudit scan --project storage-project --query-project processing-project
+bqcheck scan --project storage-project --query-project processing-project
 ```
 
 Use `--query-project` when your tables are stored in one project but queries run in another. This dramatically improves query-based recommendations (materialized views, clustering opportunities).
@@ -83,34 +83,34 @@ Use `--query-project` when your tables are stored in one project but queries run
 
 **Activate your license:**
 ```bash
-bqaudit license activate sk_live_...
+bqcheck license activate sk_live_...
 ```
 
 **Check your token balance:**
 ```bash
-bqaudit license status
+bqcheck license status
 ```
 
 **Revoke credentials:**
 ```bash
-bqaudit license revoke
+bqcheck license revoke
 ```
 
-Credentials are stored locally in `~/.bqaudit/credentials.json`
+Credentials are stored locally in `~/.bqcheck/credentials.json`
 
 ### Custom Output Path
 
-Save audit reports to a custom location:
+Save sanity check reports to a custom location:
 
 ```bash
 # Save to specific file
-bqaudit scan --project my-gcp-project --output reports/audit.md
+bqcheck scan --project my-gcp-project --output reports/sanity-check.md
 
 # Save to specific directory (auto-generates filename)
-bqaudit scan --project my-gcp-project --output-dir ./reports/
+bqcheck scan --project my-gcp-project --output-dir ./reports/
 
 # Force overwrite existing file
-bqaudit scan --project my-gcp-project --output report.md --force
+bqcheck scan --project my-gcp-project --output report.md --force
 ```
 
 ## Configuration
@@ -119,15 +119,15 @@ bqaudit scan --project my-gcp-project --output report.md --force
 
 Optional environment variables for advanced users:
 
-- `BQAUDIT_API_URL`: Override default server URL (default: production Cloud Run endpoint)
-- `BQAUDIT_REAL_MODE`: Set to `"false"` for mock server mode (testing only, default: `"true"`)
-- `BQAUDIT_REAL_SCAN`: Set to `"false"` for simulated BigQuery scan (testing only, default: `"true"`)
+- `BQCHECK_API_URL`: Override default server URL (default: production Cloud Run endpoint)
+- `BQCHECK_REAL_MODE`: Set to `"false"` for mock server mode (testing only, default: `"true"`)
+- `BQCHECK_REAL_SCAN`: Set to `"false"` for simulated BigQuery scan (testing only, default: `"true"`)
 
 **Example (development/testing):**
 ```bash
-export BQAUDIT_REAL_MODE="false"
-export BQAUDIT_REAL_SCAN="false"
-bqaudit scan --project test-project
+export BQCHECK_REAL_MODE="false"
+export BQCHECK_REAL_SCAN="false"
+bqcheck scan --project test-project
 ```
 
 ## Development
@@ -136,8 +136,8 @@ bqaudit scan --project test-project
 
 ```bash
 # Clone repository
-git clone https://github.com/OxPuRe/bqaudit.git
-cd bqaudit
+git clone https://github.com/OxPuRe/bqcheck.git
+cd bqcheck
 
 # Install dependencies
 uv sync
@@ -216,16 +216,15 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv ru
 
 ## Related Repositories
 
-- [bqaudit-server](https://github.com/OxPuRe/bqaudit-server) - Proprietary audit engine and API server
+- [bqcheck-server](https://github.com/OxPuRe/bqcheck-server) - Proprietary analysis engine and API server
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/OxPuRe/bqaudit-server/issues) (tracked in server repo)
-- **Documentation**: See [server README](https://github.com/OxPuRe/bqaudit-server#license--token-management) for license system details
+- **Issues**: [GitHub Issues](https://github.com/OxPuRe/bqcheck-server/issues) (tracked in server repo)
+- **Documentation**: See [server README](https://github.com/OxPuRe/bqcheck-server#license--token-management) for license system details
 
 ## License
 
 MIT License - Client CLI tool is open source
 
-Note: The server-side audit engine is proprietary. See [bqaudit-server](https://github.com/OxPuRe/bqaudit-server) for details.
-
+Note: The server-side analysis engine is proprietary. See [bqcheck-server](https://github.com/OxPuRe/bqcheck-server) for details.

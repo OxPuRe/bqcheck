@@ -17,10 +17,10 @@ from unittest.mock import Mock, patch
 import pytest
 from typer.testing import CliRunner
 
-from bqaudit.api.models import AuditResponse, AuditSummary
-from bqaudit.cli import app
-from bqaudit.report_generator import MarkdownReportGenerator
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.api.models import CheckResponse, CheckSummary
+from bqcheck.cli import app
+from bqcheck.report_generator import MarkdownReportGenerator
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 runner = CliRunner()
 
@@ -48,7 +48,7 @@ def mock_bigquery_scan():
             "low_priority_count": 0,
             "categories_breakdown": {},
         },
-        "audit_id": "test-audit-id-123",
+        "check_id": "test-check-id-123",
         "new_ephemeral_token": "new-token-456",
     }
 
@@ -58,29 +58,29 @@ def mock_bigquery_scan():
     mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
     mock_async_client.__aexit__ = AsyncMock(return_value=None)
 
-    # Set BQAUDIT_REAL_SCAN=true to enable real scan mode with mocked dependencies
-    with patch.dict("os.environ", {"BQAUDIT_REAL_SCAN": "true"}):
+    # Set BQCHECK_REAL_SCAN=true to enable real scan mode with mocked dependencies
+    with patch.dict("os.environ", {"BQCHECK_REAL_SCAN": "true"}):
         with patch(
-            "bqaudit.scanner.bigquery_client.authenticate_bigquery",
+            "bqcheck.scanner.bigquery_client.authenticate_bigquery",
             return_value=mock_bq_client,
         ):
             with patch(
-                "bqaudit.scanner.authenticate_bigquery", return_value=mock_bq_client
+                "bqcheck.scanner.authenticate_bigquery", return_value=mock_bq_client
             ):
                 with patch(
-                    "bqaudit.scanner.metadata_extractor.extract_table_metadata",
+                    "bqcheck.scanner.metadata_extractor.extract_table_metadata",
                     return_value=[],
                 ):
                     with patch(
-                        "bqaudit.scanner.metadata_extractor.extract_query_metadata",
+                        "bqcheck.scanner.metadata_extractor.extract_query_metadata",
                         return_value=[],
                     ):
                         with patch(
-                            "bqaudit.scanner.metadata_extractor.extract_access_patterns",
+                            "bqcheck.scanner.metadata_extractor.extract_access_patterns",
                             return_value=[],
                         ):
                             with patch(
-                                "bqaudit.scanner.metadata_extractor.extract_table_schemas",
+                                "bqcheck.scanner.metadata_extractor.extract_table_schemas",
                                 return_value={},
                             ):
                                 with patch(
@@ -96,7 +96,7 @@ def mock_credentials(tmp_path: Path) -> dict:
         "master_key": "VALID-TEST-KEY-123",
         "ephemeral_token": "test-token-xyz-789",
         "token_pool_balance": 10,
-        "server_url": "https://api.bqaudit.com",
+        "server_url": "https://api.bqcheck.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
         "encryption_key": IdentifierEncryptor.key_to_base64(
             IdentifierEncryptor.generate_key()
@@ -104,7 +104,7 @@ def mock_credentials(tmp_path: Path) -> dict:
     }
 
     # Create credentials file
-    creds_dir = tmp_path / ".bqaudit"
+    creds_dir = tmp_path / ".bqcheck"
     creds_dir.mkdir(parents=True, exist_ok=True)
     creds_file = creds_dir / "credentials.json"
     creds_file.write_text(json.dumps(credentials))
@@ -116,22 +116,22 @@ def mock_credentials(tmp_path: Path) -> dict:
 @pytest.fixture
 def mock_creds_path(tmp_path: Path, monkeypatch):
     """Mock CredentialStore path to use tmp_path."""
-    creds_path = tmp_path / ".bqaudit" / "credentials.json"
+    creds_path = tmp_path / ".bqcheck" / "credentials.json"
 
     # Mock the _get_credentials_path method to return our test path
     monkeypatch.setattr(
-        "bqaudit.license.storage.CredentialStore._get_credentials_path",
+        "bqcheck.license.storage.CredentialStore._get_credentials_path",
         lambda: creds_path,
     )
     return creds_path
 
 
 @pytest.fixture
-def mock_audit_response():
-    """Create mock audit response for report generation."""
-    return AuditResponse(
+def mock_check_response():
+    """Create mock check response for report generation."""
+    return CheckResponse(
         recommendations=[],
-        summary=AuditSummary(
+        summary=CheckSummary(
             total_recommendations=0,
             total_potential_savings_eur=0.0,
             high_priority_count=0,
@@ -139,7 +139,7 @@ def mock_audit_response():
             low_priority_count=0,
             categories_breakdown={},
         ),
-        audit_id="test-audit-123",
+        check_id="test-check-123",
         new_ephemeral_token="new-token-456",
     )
 
@@ -156,9 +156,9 @@ class TestPathResolution:
         # When: No custom path (None)
 
         # We'll test this via the MarkdownReportGenerator
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -166,7 +166,7 @@ class TestPathResolution:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test-123",
+            check_id="test-123",
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
@@ -177,7 +177,7 @@ class TestPathResolution:
         # Should be in cwd with default name format
         # Use generator's timestamp to match the filename (now includes time)
         timestamp_str = generator.timestamp.strftime("%Y-%m-%d-%H%M%S")
-        expected_name = f"audit-report-{timestamp_str}.md"
+        expected_name = f"sanity-check-report-{timestamp_str}.md"
 
         assert result_path.name == expected_name
         assert result_path.parent == tmp_path
@@ -185,12 +185,12 @@ class TestPathResolution:
     def test_resolve_absolute_path(self, tmp_path):
         """Test absolute path is used as-is (AC1)."""
         # Given: Absolute path
-        custom_path = tmp_path / "reports" / "audit.md"
+        custom_path = tmp_path / "reports" / "sanity-check.md"
 
         # When: Pass absolute path to save_report
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -198,7 +198,7 @@ class TestPathResolution:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test-123",
+            check_id="test-123",
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
@@ -220,12 +220,12 @@ class TestPathResolution:
         monkeypatch.chdir(tmp_path)
 
         # Given: Relative path
-        custom_path = Path("reports") / "audit.md"
+        custom_path = Path("reports") / "sanity-check.md"
 
         # When: Pass relative path to save_report
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -233,7 +233,7 @@ class TestPathResolution:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test-123",
+            check_id="test-123",
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
@@ -246,7 +246,7 @@ class TestPathResolution:
         result_path = generator.save_report(output_path=custom_path)
 
         # Then: Should be resolved relative to cwd
-        expected_path = tmp_path / "reports" / "audit.md"
+        expected_path = tmp_path / "reports" / "sanity-check.md"
         assert result_path == expected_path
         assert result_path.is_absolute()
         assert result_path.exists()
@@ -264,9 +264,9 @@ class TestDirectoryAutoCreation:
         assert not output_path.parent.exists()
 
         # When: Save report to that path
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -274,7 +274,7 @@ class TestDirectoryAutoCreation:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test-123",
+            check_id="test-123",
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
@@ -301,9 +301,9 @@ class TestDirectoryAutoCreation:
         monkeypatch.setattr(Path, "mkdir", mock_mkdir)
 
         # When/Then: Should raise PermissionError
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -311,7 +311,7 @@ class TestDirectoryAutoCreation:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test-123",
+            check_id="test-123",
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
@@ -330,9 +330,9 @@ class TestFileOverwriteHandling:
         output_path.write_text("old report content")
 
         # When: Save with force (no prompt)
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -340,7 +340,7 @@ class TestFileOverwriteHandling:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test-123",
+            check_id="test-123",
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
@@ -348,7 +348,7 @@ class TestFileOverwriteHandling:
 
         # Then: File overwritten
         assert result_path.read_text() != "old report content"
-        assert "BigQuery Audit Report" in result_path.read_text()
+        assert "BigQuery Sanity Check Report" in result_path.read_text()
 
     def test_overwrite_prompt_user_accepts(self, tmp_path, monkeypatch):
         """Test overwrite prompt when user accepts (AC3)."""
@@ -361,9 +361,9 @@ class TestFileOverwriteHandling:
         monkeypatch.setattr("builtins.input", lambda _: next(inputs))
 
         # When: Save without force (prompt)
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -371,7 +371,7 @@ class TestFileOverwriteHandling:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test-123",
+            check_id="test-123",
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
@@ -380,7 +380,7 @@ class TestFileOverwriteHandling:
         )
 
         # Then: File should be overwritten
-        assert "BigQuery Audit Report" in result_path.read_text()
+        assert "BigQuery Sanity Check Report" in result_path.read_text()
 
     def test_overwrite_prompt_user_declines(self, tmp_path, monkeypatch):
         """Test overwrite prompt when user declines (AC3)."""
@@ -393,9 +393,9 @@ class TestFileOverwriteHandling:
         monkeypatch.setattr("builtins.input", lambda _: next(inputs))
 
         # When: Save without force (prompt)
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -403,7 +403,7 @@ class TestFileOverwriteHandling:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test-123",
+            check_id="test-123",
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
@@ -435,9 +435,9 @@ class TestPermissionErrors:
         monkeypatch.setattr(Path, "write_text", mock_write_text)
 
         # When/Then: Should raise PermissionError
-        response = AuditResponse(
+        response = CheckResponse(
             recommendations=[],
-            summary=AuditSummary(
+            summary=CheckSummary(
                 total_recommendations=0,
                 total_potential_savings_eur=0.0,
                 high_priority_count=0,
@@ -445,7 +445,7 @@ class TestPermissionErrors:
                 low_priority_count=0,
                 categories_breakdown={},
             ),
-            audit_id="test-123",
+            check_id="test-123",
             new_ephemeral_token="token-456",
         )
         generator = MarkdownReportGenerator(response, project_name="test-project")
@@ -462,7 +462,7 @@ class TestScanCommandWithCustomOutput:
         tmp_path,
         mock_credentials,
         mock_creds_path,
-        mock_audit_response,
+        mock_check_response,
         monkeypatch,
     ):
         """Test scan with custom absolute output path (AC1)."""
@@ -472,7 +472,7 @@ class TestScanCommandWithCustomOutput:
         mock_creds_path.chmod(0o600)
 
         # Use mock mode to avoid real BigQuery calls
-        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")
+        monkeypatch.setenv("BQCHECK_REAL_MODE", "false")
 
         # Mock BigQuery authentication and metadata extraction
         with mock_bigquery_scan():
@@ -496,7 +496,7 @@ class TestScanCommandWithCustomOutput:
 
         # Report should be saved to custom path
         assert output_path.exists()
-        assert "BigQuery Audit Report" in output_path.read_text()
+        assert "BigQuery Sanity Check Report" in output_path.read_text()
 
         # Note: Console output uses Rich library which is captured separately
         # Just verify the file was created correctly
@@ -506,7 +506,7 @@ class TestScanCommandWithCustomOutput:
         tmp_path,
         mock_credentials,
         mock_creds_path,
-        mock_audit_response,
+        mock_check_response,
         monkeypatch,
     ):
         """Test scan with relative output path (AC6)."""
@@ -516,13 +516,13 @@ class TestScanCommandWithCustomOutput:
         mock_creds_path.chmod(0o600)
 
         # Use mock mode
-        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")
+        monkeypatch.setenv("BQCHECK_REAL_MODE", "false")
 
         # Change to tmp_path for relative path testing
         monkeypatch.chdir(tmp_path)
 
         # Relative output path
-        output_path = Path("reports") / "audit.md"
+        output_path = Path("reports") / "sanity-check.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Mock BigQuery scanning
@@ -537,7 +537,7 @@ class TestScanCommandWithCustomOutput:
             assert result.exit_code == 0
 
         # Report should exist at resolved path
-        full_path = tmp_path / "reports" / "audit.md"
+        full_path = tmp_path / "reports" / "sanity-check.md"
         assert full_path.exists()
 
     def test_scan_with_force_overwrite(
@@ -545,7 +545,7 @@ class TestScanCommandWithCustomOutput:
         tmp_path,
         mock_credentials,
         mock_creds_path,
-        mock_audit_response,
+        mock_check_response,
         monkeypatch,
     ):
         """Test scan with --force flag overwrites without prompt (AC4)."""
@@ -555,7 +555,7 @@ class TestScanCommandWithCustomOutput:
         mock_creds_path.chmod(0o600)
 
         # Use mock mode
-        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")
+        monkeypatch.setenv("BQCHECK_REAL_MODE", "false")
 
         # Create existing file
         output_path = tmp_path / "existing.md"
@@ -582,14 +582,14 @@ class TestScanCommandWithCustomOutput:
 
         # File should be overwritten
         assert output_path.read_text() != "old report"
-        assert "BigQuery Audit Report" in output_path.read_text()
+        assert "BigQuery Sanity Check Report" in output_path.read_text()
 
     def test_scan_permission_denied_displays_error(
         self,
         tmp_path,
         mock_credentials,
         mock_creds_path,
-        mock_audit_response,
+        mock_check_response,
         monkeypatch,
     ):
         """Test scan displays error on permission denied (AC5)."""
@@ -599,7 +599,7 @@ class TestScanCommandWithCustomOutput:
         mock_creds_path.chmod(0o600)
 
         # Use mock mode
-        monkeypatch.setenv("BQAUDIT_REAL_MODE", "false")
+        monkeypatch.setenv("BQCHECK_REAL_MODE", "false")
 
         # Path that will cause permission error
         output_path = tmp_path / "restricted" / "report.md"

@@ -4,15 +4,15 @@ import json
 
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
-from bqaudit.constants import ExitCode
+from bqcheck.cli import app
+from bqcheck.constants import ExitCode
 from tests.conftest import create_test_credentials
 
 runner = CliRunner()
 
 
 class TestLicenseStatusCLI:
-    """Test suite for `bqaudit license status` command."""
+    """Test suite for `bqcheck license status` command."""
 
     def test_status_display_valid_credentials(self, tmp_path, monkeypatch):
         """
@@ -29,7 +29,7 @@ class TestLicenseStatusCLI:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create valid credentials file
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -52,7 +52,7 @@ class TestLicenseStatusCLI:
         assert "ABC-XYZ-***" in result.stdout  # Masked (AC5)
         assert "ABC-XYZ-123" not in result.stdout  # Full key not shown
         assert "47 scans remaining" in result.stdout
-        assert "api.bqaudit.com" in result.stdout
+        assert "api.bqcheck.com" in result.stdout
 
     def test_status_no_credentials_found(self, tmp_path, monkeypatch):
         """
@@ -73,8 +73,8 @@ class TestLicenseStatusCLI:
         # AC2: Verify error message and instructions
         assert result.exit_code == ExitCode.FILE_ERROR
         assert "No active license found" in result.stdout
-        assert "bqaudit license activate" in result.stdout
-        assert "https://bqaudit.com/pricing" in result.stdout
+        assert "bqcheck license activate" in result.stdout
+        assert "https://bqcheck.com/pricing" in result.stdout
 
     def test_status_auto_fixes_unsafe_permissions(self, tmp_path, monkeypatch):
         """
@@ -88,7 +88,7 @@ class TestLicenseStatusCLI:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials with wrong permissions (644 - group/other can read)
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -121,7 +121,7 @@ class TestLicenseStatusCLI:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials with invalid JSON
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
@@ -147,14 +147,14 @@ class TestLicenseStatusCLI:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         # Create credentials with missing fields
-        cred_dir = tmp_path / ".bqaudit"
+        cred_dir = tmp_path / ".bqcheck"
         cred_dir.mkdir(mode=0o700)
         cred_file = cred_dir / "credentials.json"
 
         # Missing token_pool_balance and ephemeral_token
         incomplete_credentials = {
             "master_key": "ABC-XYZ-123",
-            "server_url": "https://api.bqaudit.com",
+            "server_url": "https://api.bqcheck.com",
         }
 
         cred_file.write_text(json.dumps(incomplete_credentials, indent=2))
@@ -183,7 +183,7 @@ class TestLicenseStatusCLI:
 
         for full_key, expected_masked in test_keys:
             # Create credentials
-            cred_dir = tmp_path / ".bqaudit"
+            cred_dir = tmp_path / ".bqcheck"
             cred_dir.mkdir(mode=0o700, exist_ok=True)
             cred_file = cred_dir / "credentials.json"
 

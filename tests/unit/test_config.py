@@ -1,12 +1,12 @@
 """
-Unit tests for bqaudit configuration module.
+Unit tests for bqcheck configuration module.
 
 Tests logging configuration functionality including verbose mode.
 """
 
 import logging
 
-from bqaudit.config import configure_logging
+from bqcheck.config import configure_logging
 
 
 class TestConfigureLogging:
@@ -17,21 +17,21 @@ class TestConfigureLogging:
         logger = configure_logging(verbose=True)
 
         assert logger.level == logging.DEBUG
-        assert logger.name == "bqaudit"
+        assert logger.name == "bqcheck"
 
     def test_configure_logging_verbose_false(self):
         """Test logging configured to INFO when verbose=False."""
         logger = configure_logging(verbose=False)
 
         assert logger.level == logging.INFO
-        assert logger.name == "bqaudit"
+        assert logger.name == "bqcheck"
 
     def test_configure_logging_default(self):
         """Test logging configured to INFO by default (no args)."""
         logger = configure_logging()
 
         assert logger.level == logging.INFO
-        assert logger.name == "bqaudit"
+        assert logger.name == "bqcheck"
 
     def test_configure_logging_has_handler(self):
         """Test logger has at least one handler configured."""

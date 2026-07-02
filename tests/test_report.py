@@ -1,5 +1,5 @@
 """
-Tests for bqaudit.report.
+Tests for bqcheck.report.
 
 Placeholder tests to verify pytest infrastructure.
 """

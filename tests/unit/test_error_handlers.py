@@ -4,7 +4,7 @@ import io
 
 from rich.console import Console
 
-from bqaudit.error_handlers import (
+from bqcheck.error_handlers import (
     EXIT_AUTH_ERROR,
     EXIT_FILE_ERROR,
     EXIT_NETWORK_ERROR,
@@ -90,7 +90,7 @@ class TestNetworkErrorMessages:
 
         # Then: Message includes troubleshooting guidance
         output = console.file.getvalue()
-        assert "❌ Error: Unable to reach audit server" in output
+        assert "❌ Error: Unable to reach analysis server" in output
         assert "Check your internet connection" in output
         assert "Retry the scan when connection is restored" in output
         assert "Your token was not consumed" in output
@@ -127,8 +127,8 @@ class TestTimeoutErrorMessages:
 
         # Then: Message includes large project guidance
         output = console.file.getvalue()
-        assert "❌ Error: Audit timeout (>15 minutes)" in output
-        assert "This may indicate a very large project" in output
+        assert "❌ Error: Sanity check timeout (>15 minutes)" in output
+        assert "This may indicate a very large" in output
         assert "Contact support if the issue persists" in output
         assert "Your token was not consumed" in output
 

@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from bqaudit.cli import app
-from bqaudit.scanner.encryption import IdentifierEncryptor
+from bqcheck.cli import app
+from bqcheck.scanner.encryption import IdentifierEncryptor
 
 runner = CliRunner()
 
@@ -25,7 +25,7 @@ def mock_credentials(tmp_path: Path) -> dict:
         "master_key": "VALID-TEST-KEY-123",
         "ephemeral_token": "test-token-xyz-789",
         "token_pool_balance": 10,
-        "server_url": "https://api.bqaudit.com",
+        "server_url": "https://api.bqcheck.com",
         "activated_at": "2024-01-01T00:00:00+00:00",
         "encryption_key": IdentifierEncryptor.key_to_base64(
             IdentifierEncryptor.generate_key()
@@ -33,7 +33,7 @@ def mock_credentials(tmp_path: Path) -> dict:
     }
 
     # Create credentials file
-    creds_dir = tmp_path / ".bqaudit"
+    creds_dir = tmp_path / ".bqcheck"
     creds_dir.mkdir(parents=True, exist_ok=True)
     creds_file = creds_dir / "credentials.json"
     creds_file.write_text(json.dumps(credentials))
@@ -45,11 +45,11 @@ def mock_credentials(tmp_path: Path) -> dict:
 @pytest.fixture
 def mock_creds_path(tmp_path: Path, monkeypatch):
     """Mock CredentialStore path to use tmp_path."""
-    creds_path = tmp_path / ".bqaudit" / "credentials.json"
+    creds_path = tmp_path / ".bqcheck" / "credentials.json"
 
     # Mock the _get_credentials_path method to return our test path
     monkeypatch.setattr(
-        "bqaudit.license.storage.CredentialStore._get_credentials_path",
+        "bqcheck.license.storage.CredentialStore._get_credentials_path",
         lambda: creds_path,
     )
     return creds_path
@@ -74,7 +74,7 @@ class TestLicenseStatusDepletion:
         # Assert
         assert result.exit_code == 0
         assert "0 scans remaining (DEPLETED)" in result.stdout
-        assert "bqaudit.com/pricing" in result.stdout
+        assert "bqcheck.com/pricing" in result.stdout
 
     def test_license_status_normal_when_balance_positive(
         self, tmp_path, mock_credentials, mock_creds_path

@@ -1,12 +1,12 @@
 """
-Unit tests for bqaudit.queries module.
+Unit tests for bqcheck.queries module.
 
 Tests SQL query generation with injection protection and validation.
 """
 
 import pytest
 
-from bqaudit.queries import (
+from bqcheck.queries import (
     get_sample_queries_query,
     get_simple_test_query,
     get_table_count_query,
@@ -172,7 +172,7 @@ class TestModuleExports:
 
     def test_all_exports_defined(self):
         """Test __all__ is defined with expected functions."""
-        from bqaudit import queries
+        from bqcheck import queries
 
         assert hasattr(queries, "__all__")
         assert "get_simple_test_query" in queries.__all__

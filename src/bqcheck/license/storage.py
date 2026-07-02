@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from bqaudit.license.models import Credentials
+from bqcheck.license.models import Credentials
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class CredentialStore:
     """
     Secure credential storage with chmod 600 enforcement.
 
-    Storage location: ~/.bqaudit/credentials.json
+    Storage location: ~/.bqcheck/credentials.json
     Security model: Plain JSON with chmod 600 (owner read/write only)
 
     Rationale for no encryption:
@@ -54,7 +54,7 @@ class CredentialStore:
         Get credentials path with HOME validation.
 
         Returns:
-            Path: Path to credentials file (~/.bqaudit/credentials.json)
+            Path: Path to credentials file (~/.bqcheck/credentials.json)
 
         Raises:
             ValueError: If HOME is not absolute or outside expected paths
@@ -66,7 +66,7 @@ class CredentialStore:
         if not home.is_absolute():
             raise ValueError(f"HOME must be absolute path, got: {home}")
 
-        return home / ".bqaudit" / "credentials.json"
+        return home / ".bqcheck" / "credentials.json"
 
     @classmethod
     def save(cls, credentials: Dict[str, Any]) -> None:
@@ -158,7 +158,7 @@ class CredentialStore:
             logger.error(f"Temp file already exists: {temp_path}")
             raise OSError(
                 "Credentials save conflict: temporary file already exists. "
-                "If no other save is running, delete ~/.bqaudit/credentials.json.tmp manually."
+                "If no other save is running, delete ~/.bqcheck/credentials.json.tmp manually."
             )
 
         except Exception:
