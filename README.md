@@ -144,7 +144,7 @@ bqcheck scan --project my-gcp-project --output report.md --force
 
 Optional environment variables for advanced users:
 
-- `BQCHECK_API_URL`: Override default server URL (default: production Cloud Run endpoint)
+- `BQCHECK_API_URL`: Override default server URL (default: `https://bqcheck-server-131187061372.europe-west1.run.app`)
 - `BQCHECK_REAL_MODE`: Set to `"false"` for mock server mode (testing only, default: `"true"`)
 - `BQCHECK_REAL_SCAN`: Set to `"false"` for simulated BigQuery scan (testing only, default: `"true"`)
 - `BQCHECK_PRICING_URL`: Override the pricing URL shown in CLI messages
@@ -247,7 +247,7 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv ru
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/OxPuRe/bqcheck-server/issues) (tracked in server repo)
+- **Issues**: [GitHub Issues](https://github.com/OxPuRe/bqcheck/issues)
 - **Private testing / support**: for now, support requests route through the same issue tracker unless a direct testing contact has been shared with you
 - **Documentation**: See [server README](https://github.com/OxPuRe/bqcheck-server#license--token-management) for license system details
 

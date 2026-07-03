@@ -55,6 +55,8 @@ def version_cmd(
     import sys
 
     from bqcheck.constants import (
+        DEFAULT_API_URL,
+        ENV_VAR_API_URL,
         ENV_VAR_REAL_MODE,
         ENV_VAR_REAL_SCAN,
         get_support_url,
@@ -67,7 +69,7 @@ def version_cmd(
 
     console.print(f"Python: {sys.version.split()[0]}")
     console.print(f"Platform: {platform.platform()}")
-    console.print(f"API URL: {os.getenv('BQCHECK_API_URL', '(default)')}")
+    console.print(f"API URL: {os.getenv(ENV_VAR_API_URL, DEFAULT_API_URL)}")
     console.print(f"{ENV_VAR_REAL_MODE}: {os.getenv(ENV_VAR_REAL_MODE, '(default)')}")
     console.print(f"{ENV_VAR_REAL_SCAN}: {os.getenv(ENV_VAR_REAL_SCAN, '(default)')}")
     console.print(f"Support URL: {get_support_url()}")
@@ -393,7 +395,7 @@ def validate(
             console.print(f"[dim]  Response: {health}[/dim]")
 
         console.print("[green]✓ Server connectivity OK[/green]")
-        validation_results.append(("Server Health", "✓", "api.bqcheck.com reachable"))
+        validation_results.append(("Server Health", "✓", "bqcheck API reachable"))
 
         # Version compatibility check
         min_version = health.get("min_client_version")
@@ -565,11 +567,11 @@ To list available projects:
     gcloud projects list"""
 
     elif error_type == "server_unreachable":
-        return """❌ Cannot reach bqcheck server (api.bqcheck.com)
+        return """❌ Cannot reach bqcheck server
 
 Possible causes:
 - Check internet connectivity
-- Verify firewall/proxy settings allow HTTPS to api.bqcheck.com
+- Verify firewall/proxy settings allow HTTPS to the configured BQCHECK_API_URL
 - Server may be temporarily down (try again in a few minutes)"""
 
     elif error_type == "server_timeout":

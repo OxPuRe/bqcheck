@@ -5,7 +5,7 @@ import json
 from typer.testing import CliRunner
 
 from bqcheck.cli import app
-from bqcheck.constants import ExitCode
+from bqcheck.constants import DEFAULT_API_URL, ExitCode
 from tests.conftest import create_test_credentials
 
 runner = CliRunner()
@@ -52,7 +52,7 @@ class TestLicenseStatusCLI:
         assert "ABC-XYZ-***" in result.stdout  # Masked (AC5)
         assert "ABC-XYZ-123" not in result.stdout  # Full key not shown
         assert "47 scans remaining" in result.stdout
-        assert "api.bqcheck.com" in result.stdout
+        assert DEFAULT_API_URL in result.stdout
 
     def test_status_no_credentials_found(self, tmp_path, monkeypatch):
         """

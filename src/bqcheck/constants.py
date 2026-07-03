@@ -45,12 +45,16 @@ ENV_VAR_REAL_MODE = (
     "BQCHECK_REAL_MODE"  # Controls API client mode (mock vs real server)
 )
 ENV_VAR_REAL_SCAN = "BQCHECK_REAL_SCAN"  # Controls scan execution (simulated vs real)
+ENV_VAR_API_URL = "BQCHECK_API_URL"
 ENV_VAR_PRICING_URL = "BQCHECK_PRICING_URL"
 ENV_VAR_SUPPORT_URL = "BQCHECK_SUPPORT_URL"
 
+# Default production API URL
+DEFAULT_API_URL = "https://bqcheck-server-131187061372.europe-west1.run.app"
+
 # Public product URLs
 DEFAULT_PRICING_URL = "https://bqcheck.com/pricing"
-DEFAULT_SUPPORT_URL = "https://github.com/OxPuRe/bqcheck-server/issues"
+DEFAULT_SUPPORT_URL = "https://github.com/OxPuRe/bqcheck/issues"
 
 
 def get_pricing_url() -> str:

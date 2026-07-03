@@ -20,7 +20,6 @@ def test_version_command_verbose_displays_debug_context(monkeypatch):
     monkeypatch.setenv("BQCHECK_API_URL", "https://api.example.test")
     monkeypatch.setenv("BQCHECK_REAL_MODE", "false")
     monkeypatch.setenv("BQCHECK_REAL_SCAN", "false")
-    monkeypatch.setenv("BQCHECK_PRICING_URL", "https://pricing.example.test")
     monkeypatch.setenv("BQCHECK_SUPPORT_URL", "https://support.example.test")
 
     result = runner.invoke(app, ["version", "--verbose"])
@@ -30,5 +29,4 @@ def test_version_command_verbose_displays_debug_context(monkeypatch):
     assert "API URL: https://api.example.test" in result.stdout
     assert "BQCHECK_REAL_MODE: false" in result.stdout
     assert "BQCHECK_REAL_SCAN: false" in result.stdout
-    assert "Pricing URL: https://pricing.example.test" in result.stdout
     assert "Support URL: https://support.example.test" in result.stdout

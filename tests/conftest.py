@@ -2,6 +2,7 @@
 
 import pytest
 
+from bqcheck.constants import DEFAULT_API_URL
 from bqcheck.scanner.encryption import IdentifierEncryptor
 
 
@@ -12,7 +13,7 @@ def valid_test_credentials():
         "master_key": "TEST-KEY",
         "token_pool_balance": 50,
         "ephemeral_token": "token123",
-        "server_url": "https://api.bqcheck.com",
+        "server_url": DEFAULT_API_URL,
         "activated_at": "2026-01-30T10:00:00+00:00",
         "encryption_key": IdentifierEncryptor.key_to_base64(
             IdentifierEncryptor.generate_key()
@@ -39,7 +40,7 @@ def create_test_credentials(**overrides):
         "master_key": "TEST-KEY",
         "token_pool_balance": 50,
         "ephemeral_token": "token123",
-        "server_url": "https://api.bqcheck.com",
+        "server_url": DEFAULT_API_URL,
         "activated_at": "2026-01-30T10:00:00+00:00",
         "encryption_key": IdentifierEncryptor.key_to_base64(
             IdentifierEncryptor.generate_key()

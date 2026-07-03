@@ -28,6 +28,7 @@ from bqcheck.api.models import (
     TokenRenewalResponse,
 )
 from bqcheck.constants import HTTP_SYNC_TIMEOUT_CHECK, HTTP_SYNC_TIMEOUT_MUTATION
+from bqcheck.constants import DEFAULT_API_URL, ENV_VAR_API_URL
 
 # Mock mode test keys
 # Use exact keys instead of prefix matching
@@ -224,17 +225,17 @@ def check_server_health() -> Dict[str, Any]:
     # Validate API URL from environment variable
     from urllib.parse import urlparse
 
-    base_url = os.getenv("BQCHECK_API_URL", "https://api.bqcheck.com")
+    base_url = os.getenv(ENV_VAR_API_URL, DEFAULT_API_URL)
 
     # Validate URL format before use
     try:
         parsed = urlparse(base_url)
         if not parsed.scheme or not parsed.netloc or parsed.scheme != "https":
             raise ValueError(
-                f"Invalid BQCHECK_API_URL: must be https:// URL, got {base_url}"
+                f"Invalid {ENV_VAR_API_URL}: must be https:// URL, got {base_url}"
             )
     except (ValueError, AttributeError) as e:
-        raise ValueError(f"Invalid BQCHECK_API_URL environment variable: {e}")
+        raise ValueError(f"Invalid {ENV_VAR_API_URL} environment variable: {e}")
 
     health_url = f"{base_url}/v1/health"
 
@@ -308,9 +309,7 @@ class BQCheckAPIClient:
                 "API client initialized in MOCK MODE - using test responses. "
                 "Set BQCHECK_REAL_MODE=true for production use."
             )
-        server_url_raw = server_url or os.getenv(
-            "BQCHECK_API_URL", "https://bqcheck-server-evyc2k5v5a-ew.a.run.app"
-        )
+        server_url_raw = server_url or os.getenv(ENV_VAR_API_URL, DEFAULT_API_URL)
 
         self.set_server_url(server_url_raw)
 
