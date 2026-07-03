@@ -378,6 +378,41 @@ class MarkdownReportGenerator:
             "worth addressing if you want to tighten long-tail costs."
         )
 
+    def _build_focus_highlights(self) -> list[str]:
+        """Surface the main commercial takeaways from the recommendation mix."""
+        recommendations = self.check_response.recommendations
+        if not recommendations:
+            return []
+
+        category_totals: dict[str, dict[str, float]] = {}
+        for rec in recommendations:
+            bucket = category_totals.setdefault(
+                rec.type,
+                {"count": 0.0, "savings": 0.0},
+            )
+            bucket["count"] += 1
+            bucket["savings"] += rec.savings_eur
+
+        top_category, top_category_stats = max(
+            category_totals.items(),
+            key=lambda item: (item[1]["savings"], item[1]["count"]),
+        )
+        top_recommendation = max(recommendations, key=lambda rec: rec.savings_eur)
+
+        return [
+            (
+                "Primary focus area: "
+                f"{self._format_recommendation_type(top_category)} "
+                f"(€{top_category_stats['savings']:.2f}/month across "
+                f"{int(top_category_stats['count'])} recommendation(s))"
+            ),
+            (
+                "Best single starting point: "
+                f"{self._clean_title(top_recommendation.title)} "
+                f"(€{top_recommendation.savings_eur:.2f}/month)"
+            ),
+        ]
+
     @staticmethod
     def _summarize_steps(implementation_steps: list[str], limit: int = 3) -> list[str]:
         """Return the first actionable implementation steps in report-friendly form."""
@@ -666,6 +701,15 @@ class MarkdownReportGenerator:
                     f"| {category.capitalize()} | {count} | €{savings:.2f} |\n"
                 )
 
+        focus_highlights = self._build_focus_highlights()
+        if focus_highlights:
+            exec_summary += """
+### Focus Areas
+
+"""
+            for highlight in focus_highlights:
+                exec_summary += f"- {highlight}\n"
+
         return exec_summary
 
     def generate_quick_wins(self) -> str:
@@ -756,7 +800,11 @@ Top high-priority optimizations for immediate impact:
             if not items:
                 continue
             has_content = True
+            phase_savings = sum(rec.savings_eur for rec in items)
             action_plan += f"### {label}\n\n"
+            action_plan += (
+                f"_Estimated value in this phase: €{phase_savings:.2f}/month_\n\n"
+            )
             for rec in items:
                 clean_title = self._clean_title(rec.title)
                 action_plan += (

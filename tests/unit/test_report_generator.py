@@ -150,6 +150,8 @@ class TestExecutiveSummary:
         assert "High Priority | 1" in summary
         assert "Medium Priority | 1" in summary
         assert "Low Priority | 1" in summary
+        assert "### Focus Areas" in summary
+        assert "Primary focus area:" in summary
 
     def test_executive_summary_zero_recommendations(self):
         """Test Executive Summary with 0 recommendations."""
@@ -316,6 +318,7 @@ class TestActionPlan:
         assert "### Later" in action_plan
         assert "Storage Hygiene" in action_plan
         assert "Table Layout" in action_plan
+        assert "_Estimated value in this phase:" in action_plan
 
 
 class TestDetailedRecommendations:
