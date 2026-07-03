@@ -117,6 +117,54 @@ def test_merge_table_metadata_no_access_pattern():
     assert result[0]["query_stats"] == {"total_bytes_processed": 0, "query_count": 0}
 
 
+def test_merge_table_metadata_detects_date_sharded_table_groups():
+    """Daily shard families are summarized for server-side recommendations."""
+    tables = [
+        TableMetadata(
+            table_catalog="project",
+            table_schema="dataset",
+            table_name=f"events_2024010{i}",
+            table_type="TABLE",
+            creation_time="2024-01-01T00:00:00Z",
+            size_bytes=2 * 1024**3,
+            row_count=100,
+        )
+        for i in range(1, 8)
+    ]
+
+    queries = [
+        QueryMetadata(
+            job_id="job1",
+            query="SELECT * FROM `dataset.events_20240101`",
+            total_bytes_processed=5 * 1024**3,
+            creation_time="2024-01-01 00:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+        ),
+        QueryMetadata(
+            job_id="job2",
+            query=(
+                "SELECT * FROM `dataset.events_20240101` "
+                "UNION ALL SELECT * FROM `dataset.events_20240102`"
+            ),
+            total_bytes_processed=5 * 1024**3,
+            creation_time="2024-01-02 00:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+        ),
+    ]
+
+    result = merge_table_metadata(tables, [], queries, {})
+
+    assert all(table["is_date_sharded"] for table in result)
+    assert all(table["shard_group_table_count"] == 7 for table in result)
+    assert all(
+        table["shard_group_total_size_bytes"] == 14 * 1024**3 for table in result
+    )
+    assert result[0]["shard_group_query_stats"]["query_count"] == 2
+    assert result[0]["shard_group_query_stats"]["query_days_in_period"] == 1.0
+
+
 def test_extract_table_schemas_mock():
     """Test schema extraction with mocked client."""
     mock_client = Mock()

@@ -455,6 +455,12 @@ def anonymize_metadata(
         "executions_per_day",
         "bytes_per_execution",
         "has_materialized_view",
+        # Derived sharded-table signals
+        "is_date_sharded",
+        "shard_group_id",
+        "shard_group_table_count",
+        "shard_group_total_size_bytes",
+        "shard_group_query_stats",
     }
 
     anonymized: Dict[str, Any] = {}
@@ -522,6 +528,7 @@ def merge_table_metadata(
     Returns:
         List of enriched table dictionaries ready for anonymization
     """
+    import hashlib
     import re
 
     from bqcheck.scanner.aggregator import (
@@ -539,12 +546,51 @@ def merge_table_metadata(
     # Convert queries to list of dicts for query_analyzer
     query_dicts = [q.model_dump() for q in queries]
 
+    # Detect daily sharded table families locally so the server can reason
+    # about them without ever receiving raw table prefixes.
+    shard_group_candidates: Dict[str, Dict[str, Any]] = {}
+    table_to_shard_group: Dict[str, str] = {}
+    for table in tables:
+        table_match = re.match(r"^(.+)_(\d{8})$", table.table_name)
+        if not table_match:
+            continue
+
+        shard_prefix = table_match.group(1)
+        group_key = f"{table.table_schema}.{shard_prefix}"
+        group_id = hashlib.sha256(group_key.encode("utf-8")).hexdigest()
+
+        if group_id not in shard_group_candidates:
+            shard_group_candidates[group_id] = {
+                "group_id": group_id,
+                "table_count": 0,
+                "total_size_bytes": 0,
+                "tables": set(),
+            }
+
+        shard_group_candidates[group_id]["table_count"] += 1
+        shard_group_candidates[group_id]["total_size_bytes"] += table.size_bytes or 0
+        shard_group_candidates[group_id]["tables"].add(
+            f"{table.table_schema}.{table.table_name}"
+        )
+
+    shard_groups = {
+        group_id: group_info
+        for group_id, group_info in shard_group_candidates.items()
+        if group_info["table_count"] >= 7
+    }
+    for group_id, group_info in shard_groups.items():
+        for table_key in group_info["tables"]:
+            table_to_shard_group[table_key] = group_id
+
     # Aggregate queries by table
     query_stats_map: Dict[str, Dict[str, Any]] = {}
     query_timestamps_map: Dict[str, List[str]] = {}
+    shard_query_stats_map: Dict[str, Dict[str, Any]] = {}
+    shard_timestamps_map: Dict[str, List[str]] = {}
     for query in queries:
         # Extract table references from query (simplified - match dataset.table patterns)
         table_refs = re.findall(r"`?([a-z0-9_-]+)\.([a-z0-9_]+)`?", query.query.lower())
+        referenced_shard_groups = set()
         for dataset, table in table_refs:
             key = f"{dataset}.{table}"
             if key not in query_stats_map:
@@ -558,6 +604,23 @@ def merge_table_metadata(
             query_stats_map[key]["query_count"] += 1
             query_timestamps_map[key].append(query.creation_time)
 
+            shard_group_id = table_to_shard_group.get(key)
+            if shard_group_id:
+                referenced_shard_groups.add(shard_group_id)
+
+        for shard_group_id in referenced_shard_groups:
+            if shard_group_id not in shard_query_stats_map:
+                shard_query_stats_map[shard_group_id] = {
+                    "total_bytes_processed": 0,
+                    "query_count": 0,
+                }
+                shard_timestamps_map[shard_group_id] = []
+            shard_query_stats_map[shard_group_id]["total_bytes_processed"] += (
+                query.total_bytes_processed
+            )
+            shard_query_stats_map[shard_group_id]["query_count"] += 1
+            shard_timestamps_map[shard_group_id].append(query.creation_time)
+
     # Extract filtered columns for all tables in a single pass (much more efficient)
     all_filtered_columns = aggregate_filtered_columns_all_tables(query_dicts)
     for table_key, filtered_cols in all_filtered_columns.items():
@@ -570,6 +633,14 @@ def merge_table_metadata(
         )
         query_stats_map[table_key]["query_distinct_days"] = _calculate_distinct_days(
             timestamps
+        )
+
+    for group_id, timestamps in shard_timestamps_map.items():
+        shard_query_stats_map[group_id]["query_days_in_period"] = (
+            _calculate_days_in_period(timestamps)
+        )
+        shard_query_stats_map[group_id]["query_distinct_days"] = (
+            _calculate_distinct_days(timestamps)
         )
 
     # Merge everything
@@ -599,6 +670,18 @@ def merge_table_metadata(
             table_dict["query_stats"] = query_stats_map[table_key]
         else:
             table_dict["query_stats"] = {"total_bytes_processed": 0, "query_count": 0}
+
+        shard_group_id = table_to_shard_group.get(table_key)
+        if shard_group_id:
+            group_info = shard_groups[shard_group_id]
+            table_dict["is_date_sharded"] = True
+            table_dict["shard_group_id"] = shard_group_id
+            table_dict["shard_group_table_count"] = group_info["table_count"]
+            table_dict["shard_group_total_size_bytes"] = group_info["total_size_bytes"]
+            table_dict["shard_group_query_stats"] = shard_query_stats_map.get(
+                shard_group_id,
+                {"total_bytes_processed": 0, "query_count": 0},
+            )
 
         enriched_tables.append(table_dict)
 

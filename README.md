@@ -235,7 +235,7 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv ru
 1. **Extract metadata** - Client queries BigQuery INFORMATION_SCHEMA for table/query metadata
 2. **Anonymize locally** - SHA-256 hash all project and table identifiers
 3. **Send to server** - Encrypted HTTPS request with ephemeral token
-4. **Analyze** - Server runs 5 active detection algorithms (storage, partitioning, partition pruning, clustering, queries)
+4. **Analyze** - Server runs 6 active detection algorithms (storage, date sharding, partitioning, partition pruning, clustering, queries)
 5. **Receive recommendations** - Markdown report with prioritized optimizations and EUR savings
 6. **Auto-renew token** - Server returns fresh ephemeral token for next scan
 
