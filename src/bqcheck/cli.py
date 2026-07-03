@@ -24,12 +24,7 @@ from bqcheck import __version__
 from bqcheck.api.client import check_server_health
 from bqcheck.config import configure_logging
 from bqcheck.constants import ExitCode, get_support_url
-from bqcheck.queries import (
-    get_sample_queries_query,
-    get_simple_test_query,
-    get_table_count_query,
-    get_tables_query,
-)
+from bqcheck.queries import get_simple_test_query
 from bqcheck.scanner import (
     AuthenticationError,
     authenticate_bigquery,
@@ -62,7 +57,6 @@ def version_cmd(
     from bqcheck.constants import (
         ENV_VAR_REAL_MODE,
         ENV_VAR_REAL_SCAN,
-        get_pricing_url,
         get_support_url,
     )
 
@@ -76,7 +70,6 @@ def version_cmd(
     console.print(f"API URL: {os.getenv('BQCHECK_API_URL', '(default)')}")
     console.print(f"{ENV_VAR_REAL_MODE}: {os.getenv(ENV_VAR_REAL_MODE, '(default)')}")
     console.print(f"{ENV_VAR_REAL_SCAN}: {os.getenv(ENV_VAR_REAL_SCAN, '(default)')}")
-    console.print(f"Pricing URL: {get_pricing_url()}")
     console.print(f"Support URL: {get_support_url()}")
 
 
@@ -85,6 +78,13 @@ def validate(
     project: Annotated[
         str, typer.Option("--project", "-p", help="GCP project ID to validate")
     ],
+    query_project: Annotated[
+        Optional[str],
+        typer.Option(
+            "--query-project",
+            help="Optional GCP project ID where queries/jobs run",
+        ),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Show detailed validation steps"),
@@ -170,19 +170,19 @@ def validate(
         if verbose:
             console.print("[blue]ℹ Checking IAM permissions...[/blue]")
 
-        # Test bigquery.tables.get permission
-        tables_query = get_tables_query(project, limit=1)
-        if verbose:
-            console.print(f"[dim]  Query: {tables_query.strip()}[/dim]")
+        datasets = list(client.list_datasets(project=project, max_results=1))
+        if datasets:
+            dataset_ref = getattr(datasets[0], "reference", None) or (
+                f"{project}.{datasets[0].dataset_id}"
+            )
+            list(client.list_tables(dataset_ref, max_results=1))
 
-        query_job = client.query(tables_query)
-        list(query_job.result())  # Execute query
+        jobs_project = query_project or project
+        jobs_client = client
+        if query_project and query_project != project:
+            jobs_client = authenticate_bigquery(query_project)
 
-        # Test bigquery.jobs.list permission
-        if verbose:
-            console.print("[dim]  Testing bigquery.jobs.list permission...[/dim]")
-
-        _ = list(client.list_jobs(project=project, max_results=1))
+        list(jobs_client.list_jobs(project=jobs_project, max_results=1))
 
         console.print("[green]✓ Permissions verified (bigquery.metadataViewer)[/green]")
         validation_results.append(("IAM Permissions", "✓", "bigquery.metadataViewer"))
@@ -190,18 +190,23 @@ def validate(
     except Forbidden:
         console.print("[red]❌ Missing required permissions[/red]")
         _handle_validation_error("permissions_missing", project, 4)
+    except NotFound:
+        console.print("[red]❌ Project not found or inaccessible[/red]")
+        _handle_validation_error("project_not_found", project, 4)
 
     # Step 4: Test Query Execution
     try:
         if verbose:
-            console.print("[blue]ℹ Running test query...[/blue]")
+            console.print("[blue]ℹ Checking metadata access...[/blue]")
 
-        test_query = get_tables_query(project, limit=1)
-        if verbose:
-            console.print(f"[dim]  Query: {test_query.strip()}[/dim]")
-
-        query_job = client.query(test_query)
-        results = list(query_job.result())
+        sample_tables = _list_sample_tables(client, project, limit=1)
+        if verbose and sample_tables:
+            first_table = sample_tables[0]
+            console.print(
+                "[dim]  Sample table access: "
+                f"{first_table.table_catalog}.{first_table.table_schema}."
+                f"{first_table.table_name}[/dim]"
+            )
 
         console.print("[green]✓ Test query successful[/green]")
         validation_results.append(("Test Query", "✓", "Successful"))
@@ -215,24 +220,15 @@ def validate(
         if verbose:
             console.print("[blue]ℹ Checking project data sufficiency...[/blue]")
 
-        count_query = get_table_count_query(project)
-        if verbose:
-            console.print(f"[dim]  Query: {count_query.strip()}[/dim]")
+        table_count = _count_project_tables(client, project)
 
-        query_job = client.query(count_query)
-        results = list(query_job.result())
-
-        if not results:
-            console.print("[yellow]⚠ Could not retrieve table count[/yellow]")
-            validation_results.append(("Project Data", "⚠", "Count unavailable"))
-        elif results[0].table_count == 0:
+        if table_count == 0:
             console.print(
                 "[yellow]⚠ Project has no tables - "
                 "sanity check will have limited value[/yellow]"
             )
             validation_results.append(("Project Data", "⚠", "0 tables (limited value)"))
         else:
-            table_count = results[0].table_count
             console.print(f"[green]✓ Project has {table_count} tables[/green]")
             validation_results.append(("Project Data", "✓", f"{table_count} tables"))
 
@@ -249,14 +245,17 @@ def validate(
             console.print("\n[blue]ℹ Extracting sample metadata for preview...[/blue]")
 
             # Extract sample tables (first 3)
-            sample_tables_query = get_tables_query(project, limit=3)
-            query_job = client.query(sample_tables_query)
-            sample_tables = list(query_job.result())
+            sample_tables = _list_sample_tables(client, project, limit=3)
 
             # Extract sample queries (first 3 SELECT queries)
-            sample_queries_query = get_sample_queries_query(project, limit=3)
-            query_job = client.query(sample_queries_query)
-            sample_queries = list(query_job.result())
+            from bqcheck.scanner.metadata_extractor import extract_query_metadata
+
+            sample_queries = extract_query_metadata(
+                client,
+                query_project or project,
+                days=30,
+                max_queries=3,
+            )
 
             # Generate temporary encryption key for anonymization preview
             # (validate command doesn't need real credentials)
@@ -465,6 +464,36 @@ def validate(
     )
 
     console.print("[dim]Validation successful (no tokens consumed)[/dim]\n")
+
+
+def _list_sample_tables(client: object, project: str, limit: int = 3) -> list[object]:
+    """List a few tables from the project using BigQuery metadata APIs."""
+    sample_tables: list[object] = []
+
+    for dataset in client.list_datasets(project=project):
+        dataset_ref = (
+            getattr(dataset, "reference", None) or f"{project}.{dataset.dataset_id}"
+        )
+        for table in client.list_tables(dataset_ref, max_results=limit):
+            sample_tables.append(table)
+            if len(sample_tables) >= limit:
+                return sample_tables
+
+    return sample_tables
+
+
+def _count_project_tables(client: object, project: str) -> int:
+    """Count tables in the project using metadata listing APIs."""
+    table_count = 0
+
+    for dataset in client.list_datasets(project=project):
+        dataset_ref = (
+            getattr(dataset, "reference", None) or f"{project}.{dataset.dataset_id}"
+        )
+        for _ in client.list_tables(dataset_ref):
+            table_count += 1
+
+    return table_count
 
 
 def _handle_validation_error(error_type: str, project_id: str, exit_code: int) -> None:

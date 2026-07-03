@@ -27,6 +27,24 @@ from bqcheck.cli import app
 runner = CliRunner()
 
 
+def _setup_listing_mocks(client, table_count: int = 1):
+    """Mock dataset/table listing used by validate()."""
+    dataset = Mock()
+    dataset.dataset_id = "dataset"
+    dataset.reference = "test-project.dataset"
+    client.list_datasets.return_value = [dataset]
+
+    tables = []
+    for i in range(table_count):
+        table = Mock()
+        table.table_catalog = "test"
+        table.table_schema = "dataset"
+        table.table_name = f"table{i + 1}"
+        tables.append(table)
+
+    client.list_tables.return_value = tables
+
+
 # ============================================================================
 # FIXTURES
 # ============================================================================
@@ -52,11 +70,18 @@ def mock_bq_client():
 
     def _create_query_row(query_text):
         row = Mock()
+        row.job_id = "job_123"
         row.query = query_text
+        row.total_bytes_processed = 123456
+        row.creation_time = "2024-01-01 00:00:00 UTC"
+        row.user_email = "user@example.com"
+        row.job_type = "QUERY"
+        row.state = "DONE"
+        row.referenced_tables = []
         return row
 
     # Mock query results with side_effect for different queries
-    def query_side_effect(query_str):
+    def query_side_effect(query_str, *args, **kwargs):
         mock_job = Mock()
         if "COUNT" in query_str:
             # Count query
@@ -79,6 +104,8 @@ def mock_bq_client():
         return mock_job
 
     client.query.side_effect = query_side_effect
+
+    _setup_listing_mocks(client, table_count=42)
 
     # Mock list_jobs for permissions check
     client.list_jobs.return_value = []
@@ -159,6 +186,7 @@ def test_validate_api_disabled():
     """Test BigQuery API not enabled error."""
     client = Mock()
     client.query.side_effect = Forbidden("BigQuery API has not been used in project")
+    _setup_listing_mocks(client)
 
     with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "test-project"])
@@ -187,16 +215,11 @@ def test_validate_missing_permissions():
     """Test missing IAM permissions error."""
     client = Mock()
 
-    # First query (SELECT 1) succeeds
     mock_query_job1 = Mock()
     mock_query_job1.result.return_value = []
-
-    # Second query (INFORMATION_SCHEMA) fails with permissions error
-    mock_query_job2 = Mock()
-    mock_query_job2.result.side_effect = Forbidden("Access Denied: Table")
-
-    # Configure client.query to succeed first, then fail
-    client.query.side_effect = [mock_query_job1, mock_query_job2]
+    client.query.return_value = mock_query_job1
+    _setup_listing_mocks(client)
+    client.list_tables.side_effect = Forbidden("Access Denied: Table")
 
     with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "test-project"])
@@ -225,15 +248,11 @@ def test_validate_project_not_found():
     """Test project not found error."""
     client = Mock()
 
-    # First two queries succeed (SELECT 1, permissions check)
     mock_success = Mock()
     mock_success.result.return_value = []
-
-    # Third query fails with NotFound
-    mock_fail = Mock()
-    mock_fail.result.side_effect = NotFound("Project not found")
-
-    client.query.side_effect = [mock_success, mock_success, mock_fail]
+    client.query.return_value = mock_success
+    _setup_listing_mocks(client)
+    client.list_tables.side_effect = NotFound("Project not found")
     client.list_jobs.return_value = []
 
     with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
@@ -253,31 +272,10 @@ def test_validate_project_has_tables(mock_health_response):
     # Create custom client mock (bypass fixture since we need custom count value)
     client = Mock()
 
-    # Helper functions
-    def _create_table_row(catalog, schema, name):
-        row = Mock()
-        row.table_catalog = catalog
-        row.table_schema = schema
-        row.table_name = name
-        return row
-
-    def _create_count_row(count):
-        row = Mock()
-        row.table_count = count
-        return row
-
-    # Mock query results with specific count (42)
-    def query_side_effect(query_str):
-        mock_job = Mock()
-        if "COUNT" in query_str:
-            mock_job.result.return_value = [_create_count_row(42)]
-        else:
-            mock_job.result.return_value = [
-                _create_table_row("test", "dataset", "table1")
-            ]
-        return mock_job
-
-    client.query.side_effect = query_side_effect
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = []
+    client.query.return_value = mock_query_job
+    _setup_listing_mocks(client, table_count=42)
     client.list_jobs.return_value = []
 
     with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
@@ -294,31 +292,10 @@ def test_validate_project_no_tables(mock_health_response):
     # Create custom client mock (bypass fixture since we need custom count value)
     client = Mock()
 
-    # Helper functions
-    def _create_table_row(catalog, schema, name):
-        row = Mock()
-        row.table_catalog = catalog
-        row.table_schema = schema
-        row.table_name = name
-        return row
-
-    def _create_count_row(count):
-        row = Mock()
-        row.table_count = count
-        return row
-
-    # Mock query results with specific count (0)
-    def query_side_effect(query_str):
-        mock_job = Mock()
-        if "COUNT" in query_str:
-            mock_job.result.return_value = [_create_count_row(0)]
-        else:
-            mock_job.result.return_value = [
-                _create_table_row("test", "dataset", "table1")
-            ]
-        return mock_job
-
-    client.query.side_effect = query_side_effect
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = []
+    client.query.return_value = mock_query_job
+    _setup_listing_mocks(client, table_count=0)
     client.list_jobs.return_value = []
 
     with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
@@ -334,20 +311,14 @@ def test_validate_project_no_tables(mock_health_response):
 
 def test_validate_project_count_query_fails(mock_bq_client, mock_health_response):
     """Test count query failure is handled gracefully."""
-    # First 3 queries succeed (SELECT 1, permissions, test query)
     mock_success = Mock()
     mock_success.result.return_value = []
-
-    # Count query fails with Forbidden error
-    mock_fail = Mock()
-    mock_fail.result.side_effect = Forbidden("Access denied to INFORMATION_SCHEMA")
-
-    # Configure client to return success for first 3, then fail on count query
-    mock_bq_client.query.side_effect = [
-        mock_success,  # SELECT 1
-        mock_success,  # Permissions check (INFORMATION_SCHEMA.TABLES)
-        mock_success,  # Test query
-        mock_fail,  # Count query
+    mock_bq_client.query.return_value = mock_success
+    _setup_listing_mocks(mock_bq_client)
+    mock_bq_client.list_tables.side_effect = [
+        [Mock()],
+        [Mock()],
+        Forbidden("Access denied to INFORMATION_SCHEMA"),
     ]
     mock_bq_client.list_jobs.return_value = []
 
@@ -483,6 +454,7 @@ def test_validate_exit_codes(error, expected_code):
     elif isinstance(error, Forbidden):
         # API disabled error - needs specific message to trigger right code path
         client.query.side_effect = error
+        _setup_listing_mocks(client)
         with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
             result = runner.invoke(app, ["validate", "--project", "test-project"])
             assert result.exit_code == expected_code
@@ -491,11 +463,9 @@ def test_validate_exit_codes(error, expected_code):
         # Project not found error (happens in test query)
         mock_success = Mock()
         mock_success.result.return_value = []
-
-        mock_fail = Mock()
-        mock_fail.result.side_effect = error
-
-        client.query.side_effect = [mock_success, mock_success, mock_fail]
+        client.query.return_value = mock_success
+        _setup_listing_mocks(client)
+        client.list_tables.side_effect = error
         client.list_jobs.return_value = []
 
         with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
@@ -567,6 +537,7 @@ def test_validate_error_guidance_api_disabled():
     """Test API disabled shows exact gcloud command."""
     client = Mock()
     client.query.side_effect = Forbidden("BigQuery API has not been used")
+    _setup_listing_mocks(client)
 
     with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "my-project"])
@@ -585,11 +556,9 @@ def test_validate_error_guidance_permissions():
 
     mock_success = Mock()
     mock_success.result.return_value = []
-
-    mock_fail = Mock()
-    mock_fail.result.side_effect = Forbidden("Access Denied")
-
-    client.query.side_effect = [mock_success, mock_fail]
+    client.query.return_value = mock_success
+    _setup_listing_mocks(client)
+    client.list_tables.side_effect = Forbidden("Access Denied")
 
     with patch("bqcheck.cli.authenticate_bigquery", return_value=client):
         result = runner.invoke(app, ["validate", "--project", "my-project"])
