@@ -18,6 +18,7 @@ from bqcheck.constants import (
     EXIT_AUTH_ERROR,
     EXIT_FILE_ERROR,
     EXIT_NETWORK_ERROR,
+    get_support_url,
 )
 
 
@@ -77,10 +78,11 @@ def handle_timeout_error(console: Console) -> int:
     Returns:
         EXIT_NETWORK_ERROR code (1)
     """
+    support_url = get_support_url()
     console.print(
         "[red]❌ Error: Sanity check timeout (>15 minutes). This may indicate a very large project.[/red]"
     )
-    console.print("\nContact support if the issue persists.")
+    console.print(f"\nIf the issue persists, open a support request: {support_url}")
     console.print("[dim]Your token was not consumed.[/dim]")
     return EXIT_NETWORK_ERROR
 

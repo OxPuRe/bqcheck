@@ -1,5 +1,6 @@
 """Exit codes and configuration constants for bqcheck CLI."""
 
+import os
 from enum import IntEnum
 
 
@@ -44,6 +45,22 @@ ENV_VAR_REAL_MODE = (
     "BQCHECK_REAL_MODE"  # Controls API client mode (mock vs real server)
 )
 ENV_VAR_REAL_SCAN = "BQCHECK_REAL_SCAN"  # Controls scan execution (simulated vs real)
+ENV_VAR_PRICING_URL = "BQCHECK_PRICING_URL"
+ENV_VAR_SUPPORT_URL = "BQCHECK_SUPPORT_URL"
+
+# Public product URLs
+DEFAULT_PRICING_URL = "https://bqcheck.com/pricing"
+DEFAULT_SUPPORT_URL = "https://github.com/OxPuRe/bqcheck-server/issues"
+
+
+def get_pricing_url() -> str:
+    """Return the pricing page URL, overridable for staging or pre-launch tests."""
+    return os.getenv(ENV_VAR_PRICING_URL, DEFAULT_PRICING_URL).strip()
+
+
+def get_support_url() -> str:
+    """Return the support URL, overridable for staging or pre-launch tests."""
+    return os.getenv(ENV_VAR_SUPPORT_URL, DEFAULT_SUPPORT_URL).strip()
 
 
 # Helper functions for environment variable checks
@@ -58,7 +75,6 @@ def is_real_mode() -> bool:
         True if BQCHECK_REAL_MODE is not set or =true, False if =false (default: real mode)
     """
     import logging
-    import os
 
     value = os.getenv(ENV_VAR_REAL_MODE, "").strip().lower()
 
@@ -89,7 +105,6 @@ def is_real_scan() -> bool:
         True if BQCHECK_REAL_SCAN is not set or =true, False if =false (default: real scan)
     """
     import logging
-    import os
 
     value = os.getenv(ENV_VAR_REAL_SCAN, "").strip().lower()
 

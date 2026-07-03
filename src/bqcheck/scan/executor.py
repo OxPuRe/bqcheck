@@ -37,6 +37,7 @@ from bqcheck.console import (
     show_start_message,
     show_success_message,
 )
+from bqcheck.constants import get_support_url
 from bqcheck.error_handlers import (
     handle_bigquery_forbidden_error,
     handle_bigquery_not_found_error,
@@ -331,7 +332,7 @@ class ScanExecutor:
             if new_balance < 0:
                 raise ValueError(
                     f"Server returned invalid token pool balance: {new_balance}. "
-                    "Balance cannot be negative. Please contact support."
+                    f"Balance cannot be negative. Open a support request: {get_support_url()}"
                 )
 
             if new_balance > old_balance:

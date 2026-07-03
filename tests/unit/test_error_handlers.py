@@ -129,7 +129,7 @@ class TestTimeoutErrorMessages:
         output = console.file.getvalue()
         assert "❌ Error: Sanity check timeout (>15 minutes)" in output
         assert "This may indicate a very large" in output
-        assert "Contact support if the issue persists" in output
+        assert "open a support request" in output
         assert "Your token was not consumed" in output
 
     def test_timeout_error_preserves_token(self):

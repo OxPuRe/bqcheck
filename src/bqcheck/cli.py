@@ -23,7 +23,7 @@ from typing_extensions import Annotated
 from bqcheck import __version__
 from bqcheck.api.client import check_server_health
 from bqcheck.config import configure_logging
-from bqcheck.constants import ExitCode
+from bqcheck.constants import ExitCode, get_support_url
 from bqcheck.queries import (
     get_sample_queries_query,
     get_simple_test_query,
@@ -466,6 +466,8 @@ def _format_error_guidance(error_type: str, project_id: str) -> str:
     Returns:
         Multi-line string with error guidance and fix commands
     """
+    support_url = get_support_url()
+
     if error_type == "auth_fail":
         return """❌ GCP authentication failed
 
@@ -519,14 +521,14 @@ Possible causes:
 Try again in a few minutes."""
 
     elif error_type == "server_error":
-        return """❌ Server returned an error response
+        return f"""❌ Server returned an error response
 
 Possible causes:
-- Server is experiencing issues (check https://status.bqcheck.com)
+- Server is experiencing issues
 - API endpoint may be temporarily unavailable
 - Your request may have triggered a server-side error
 
-Try again in a few minutes. If the problem persists, contact support."""
+Try again in a few minutes. If the problem persists, open a support request: {support_url}"""
 
     else:
         return f"❌ Unknown error type: {error_type}"
@@ -599,8 +601,11 @@ def scan(
         4: Token pool depleted
     """
     from bqcheck.api.client import BQCheckAPIClient
+    from bqcheck.constants import get_pricing_url
     from bqcheck.license.storage import CredentialStore
     from bqcheck.scan.executor import ScanExecutor
+
+    pricing_url = get_pricing_url()
 
     try:
         # Step 1: Check credentials exist
@@ -614,7 +619,7 @@ def scan(
 
         if credentials["token_pool_balance"] == 0:
             console.print("\n[red]❌ Token pool depleted (0 scans remaining).[/red]\n")
-            console.print("💰 Purchase more tokens at https://bqcheck.com/pricing\n")
+            console.print(f"💰 Purchase more tokens at {pricing_url}\n")
             raise typer.Exit(ExitCode.NO_TOKENS)
 
         # Step 3: Check if this is the last token
@@ -637,7 +642,7 @@ def scan(
         if is_last_token:
             console.print("\n[yellow]⚠️  Warning: This was your last token.[/yellow]")
             console.print(
-                "💰 Purchase more tokens to continue running sanity checks: https://bqcheck.com/pricing\n"
+                f"💰 Purchase more tokens to continue running sanity checks: {pricing_url}\n"
             )
 
         # Success - exit 0
@@ -771,12 +776,15 @@ def license_status() -> None:
     import json
     from datetime import datetime, timezone
 
+    from bqcheck.constants import get_pricing_url
     from bqcheck.license.security import mask_key
     from bqcheck.license.storage import (
         CredentialNotFoundError,
         CredentialStore,
         UnsafePermissionsError,
     )
+
+    pricing_url = get_pricing_url()
 
     try:
         # Load and validate credentials
@@ -805,7 +813,7 @@ def license_status() -> None:
             console.print(
                 f"Token Pool Balance: {balance} scans remaining [red](DEPLETED)[/red]"
             )
-            console.print("\n💰 Purchase more tokens at https://bqcheck.com/pricing\n")
+            console.print(f"\n💰 Purchase more tokens at {pricing_url}\n")
         else:
             console.print(f"Token Pool Balance: {balance} scans remaining")
 
@@ -819,7 +827,7 @@ def license_status() -> None:
         console.print("\n[yellow]No active license found.[/yellow]\n")
         console.print("To activate your license, run:")
         console.print("  [cyan]bqcheck license activate <your-license-key>[/cyan]")
-        console.print("\nDon't have a license key? Visit https://bqcheck.com/pricing\n")
+        console.print(f"\nDon't have a license key? Visit {pricing_url}\n")
         raise typer.Exit(ExitCode.FILE_ERROR)
 
     except UnsafePermissionsError:
