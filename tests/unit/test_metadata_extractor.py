@@ -6,8 +6,10 @@ import pytest
 from google.api_core.exceptions import GoogleAPIError
 
 from bqcheck.scanner.metadata_extractor import (
+    _extract_materialized_view_query_from_ddl,
     _validate_project_id,
     extract_access_patterns,
+    extract_materialized_view_definitions,
     extract_query_metadata,
     extract_table_metadata,
 )
@@ -431,6 +433,51 @@ def test_validate_project_id_invalid():
         with pytest.raises(ValueError) as exc_info:
             _validate_project_id(project_id)
         assert "Invalid project_id format" in str(exc_info.value)
+
+
+def test_extract_materialized_view_query_from_ddl():
+    """Extract the SELECT body from materialized view DDL."""
+    ddl = """
+    CREATE MATERIALIZED VIEW `my-project.reporting.mv_daily_events`
+    AS
+    SELECT event_date, COUNT(*) AS total_events
+    FROM `my-project.analytics.events`
+    GROUP BY event_date;
+    """
+
+    result = _extract_materialized_view_query_from_ddl(ddl)
+
+    assert result is not None
+    assert result.startswith("SELECT event_date")
+    assert "CREATE MATERIALIZED VIEW" not in result
+
+
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
+def test_extract_materialized_view_definitions(mock_client):
+    """Materialized view definitions are extracted from INFORMATION_SCHEMA."""
+    mock_row = Mock()
+    mock_row.ddl = """
+    CREATE MATERIALIZED VIEW `my-project.reporting.mv_daily_events`
+    AS
+    SELECT event_date, COUNT(*) AS total_events
+    FROM `my-project.analytics.events`
+    GROUP BY event_date
+    """
+
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = [mock_row]
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.return_value = mock_query_job
+    _setup_dataset_mocks(mock_bq_client)
+
+    result = extract_materialized_view_definitions(mock_bq_client, "my-project")
+
+    assert result == [
+        "SELECT event_date, COUNT(*) AS total_events\n"
+        "    FROM `my-project.analytics.events`\n"
+        "    GROUP BY event_date"
+    ]
 
 
 @patch("bqcheck.scanner.metadata_extractor.bigquery.Client")

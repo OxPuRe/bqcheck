@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from google.api_core.exceptions import GoogleAPIError
 from google.cloud import bigquery
@@ -103,6 +103,31 @@ def _parse_clustering_from_ddl(ddl: str) -> List[str]:
         return [f for f in fields if f]  # Filter empty strings
 
     return []
+
+
+def _extract_materialized_view_query_from_ddl(ddl: str) -> Optional[str]:
+    """
+    Extract the SELECT statement from a CREATE MATERIALIZED VIEW DDL.
+
+    Args:
+        ddl: CREATE MATERIALIZED VIEW DDL statement
+
+    Returns:
+        The SELECT statement body, or None if it cannot be extracted.
+    """
+    if not ddl:
+        return None
+
+    ddl_clean = ddl.strip().rstrip(";")
+    match = re.search(
+        r"CREATE\s+MATERIALIZED\s+VIEW\b.*?\bAS\s+(SELECT.+)$",
+        ddl_clean,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+
+    return match.group(1).strip()
 
 
 def _validate_project_id(project_id: str) -> None:
@@ -429,6 +454,63 @@ def extract_query_metadata(
         "has no query history or uses a different location."
     )
     return []
+
+
+def extract_materialized_view_definitions(
+    client: bigquery.Client, project_id: str
+) -> List[str]:
+    """
+    Extract materialized view SELECT definitions from INFORMATION_SCHEMA.TABLES.
+
+    Args:
+        client: Authenticated BigQuery client
+        project_id: GCP project ID to scan
+
+    Returns:
+        List of SELECT statements backing materialized views in the project
+    """
+    _validate_project_id(project_id)
+
+    try:
+        datasets = list(client.list_datasets(project=project_id))
+        locations = set()
+        for dataset in datasets:
+            dataset_ref = client.get_dataset(f"{project_id}.{dataset.dataset_id}")
+            locations.add(dataset_ref.location)
+    except GoogleAPIError:
+        locations = {"US", "EU"}
+
+    materialized_view_queries: List[str] = []
+
+    for location in locations:
+        query = f"""
+        SELECT ddl
+        FROM `{project_id}.region-{location}.INFORMATION_SCHEMA.TABLES`
+        WHERE table_type = 'MATERIALIZED VIEW'
+          AND ddl IS NOT NULL
+        """
+
+        try:
+            query_job = client.query(query, location=location)
+
+            for row in query_job.result():
+                definition_query = _extract_materialized_view_query_from_ddl(row.ddl)
+                if definition_query:
+                    materialized_view_queries.append(definition_query)
+        except GoogleAPIError as e:
+            logger.debug(
+                "Location %s failed for materialized view extraction: %s",
+                location,
+                e,
+            )
+            continue
+
+    logger.info(
+        "Extracted %d materialized view definition(s) across %d region(s)",
+        len(materialized_view_queries),
+        len(locations),
+    )
+    return materialized_view_queries
 
 
 def extract_table_schemas(

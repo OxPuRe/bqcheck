@@ -19,6 +19,7 @@ from bqcheck.scanner.bigquery_client import (
 )
 from bqcheck.scanner.metadata_extractor import (
     extract_access_patterns,
+    extract_materialized_view_definitions,
     extract_query_metadata,
     extract_table_metadata,
     extract_table_schemas,
@@ -35,6 +36,7 @@ __all__ = [
     "extract_table_metadata",
     "extract_query_metadata",
     "extract_access_patterns",
+    "extract_materialized_view_definitions",
     "extract_table_schemas",
     "generate_salt",
     "anonymize_table_name",

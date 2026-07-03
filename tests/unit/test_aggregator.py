@@ -8,6 +8,7 @@ import pytest
 
 from bqcheck.scanner.aggregator import (
     _calculate_days_in_period,
+    _normalize_query_text,
     _parse_iso_timestamp,
     aggregate_query_metadata,
 )
@@ -295,6 +296,36 @@ class TestQueryAggregation:
         # Verify query_type is extracted correctly
         assert result[0]["query_type"] == "SELECT"
 
+    def test_aggregate_marks_existing_materialized_view(self):
+        """Matching materialized view definitions suppress duplicate recommendations."""
+        salt = IdentifierEncryptor.generate_key()
+        query_text = """
+        SELECT customer_id, SUM(amount) AS total_amount
+        FROM `sales.orders`
+        GROUP BY customer_id
+        """
+        queries = [
+            QueryMetadata(
+                job_id="project:us.job1",
+                query=query_text,
+                total_bytes_processed=1099511627776,
+                creation_time="2024-01-01 10:00:00 UTC",
+                job_type="QUERY",
+                state="DONE",
+            )
+        ]
+
+        result = aggregate_query_metadata(
+            queries,
+            salt,
+            materialized_view_queries=[
+                "SELECT customer_id, SUM(amount) AS total_amount "
+                "FROM `sales.orders` GROUP BY customer_id;"
+            ],
+        )
+
+        assert result[0]["has_materialized_view"] is True
+
     def test_aggregate_extracts_query_type_correctly(self):
         """Test that query_type is correctly extracted for different SQL statements."""
         salt = IdentifierEncryptor.generate_key()
@@ -368,3 +399,12 @@ class TestQueryAggregation:
         assert len(result) == 1
         assert result[0]["query_type"] == "SELECT"
         assert "last_execution_time" in result[0]
+
+
+def test_normalize_query_text_collapses_whitespace_and_semicolons():
+    """Normalization keeps equivalent queries comparable."""
+    normalized = _normalize_query_text(
+        "  SELECT *\n  FROM `dataset.table`\n WHERE id = 1;  "
+    )
+
+    assert normalized == "SELECT * FROM `dataset.table` WHERE id = 1"

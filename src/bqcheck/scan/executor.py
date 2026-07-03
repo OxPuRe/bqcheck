@@ -442,6 +442,7 @@ class ScanExecutor:
                 from bqcheck.scanner.encryption import IdentifierEncryptor
                 from bqcheck.scanner.metadata_extractor import (
                     extract_access_patterns,
+                    extract_materialized_view_definitions,
                     extract_query_metadata,
                     extract_table_metadata,
                     extract_table_schemas,
@@ -465,6 +466,11 @@ class ScanExecutor:
 
                 logger.info("Extracting table schemas...")
                 table_schemas = extract_table_schemas(client, project_id)
+
+                logger.info("Extracting materialized view definitions...")
+                materialized_view_queries = extract_materialized_view_definitions(
+                    client, project_id
+                )
 
             # Merge metadata into enriched format with table_id, last_modified_time, schema, query_stats
             enriched_tables = merge_table_metadata(
@@ -491,7 +497,10 @@ class ScanExecutor:
 
             # Aggregate and encrypt queries (groups by pattern, calculates stats)
             aggregated_queries = aggregate_query_metadata(
-                query_metadata, encryption_key, scan_days=90
+                query_metadata,
+                encryption_key,
+                scan_days=90,
+                materialized_view_queries=materialized_view_queries,
             )
 
             # Encrypt access patterns

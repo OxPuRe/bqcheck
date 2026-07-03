@@ -12,15 +12,21 @@ Aggregation Process:
 
 import hashlib
 import logging
+import re
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from bqcheck.scanner.anonymizer import anonymize_query_pattern
 from bqcheck.scanner.encryption import IdentifierEncryptor
 from bqcheck.scanner.models import QueryMetadata
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_query_text(query: str) -> str:
+    """Normalize query formatting for stable pattern comparisons."""
+    return re.sub(r"\s+", " ", query.strip().rstrip(";"))
 
 
 def _parse_iso_timestamp(timestamp_str: str) -> datetime:
@@ -129,7 +135,10 @@ def _calculate_distinct_days(timestamps: List[str]) -> int:
 
 
 def aggregate_query_metadata(
-    queries: List[QueryMetadata], encryption_key: bytes, scan_days: int = 90
+    queries: List[QueryMetadata],
+    encryption_key: bytes,
+    scan_days: int = 90,
+    materialized_view_queries: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Aggregate raw query metadata into pattern-based statistics.
@@ -149,7 +158,7 @@ def aggregate_query_metadata(
         - executions_per_day: Average daily execution count
         - bytes_per_execution: Average bytes processed per execution
         - total_bytes_processed: Total bytes across all executions
-        - has_materialized_view: Whether materialized view exists (always False for now)
+        - has_materialized_view: Whether an equivalent materialized view exists
 
     Example:
         >>> from bqcheck.scanner.models import QueryMetadata
@@ -182,6 +191,16 @@ def aggregate_query_metadata(
     if not queries:
         return []
 
+    materialized_view_hashes = set()
+    for mv_query in materialized_view_queries or []:
+        normalized_mv_query = _normalize_query_text(mv_query)
+        encrypted_mv_query = anonymize_query_pattern(
+            normalized_mv_query, encryption_key
+        )
+        materialized_view_hashes.add(
+            hashlib.sha256(encrypted_mv_query.encode("utf-8")).hexdigest()
+        )
+
     # Group queries by anonymized pattern
     pattern_groups: Dict[str, List[QueryMetadata]] = defaultdict(list)
 
@@ -192,7 +211,8 @@ def aggregate_query_metadata(
             continue
 
         # Encrypt query pattern (table references)
-        encrypted_query = anonymize_query_pattern(query.query, encryption_key)
+        normalized_query = _normalize_query_text(query.query)
+        encrypted_query = anonymize_query_pattern(normalized_query, encryption_key)
 
         # Create pattern hash from encrypted query
         pattern_hash = hashlib.sha256(encrypted_query.encode("utf-8")).hexdigest()
@@ -222,9 +242,8 @@ def aggregate_query_metadata(
         distinct_days = _calculate_distinct_days(timestamps)
 
         # Get encrypted query text (same for all queries in group)
-        encrypted_query = anonymize_query_pattern(
-            pattern_queries[0].query, encryption_key
-        )
+        normalized_query = _normalize_query_text(pattern_queries[0].query)
+        encrypted_query = anonymize_query_pattern(normalized_query, encryption_key)
 
         # Extract query type (SELECT, MERGE, INSERT, etc.) before encryption
         # This helps server-side filtering without exposing query content
@@ -264,7 +283,7 @@ def aggregate_query_metadata(
             "executions_per_day": executions_per_day,
             "bytes_per_execution": bytes_per_execution,
             "total_bytes_processed": total_bytes,
-            "has_materialized_view": False,  # TODO: Detect materialized views in future
+            "has_materialized_view": pattern_hash in materialized_view_hashes,
             "execution_count": execution_count,  # Total number of executions
             "days_in_period": days_in_period,  # Actual period of activity
             "distinct_days": distinct_days,  # Number of distinct calendar days with executions
