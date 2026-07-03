@@ -8,6 +8,7 @@ import pytest
 
 from bqcheck.scanner.aggregator import (
     _calculate_days_in_period,
+    _calculate_recent_execution_count,
     _normalize_query_text,
     _parse_iso_timestamp,
     aggregate_query_metadata,
@@ -97,6 +98,15 @@ class TestDaysInPeriodCalculation:
         timestamps = ["invalid"]
         days = _calculate_days_in_period(timestamps)
         assert days == 1.0
+
+    def test_calculate_recent_execution_count_old_timestamps(self):
+        """Old executions should not count as recently active."""
+        timestamps = [
+            "2024-01-01 10:00:00 UTC",
+            "2024-01-02 10:00:00 UTC",
+        ]
+        recent_count = _calculate_recent_execution_count(timestamps)
+        assert recent_count == 0
 
 
 class TestQueryAggregation:
@@ -295,6 +305,7 @@ class TestQueryAggregation:
         assert set(result[0].keys()) >= required_fields
         # Verify query_type is extracted correctly
         assert result[0]["query_type"] == "SELECT"
+        assert "recent_execution_count" in result[0]
 
     def test_aggregate_marks_existing_materialized_view(self):
         """Matching materialized view definitions suppress duplicate recommendations."""

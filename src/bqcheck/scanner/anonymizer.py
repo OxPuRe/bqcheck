@@ -534,6 +534,8 @@ def merge_table_metadata(
     from bqcheck.scanner.aggregator import (
         _calculate_days_in_period,
         _calculate_distinct_days,
+        _calculate_recent_execution_count,
+        _parse_iso_timestamp,
     )
     from bqcheck.scanner.query_analyzer import aggregate_filtered_columns_all_tables
 
@@ -634,6 +636,14 @@ def merge_table_metadata(
         query_stats_map[table_key]["query_distinct_days"] = _calculate_distinct_days(
             timestamps
         )
+        query_stats_map[table_key]["recent_query_count"] = (
+            _calculate_recent_execution_count(timestamps)
+        )
+        try:
+            last_query_time = max(_parse_iso_timestamp(ts) for ts in timestamps)
+            query_stats_map[table_key]["last_query_time"] = last_query_time.isoformat()
+        except ValueError:
+            pass
 
     for group_id, timestamps in shard_timestamps_map.items():
         shard_query_stats_map[group_id]["query_days_in_period"] = (
@@ -641,6 +651,9 @@ def merge_table_metadata(
         )
         shard_query_stats_map[group_id]["query_distinct_days"] = (
             _calculate_distinct_days(timestamps)
+        )
+        shard_query_stats_map[group_id]["recent_query_count"] = (
+            _calculate_recent_execution_count(timestamps)
         )
 
     # Merge everything

@@ -93,6 +93,8 @@ def test_merge_table_metadata_tracks_query_activity_window():
     assert result[0]["query_stats"]["query_count"] == 2
     assert result[0]["query_stats"]["query_days_in_period"] == 30.0
     assert result[0]["query_stats"]["query_distinct_days"] == 2
+    assert result[0]["query_stats"]["recent_query_count"] == 0
+    assert result[0]["query_stats"]["last_query_time"] == "2024-01-31T00:00:00"
 
 
 def test_merge_table_metadata_no_access_pattern():

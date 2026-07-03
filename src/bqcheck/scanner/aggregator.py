@@ -14,7 +14,7 @@ import hashlib
 import logging
 import re
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from bqcheck.scanner.anonymizer import anonymize_query_pattern
@@ -134,6 +134,35 @@ def _calculate_distinct_days(timestamps: List[str]) -> int:
         return 1
 
 
+def _calculate_recent_execution_count(
+    timestamps: List[str], recent_days: int = 14
+) -> int:
+    """Count executions that happened within the recent activity window."""
+    if not timestamps:
+        return 0
+
+    try:
+        now = datetime.now(timezone.utc)
+        recent_cutoff = now - timedelta(days=recent_days)
+        recent_count = 0
+
+        for timestamp in timestamps:
+            parsed = _parse_iso_timestamp(timestamp)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+
+            if parsed.astimezone(timezone.utc) >= recent_cutoff:
+                recent_count += 1
+
+        return recent_count
+    except ValueError as e:
+        logger.warning(
+            "Failed to parse timestamps for recent activity: %s. Using 0 as fallback.",
+            e,
+        )
+        return 0
+
+
 def aggregate_query_metadata(
     queries: List[QueryMetadata],
     encryption_key: bytes,
@@ -240,6 +269,7 @@ def aggregate_query_metadata(
 
         # Calculate distinct days to identify truly recurring patterns
         distinct_days = _calculate_distinct_days(timestamps)
+        recent_execution_count = _calculate_recent_execution_count(timestamps)
 
         # Get encrypted query text (same for all queries in group)
         normalized_query = _normalize_query_text(pattern_queries[0].query)
@@ -287,6 +317,7 @@ def aggregate_query_metadata(
             "execution_count": execution_count,  # Total number of executions
             "days_in_period": days_in_period,  # Actual period of activity
             "distinct_days": distinct_days,  # Number of distinct calendar days with executions
+            "recent_execution_count": recent_execution_count,
             "last_execution_time": last_execution,  # Most recent execution
             "most_recent_job_id": encrypted_job_id,  # Encrypted job ID (contains project ID)
         }
