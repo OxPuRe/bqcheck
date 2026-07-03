@@ -336,6 +336,79 @@ class MarkdownReportGenerator:
         return job_ids
 
     @staticmethod
+    def _format_recommendation_type(rec_type: str) -> str:
+        """Convert internal recommendation types into user-facing labels."""
+        labels = {
+            "storage": "Storage Hygiene",
+            "unused_storage": "Storage Hygiene",
+            "partitioning": "Table Layout",
+            "clustering": "Table Layout",
+            "queries": "Query Efficiency",
+            "temporal": "Lifecycle Management",
+        }
+        return labels.get(rec_type, rec_type.replace("_", " ").title())
+
+    @staticmethod
+    def _build_summary_assessment(
+        total_recommendations: int,
+        total_savings_eur: float,
+        high_priority_count: int,
+    ) -> str:
+        """Produce a short executive assessment paragraph."""
+        if total_recommendations == 0:
+            return (
+                "No material optimization opportunities were detected in this scan. "
+                "The current BigQuery setup looks disciplined on the signals reviewed."
+            )
+
+        if high_priority_count > 0 and total_savings_eur >= 500:
+            return (
+                "This scan found meaningful near-term savings with at least one "
+                "high-priority issue worth addressing first."
+            )
+
+        if total_savings_eur >= 100:
+            return (
+                "This scan found a worthwhile set of optimizations, mostly concentrated "
+                "in medium-impact improvements."
+            )
+
+        return (
+            "This scan found a small number of lower-impact optimizations. They are "
+            "worth addressing if you want to tighten long-tail costs."
+        )
+
+    @staticmethod
+    def _summarize_steps(implementation_steps: list[str], limit: int = 3) -> list[str]:
+        """Return the first actionable implementation steps in report-friendly form."""
+        summarized = []
+        for step in implementation_steps[:limit]:
+            summarized.append(step.strip())
+        return summarized
+
+    def _sanitize_step_for_report(self, step: str) -> Optional[str]:
+        """Prepare implementation text for report display."""
+        sanitized = self._decrypt_identifiers_in_text(step).strip()
+        sanitized = self._truncate_sql_in_step(sanitized)
+
+        job_id_match = re.search(r"job ID:\s+([a-zA-Z0-9_:-]+)", sanitized)
+        if job_id_match:
+            job_id = job_id_match.group(1)
+            if self.encryptor:
+                try:
+                    decrypted_job_id = self.encryptor.decrypt_with_nonce(
+                        job_id, context="job_id"
+                    )
+                    return sanitized.replace(
+                        job_id, self._format_job_id_link(decrypted_job_id)
+                    )
+                except (ValueError, Exception):
+                    return None
+            return None
+
+        return sanitized
+
+    @staticmethod
     def _format_job_id_link(job_id: str) -> str:
         """
         Format job ID as clickable BigQuery Console link.
@@ -556,6 +629,12 @@ class MarkdownReportGenerator:
         exec_summary = f"""
 ## Executive Summary
 
+{self._build_summary_assessment(
+    summary.total_recommendations,
+    summary.total_potential_savings_eur,
+    summary.high_priority_count,
+)}
+
 | Metric | Value |
 |--------|-------|
 | Total Recommendations | {summary.total_recommendations} |
@@ -611,7 +690,7 @@ class MarkdownReportGenerator:
             return """
 ## Quick Wins
 
-_No high-priority recommendations at this time._
+_No urgent issues were flagged in this scan._
 """
 
         quick_wins = """
@@ -630,12 +709,64 @@ Top high-priority optimizations for immediate impact:
             )
             # Truncate long query hashes for readability
             decrypted_description = self._truncate_query_hash(decrypted_description)
+            first_move = self._sanitize_step_for_report(rec.implementation_steps[0])
             quick_wins += f"""{i}. **{clean_title}** - €{rec.savings_eur:.2f}/month
    - {decrypted_description}
+"""
+            if first_move:
+                quick_wins += f"""   - First move: {first_move}
+
+"""
+            else:
+                quick_wins += "\n"
+
+        return quick_wins
+
+    def generate_action_plan(self) -> str:
+        """Generate a simple phased action plan from the recommendation set."""
+        if not self.check_response.recommendations:
+            return ""
+
+        priority_buckets = {
+            "HIGH": ("Now", 3),
+            "MEDIUM": ("Next", 3),
+            "LOW": ("Later", 2),
+        }
+
+        sorted_recs = sorted(
+            self.check_response.recommendations,
+            key=lambda r: (
+                {"HIGH": 0, "MEDIUM": 1, "LOW": 2}.get(str(r.priority), 3),
+                -r.savings_eur,
+            ),
+        )
+
+        grouped: dict[str, list] = {}
+        action_plan = """
+## Suggested Action Plan
 
 """
 
-        return quick_wins
+        for rec in sorted_recs:
+            grouped.setdefault(str(rec.priority), []).append(rec)
+
+        has_content = False
+        for priority, (label, limit) in priority_buckets.items():
+            items = grouped.get(priority, [])[:limit]
+            if not items:
+                continue
+            has_content = True
+            action_plan += f"### {label}\n\n"
+            for rec in items:
+                clean_title = self._clean_title(rec.title)
+                action_plan += (
+                    f"- **{clean_title}** "
+                    f"({self._format_recommendation_type(rec.type)}, "
+                    f"€{rec.savings_eur:.2f}/month)\n"
+                )
+            action_plan += "\n"
+
+        return action_plan if has_content else ""
 
     def generate_detailed_recommendations(self) -> str:
         """
@@ -680,7 +811,7 @@ Top high-priority optimizations for immediate impact:
 
             detailed += f"""### Recommendation {i}: {clean_title}
 
-**Type:** {rec.type}
+**Category:** {self._format_recommendation_type(rec.type)}
 
 **Priority:** {rec.priority}
 
@@ -741,6 +872,15 @@ Top high-priority optimizations for immediate impact:
 
 """
 
+            first_move = None
+            if rec.implementation_steps:
+                first_move = self._sanitize_step_for_report(rec.implementation_steps[0])
+            if first_move:
+                detailed += f"""**Recommended First Move:**
+{first_move}
+
+"""
+
             evidence_points = self._build_evidence_points(
                 rec.type, decrypted_description
             )
@@ -749,6 +889,18 @@ Top high-priority optimizations for immediate impact:
 """
                 for point in evidence_points:
                     detailed += f"- {point}\n"
+                detailed += "\n"
+
+            implementation_outline = [
+                sanitized
+                for step in self._summarize_steps(rec.implementation_steps)
+                if (sanitized := self._sanitize_step_for_report(step))
+            ]
+            if implementation_outline:
+                detailed += """**Implementation Outline:**
+"""
+                for step in implementation_outline:
+                    detailed += f"- {step}\n"
                 detailed += "\n"
 
             detailed += """---
@@ -1026,6 +1178,9 @@ For tables with historical data that's rarely accessed:
 
         # Add Quick Wins
         report += self.generate_quick_wins()
+
+        # Add Suggested Action Plan
+        report += self.generate_action_plan()
 
         # Add Detailed Recommendations
         report += self.generate_detailed_recommendations()

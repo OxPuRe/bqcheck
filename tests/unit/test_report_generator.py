@@ -172,6 +172,7 @@ class TestExecutiveSummary:
 
         assert "Total Recommendations | 0" in summary
         assert "€0.00" in summary
+        assert "No material optimization opportunities were detected" in summary
 
 
 class TestQuickWins:
@@ -254,6 +255,7 @@ class TestQuickWins:
         assert quick_wins.count("1. **") == 1
         assert quick_wins.count("2. **") == 1
         assert quick_wins.count("3. **") == 0
+        assert "First move:" in quick_wins
 
     def test_quick_wins_with_zero_high_priority(self):
         """Test Quick Wins with 0 HIGH priority recommendations."""
@@ -296,7 +298,24 @@ class TestQuickWins:
         quick_wins = generator.generate_quick_wins()
 
         # Should show message about no high-priority recommendations
-        assert "_No high-priority recommendations at this time._" in quick_wins
+        assert "_No urgent issues were flagged in this scan._" in quick_wins
+
+
+class TestActionPlan:
+    """Test suggested action plan section."""
+
+    def test_action_plan_groups_items_by_priority(self, sample_check_response):
+        """Action plan should phase work into Now/Next/Later buckets."""
+        generator = MarkdownReportGenerator(sample_check_response)
+
+        action_plan = generator.generate_action_plan()
+
+        assert "## Suggested Action Plan" in action_plan
+        assert "### Now" in action_plan
+        assert "### Next" in action_plan
+        assert "### Later" in action_plan
+        assert "Storage Hygiene" in action_plan
+        assert "Table Layout" in action_plan
 
 
 class TestDetailedRecommendations:
@@ -347,11 +366,13 @@ class TestDetailedRecommendations:
 
         detailed = generator.generate_detailed_recommendations()
 
-        assert "**Type:**" in detailed
+        assert "**Category:**" in detailed
         assert "**Priority:**" in detailed
         assert "**Estimated Monthly Savings:**" in detailed
         assert "**Description:**" in detailed
         # Implementation Steps removed - guidance now in separate section
+        assert "**Recommended First Move:**" in detailed
+        assert "**Implementation Outline:**" in detailed
 
     def test_detailed_recs_include_confidence_signals_for_query_recommendation(self):
         """Report should inspire trust without exposing detector internals."""
@@ -401,6 +422,27 @@ class TestDetailedRecommendations:
             in detailed
         )
         assert "Most recent execution seen: 2 days ago" not in detailed
+
+    def test_detailed_recs_format_category_label(self, sample_recommendations):
+        """Internal types should render as user-facing category labels."""
+        response = CheckResponse(
+            recommendations=sample_recommendations[:1],
+            summary=CheckSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=150.0,
+                high_priority_count=1,
+                medium_priority_count=0,
+                low_priority_count=0,
+                categories_breakdown={},
+            ),
+            check_id="test",
+            new_ephemeral_token="token",
+        )
+        generator = MarkdownReportGenerator(response)
+
+        detailed = generator.generate_detailed_recommendations()
+
+        assert "**Category:** Storage Hygiene" in detailed
 
 
 class TestFileSaving:
