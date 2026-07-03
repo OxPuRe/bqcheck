@@ -12,7 +12,7 @@ import hmac
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, TypedDict
+from typing import Any, Dict, Optional, TypedDict
 
 import httpx
 
@@ -29,7 +29,7 @@ from bqcheck.api.models import (
 )
 from bqcheck.constants import HTTP_SYNC_TIMEOUT_CHECK, HTTP_SYNC_TIMEOUT_MUTATION
 
-# Mock mode test keys (Epic 3)
+# Mock mode test keys
 # Use exact keys instead of prefix matching
 # to prevent token collision attacks
 MOCK_VALID_TEST_KEYS = {
@@ -278,8 +278,7 @@ class BQCheckAPIClient:
     """
     API client for bqcheck server communication.
 
-    Epic 3: Returns mocked responses for testing (mock_mode=True)
-    Future Epic: Switches to real HTTP calls (mock_mode=False)
+    Returns mocked responses in test mode and real HTTP responses otherwise.
 
     Security:
     - HTTPS-only enforcement (FR62)
@@ -292,13 +291,14 @@ class BQCheckAPIClient:
     sanity check operations with progress indicators.
     """
 
-    def __init__(self, mock_mode: bool = True):
+    def __init__(self, mock_mode: bool = True, server_url: Optional[str] = None):
         """
         Initialize API client.
 
         Args:
-            mock_mode: If True, return mocked responses for Epic 3 testing.
+            mock_mode: If True, return mocked responses for local tests.
                       If False, make real HTTP calls to server.
+            server_url: Optional API base URL. If omitted, BQCHECK_API_URL is used.
         """
         self.mock_mode = mock_mode
 
@@ -308,22 +308,32 @@ class BQCheckAPIClient:
                 "API client initialized in MOCK MODE - using test responses. "
                 "Set BQCHECK_REAL_MODE=true for production use."
             )
-        server_url_raw = os.getenv(
+        server_url_raw = server_url or os.getenv(
             "BQCHECK_API_URL", "https://bqcheck-server-evyc2k5v5a-ew.a.run.app"
         )
 
+        self.set_server_url(server_url_raw)
+
+    def set_server_url(self, server_url: str) -> None:
+        """
+        Validate and set the API base URL.
+
+        The activated credentials file stores the server URL that issued the
+        token. Scans use that value so staging/local activations keep talking to
+        the same API instead of falling back to the environment default.
+        """
         # Validate API URL from environment variable
         # Prevents URL injection attacks, path traversal, and credential redirect
         from urllib.parse import urlparse
 
         try:
-            parsed = urlparse(server_url_raw)
+            parsed = urlparse(server_url)
 
             # Validate URL structure
             if not parsed.scheme or not parsed.netloc:
-                raise ValueError(f"Invalid URL format: {server_url_raw}")
+                raise ValueError(f"Invalid URL format: {server_url}")
 
-            # Enforce HTTPS in ALL modes (AC8 - FR62)
+            # Enforce HTTPS in all modes.
             if parsed.scheme != "https":
                 raise HTTPSRequiredError(
                     f"HTTPS required (got {parsed.scheme}://). "
@@ -332,23 +342,19 @@ class BQCheckAPIClient:
 
             # Validate no path traversal attempts
             if ".." in parsed.netloc or ".." in parsed.path:
-                raise ValueError(
-                    f"Invalid URL (path traversal detected): {server_url_raw}"
-                )
+                raise ValueError(f"Invalid URL (path traversal detected): {server_url}")
 
-            self.server_url = server_url_raw
+            self.server_url = server_url.rstrip("/")
         except (ValueError, AttributeError) as e:
             raise ValueError(
-                f"Invalid BQCHECK_API_URL environment variable: {e}. "
-                "Must be a valid https:// URL."
+                f"Invalid API server URL: {e}. Must be a valid https:// URL."
             )
 
     def activate_license(self, master_key: str) -> ActivationResponse:
         """
         Activate license with master license key.
 
-        Epic 3: Returns mocked response
-        Future Epic: Makes real HTTPS POST to /v1/license/activate
+        Returns a mocked response in test mode, or makes a real HTTPS POST.
 
         Args:
             master_key: Master license key to activate
@@ -367,7 +373,7 @@ class BQCheckAPIClient:
 
     def _mock_activate(self, master_key: str) -> ActivationResponse:
         """
-        Mock activation for Epic 3 testing.
+        Mock activation for local testing.
 
         Use exact key matching instead of prefix
         to prevent token collision attacks where any "VALID-*" key is accepted.
@@ -411,7 +417,7 @@ class BQCheckAPIClient:
         """
         Real activation via HTTPS POST.
 
-        Future Epic implementation - not used in Epic 3.
+        Real activation endpoint used outside mock mode.
 
         Security: Uses Authorization header instead of JSON body
         to prevent master key from being logged by middleware.
@@ -471,7 +477,7 @@ class BQCheckAPIClient:
         """
         Report successful scan completion to server.
 
-        Used by Story 3.4 (AC1: report success to server).
+        Report scan completion metadata to the server.
 
         Args:
             project_id: GCP project ID that was scanned
@@ -490,7 +496,7 @@ class BQCheckAPIClient:
     def _mock_report_scan(
         self, project_id: str, scan_result: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Mock scan reporting for Epic 3."""
+        """Mock scan reporting for local testing."""
         return {
             "status": "acknowledged",
             "project_id": project_id,
@@ -500,7 +506,7 @@ class BQCheckAPIClient:
     def _real_report_scan(
         self, project_id: str, scan_result: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Real scan reporting via HTTPS POST (Future Epic)."""
+        """Real scan reporting via HTTPS POST."""
         url = f"{self.server_url}/v1/scan/report"
 
         try:
@@ -545,7 +551,7 @@ class BQCheckAPIClient:
         """
         Renew ephemeral token after successful scan.
 
-        Used by Story 3.4 (Scan Token Management & Auto-Renewal).
+        Used by legacy mock scan flows.
 
         Args:
             master_key: Master license key for token renewal
@@ -565,7 +571,7 @@ class BQCheckAPIClient:
         self, master_key: str, current_balance: int
     ) -> TokenRenewalResponse:
         """
-        Mock token renewal for Epic 3 testing.
+        Mock token renewal for local testing.
 
         Args:
             master_key: Master license key (not used in mock)
@@ -590,7 +596,7 @@ class BQCheckAPIClient:
         """
         Real token renewal via HTTPS POST.
 
-        Future Epic implementation - not used in Epic 3.
+        Real token renewal endpoint for legacy server flows.
 
         Security: Uses Authorization header instead of JSON body
         to prevent master key from being logged by middleware.
@@ -633,7 +639,7 @@ class BQCheckAPIClient:
         """
         Execute a sanity check by sending request to server.
 
-        Story 5.1 - Task 2: HTTP client for server communication with retry logic.
+        HTTP client for server communication with retry logic.
 
         Args:
             check_request: Check request with anonymized metadata
@@ -678,12 +684,10 @@ class BQCheckAPIClient:
             wait=wait_exponential(
                 multiplier=1, min=HTTP_RETRY_MIN_WAIT, max=HTTP_RETRY_MAX_WAIT
             ),
-            # Story 5.3: Only retry on truly transient errors
             # ConnectError: connection failures (DNS, refused connection) - transient
             # TimeoutException: request timeout - transient
             # NOT NetworkError: too broad, includes permanent errors (SSL, certificates)
             retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
-            # Story 5.3: Log retry attempts for debugging
             after=after_log(logging.getLogger(__name__), logging.WARNING),
         )
         async def _send_request() -> Any:

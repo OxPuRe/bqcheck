@@ -157,6 +157,23 @@ class TestScanExecutor:
         assert result.project_id == "test-project"
         assert result.simulated is False  # Real scan with mocked dependencies
 
+    def test_scan_uses_activated_server_url(
+        self, test_credentials, mock_creds_path, mock_bigquery_and_server, monkeypatch
+    ):
+        """Scan uses the server URL stored during license activation."""
+        from bqcheck.scan.executor import ScanExecutor
+
+        credentials = {**test_credentials, "server_url": "https://staging.bqcheck.test"}
+        CredentialStore.save(credentials)
+        monkeypatch.setenv("BQCHECK_API_URL", "https://production.bqcheck.test")
+
+        api_client = BQCheckAPIClient(mock_mode=True)
+        executor = ScanExecutor(api_client)
+
+        executor.execute_scan_with_tokens("test-project")
+
+        assert api_client.server_url == "https://staging.bqcheck.test"
+
     def test_scan_success_renews_token(
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
     ):

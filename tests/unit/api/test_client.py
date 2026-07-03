@@ -59,6 +59,16 @@ class TestBQCheckAPIClient:
         with pytest.raises(HTTPSRequiredError, match="HTTPS required"):
             BQCheckAPIClient(mock_mode=True)
 
+    def test_explicit_server_url_overrides_environment(self, monkeypatch):
+        """Explicit server URL is used instead of BQCHECK_API_URL."""
+        monkeypatch.setenv("BQCHECK_API_URL", "https://env.example.com")
+
+        client = BQCheckAPIClient(
+            mock_mode=False, server_url="https://activated.example.com/"
+        )
+
+        assert client.server_url == "https://activated.example.com"
+
     def test_activate_license_success_with_valid_key(self):
         """AC1: Test activation success with VALID- prefix."""
         client = BQCheckAPIClient(mock_mode=True)

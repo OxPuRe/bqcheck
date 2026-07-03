@@ -1,4 +1,4 @@
-"""Markdown sanity check report generator (Story 5.2).
+"""Markdown sanity check report generator.
 
 Generates well-formatted Markdown reports from CheckResponse data.
 """
@@ -965,7 +965,7 @@ For tables with historical data that's rarely accessed:
 
         Returns:
             Absolute path to saved report file if successfully saved.
-            Returns None in these cases (Story 5.3):
+            Returns None in these cases:
             - File exists, interactive=True, and user declines overwrite
             - File exists, interactive=False, force=False
 
@@ -994,7 +994,7 @@ For tables with historical data that's rarely accessed:
 
         # Determine final output path
         if output_path is not None:
-            # Story 5.3: Detect trailing slash (user might think it's a directory)
+            # Detect trailing slash (user might think it's a directory)
             if str(output_path).endswith("/") or str(output_path).endswith("\\"):
                 raise ValueError(
                     f"output_path appears to be a directory (ends with slash): {output_path}. "
@@ -1008,7 +1008,7 @@ For tables with historical data that's rarely accessed:
             else:
                 final_path = output_path
 
-            # Story 5.3: Validate that output_path is not a directory
+            # Validate that output_path is not a directory
             if final_path.exists() and final_path.is_dir():
                 raise ValueError(
                     f"output_path must be a file path, not a directory: {final_path}"

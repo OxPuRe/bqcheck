@@ -1,4 +1,4 @@
-"""Scan functionality (Story 3.4)."""
+"""Scan functionality."""
 
 from bqcheck.scan.executor import ScanExecutor
 from bqcheck.scan.models import ScanResult

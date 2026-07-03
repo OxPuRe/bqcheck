@@ -26,7 +26,7 @@ class Credentials(BaseModel):
     )
     used_tokens: List[Dict[str, Any]] = Field(
         default_factory=list,
-        description="Client-side tracking of used tokens (Story 3.4, AC8)",
+        description="Client-side tracking of used tokens",
     )
 
     @field_validator("activated_at", mode="before")

@@ -1,8 +1,8 @@
 """
-Simulated BigQuery scan for Epic 3 testing (Story 3.4, Task 5).
+Simulated BigQuery scan for local testing.
 
 This simulator mimics a real BigQuery sanity check scan without actually querying
-INFORMATION_SCHEMA. The real implementation will come in Epic 4.
+INFORMATION_SCHEMA.
 """
 
 import logging
@@ -27,9 +27,7 @@ DEFAULT_SIMULATION_DELAY = _get_simulation_delay()
 
 def simulate_scan(project_id: str, ephemeral_token: str) -> ScanResult:
     """
-    Execute a simulated BigQuery scan for Epic 3 testing.
-
-    Epic 4 will replace this with real INFORMATION_SCHEMA extraction.
+    Execute a simulated BigQuery scan for local testing.
 
     Args:
         project_id: GCP project ID to scan
@@ -39,23 +37,23 @@ def simulate_scan(project_id: str, ephemeral_token: str) -> ScanResult:
         ScanResult with simulated=True flag
 
     Security:
-        - AC4: Token NEVER logged (only project_id logged)
-        - AC7: Simulation notice displayed to user
+        - Token NEVER logged (only project_id logged)
+        - Simulation notice displayed to user
     """
-    # AC4: Token NEVER logged - only log project_id
+    # Token NEVER logged - only log project_id
     logger.info(f"Starting simulated scan for project: {project_id}")
 
-    # AC7: Display simulation notice
+    # Display simulation notice
     typer.echo(f"\n🔍 [SIMULATED] Scanning BigQuery project: {project_id}")
     typer.echo("🔐 [SIMULATED] Using ephemeral token (secured)")
     typer.echo("📊 [SIMULATED] Extracting INFORMATION_SCHEMA metadata...")
 
-    # AC7: Simulate work (configurable delay, default 2 seconds)
+    # Simulate work (configurable delay, default 2 seconds)
     time.sleep(DEFAULT_SIMULATION_DELAY)
 
     typer.echo("✅ [SIMULATED] Scan completed successfully!")
-    typer.echo("\n📝 Note: This is a simulated scan for Epic 3 token testing.")
-    typer.echo("   Full BigQuery sanity check coming in Epic 4.")
+    typer.echo("\n📝 Note: This is a simulated scan for local testing.")
+    typer.echo("   Set BQCHECK_REAL_SCAN=true to run a real BigQuery sanity check.")
 
     return ScanResult(
         success=True,

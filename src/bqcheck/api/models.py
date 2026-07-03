@@ -44,12 +44,12 @@ class TokenRenewalResponse(BaseModel):
     token_pool_balance: int = Field(description="Updated token balance", ge=0)
 
 
-# Check Request/Response Models (Story 5.1)
+# Check request/response models
 
 
 class CheckMetadata(BaseModel):
     """
-    Structured metadata for check request (Story 5.3).
+    Structured metadata for check request.
 
     Validates BigQuery metadata structure to prevent server-side errors.
 

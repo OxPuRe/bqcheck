@@ -3,7 +3,7 @@ Scan executor with token lifecycle management.
 
 Manages ephemeral token lifecycle:
 - Load credentials
-- Execute scan (simulated for Epic 3, real implementation in Epic 4)
+- Execute scan (simulated locally or real server-backed analysis)
 - Renew token after success
 - Atomic token consumption (preserve on failure)
 
@@ -77,9 +77,9 @@ class ScanExecutor:
     Responsibilities:
     - Load credentials from storage
     - Execute scan with ephemeral token
-    - Renew token after successful scan (AC3)
-    - Preserve token on failure (AC2 - atomic consumption)
-    - Update credentials atomically (AC6)
+    - Renew token after successful scan
+    - Preserve token on failure with atomic consumption
+    - Update credentials atomically
     """
 
     def __init__(self, api_client: BQCheckAPIClient):
@@ -119,19 +119,20 @@ class ScanExecutor:
             ScanResult with scan results
 
         Raises:
-            Exception: If scan fails (token preserved - AC2)
+            Exception: If scan fails (token preserved)
 
         Environment Variables:
             BQCHECK_REAL_SCAN: Set to 'true' to execute a real sanity check with server analysis.
-                              Default: 'false' (simulated scan for Epic 3)
+                              Defaults to real scans when unset.
 
         Security:
-        - AC4: Tokens NEVER logged
-        - AC5: Master key ONLY for renewal (not during scan)
+        - Tokens are never logged
+        - Master key is not transmitted during scans
         """
         # Step 1: Load credentials (with specific error handling)
         try:
             credentials = CredentialStore.load()
+            self.api_client.set_server_url(credentials["server_url"])
         except CredentialNotFoundError:
             typer.echo("❌ Error: No active license found.")
             typer.echo("Run: bqcheck license activate <your-license-key>")
@@ -182,10 +183,9 @@ class ScanExecutor:
             typer.echo("\n💡 Tip: Run 'bqcheck validate' to check permissions")
             sys.exit(3)
 
-        # Step 2: Execute scan (SIMULATED for Epic 3, or REAL for Epic 5)
+        # Step 2: Execute scan in simulated or real mode
         try:
-            # AC1, AC7: Simulated scan
-            # AC4: Token never logged - passed to simulator but not logged
+            # Token never logged - passed to simulator/server but not logged
             # Choose scan mode based on environment variable
             # Note: BQCHECK_REAL_SCAN controls scan execution (simulated vs real)
             # Note: BQCHECK_REAL_MODE controls API client mode (mock vs real server)
@@ -194,7 +194,7 @@ class ScanExecutor:
             use_real_scan = is_real_scan()
 
             if use_real_scan:
-                # Epic 5: Execute real check with server
+                # Execute real check with server
                 from bqcheck.constants import ENV_VAR_REAL_SCAN
 
                 logger.info(f"Executing REAL check ({ENV_VAR_REAL_SCAN}=true)")
@@ -210,17 +210,16 @@ class ScanExecutor:
                         )
                     )
                 except ScanError as e:
-                    # Story 5.3: Handle errors from async context properly
                     # Error handlers already displayed messages, just exit with code
                     sys.exit(e.exit_code)
 
-                # AC5: Display check results immediately (credentials updated later atomically)
+                # Display check results immediately (credentials updated later atomically)
                 show_success_message(
                     check_response.summary.total_recommendations,
                     check_response.summary.total_potential_savings_eur,
                 )
 
-                # Generate and save Markdown report (Story 5.2, 5.4)
+                # Generate and save Markdown report
                 from bqcheck.report_generator import MarkdownReportGenerator
                 from bqcheck.scanner.encryption import IdentifierEncryptor
 
@@ -260,8 +259,7 @@ class ScanExecutor:
                     check_response=check_response,
                 )
             else:
-                # Epic 3: Simulated scan (original behavior)
-                logger.info("Executing SIMULATED check (Epic 3)")
+                logger.info("Executing SIMULATED check")
                 result = self._execute_simulated_scan(
                     project_id, credentials["ephemeral_token"]
                 )
@@ -285,12 +283,12 @@ class ScanExecutor:
                 new_ephemeral_token = mock_renewal.ephemeral_token
                 new_balance = mock_renewal.token_pool_balance
 
-            # Step 4: Update credentials atomically (AC6, AC8)
-            # AC8: Mark old token as used (client-side tracking)
+            # Step 4: Update credentials atomically
+            # Mark old token as used (client-side tracking)
             old_token = credentials["ephemeral_token"]
             credentials["ephemeral_token"] = new_ephemeral_token
 
-            # Track used tokens (AC8: Single-use enforcement)
+            # Track used tokens for local replay protection.
             # Use hash instead of truncation
             # Truncation loses entropy and makes tokens guessable. Hash preserves
             # uniqueness while being irreversible.
@@ -345,7 +343,7 @@ class ScanExecutor:
             credentials["token_pool_balance"] = new_balance
             CredentialStore.update(credentials)
 
-            # AC1: Display success with balance (for simulated scans only)
+            # Display success with balance (for simulated scans only)
             # Real scan already displayed results earlier
             if not use_real_scan:
                 typer.echo("\n✅ Scan completed successfully!")
@@ -359,7 +357,7 @@ class ScanExecutor:
             return result
 
         except Exception as e:
-            # AC2: CRITICAL - Token preserved on failure
+            # CRITICAL - Token preserved on failure
             # Credentials NOT updated
             logger.error(f"Scan failed: {e}")
             typer.echo("❌ Error: Scan failed. Token preserved for retry.")
@@ -369,9 +367,7 @@ class ScanExecutor:
         self, project_id: str, ephemeral_token: str
     ) -> ScanResult:
         """
-        Execute SIMULATED BigQuery scan for Epic 3.
-
-        Epic 4 will replace with real INFORMATION_SCHEMA extraction.
+        Execute a local simulated BigQuery scan.
 
         Args:
             project_id: GCP project ID to scan
@@ -381,7 +377,7 @@ class ScanExecutor:
             ScanResult with simulated=True
 
         Security:
-        - AC4: Token NEVER logged (delegated to simulator)
+        - Token NEVER logged (delegated to simulator)
         """
         return simulate_scan(project_id, ephemeral_token)
 
@@ -389,13 +385,13 @@ class ScanExecutor:
         self, project_id: str, ephemeral_token: str, query_project: "str | None" = None
     ) -> CheckResponse:
         """
-        Execute REAL BigQuery scan with server integration (Story 5.1 + 5.3).
+        Execute a real BigQuery scan with server integration.
 
         Process:
-        1. Display start message (AC1)
-        2. Extract metadata from BigQuery INFORMATION_SCHEMA with spinner (AC2)
+        1. Display start message
+        2. Extract metadata from BigQuery INFORMATION_SCHEMA with spinner
         3. Anonymize project_id (SHA-256)
-        4. Send to POST /v1/check with progress indicators (AC3, AC4)
+        4. Send to POST /v1/check with progress indicators
         5. Return CheckResponse with recommendations
 
         Args:
@@ -408,7 +404,7 @@ class ScanExecutor:
             CheckResponse with recommendations and new ephemeral token
 
         Raises:
-            SystemExit: Via error handlers (AC6, AC7, AC8)
+            ScanError: Via error handlers
                 - Exit code 3: BigQuery permission/auth errors
                 - Exit code 2: Project not found
                 - Exit code 1: Network/timeout errors
@@ -424,18 +420,18 @@ class ScanExecutor:
         from bqcheck.api.models import CheckRequest
         from bqcheck.scanner import authenticate_bigquery
 
-        # AC1: Display start message
+        # Display start message
         show_start_message(project_id)
 
-        # Step 1: Extract BigQuery metadata (Epic 2) with progress indicator (AC2)
-        # and error handling (AC6)
+        # Step 1: Extract BigQuery metadata with progress indicator
+        # and error handling
         try:
             logger.info(f"Extracting metadata from project: {project_id}")
 
             with show_extraction_progress():
                 client = authenticate_bigquery(project_id)
 
-                # Epic 2 Integration: Extract real metadata
+                # Extract real metadata
                 from bqcheck.scanner.aggregator import aggregate_query_metadata
                 from bqcheck.scanner.anonymizer import (
                     anonymize_access_patterns,
@@ -518,7 +514,6 @@ class ScanExecutor:
             )
 
         except PermissionDenied:
-            # AC6: BigQuery permission error
             # Get user email for IAM binding command
             # Add timeout, validation, stderr capture
             try:
@@ -543,14 +538,12 @@ class ScanExecutor:
                 ValueError,
                 OSError,
             ):
-                # Story 5.3: Narrow exception catching to specific gcloud CLI failures
                 # CalledProcessError: gcloud command failed
                 # FileNotFoundError: gcloud not installed
                 # ValueError: invalid email format
                 # OSError: permission issues
                 email = None
             exit_code = handle_bigquery_permission_error(console, project_id, email)
-            # Story 5.3: Raise exception instead of sys.exit() from async context
             raise ScanError(exit_code, "BigQuery permission denied")
 
         except NotFound:
@@ -566,7 +559,6 @@ class ScanExecutor:
         # Step 2: Anonymize project_id (SHA-256)
         project_id_hash = hashlib.sha256(project_id.encode("utf-8")).hexdigest()
 
-        # Story 5.3: Validate SHA-256 hash format (64 hex characters)
         # Use explicit check instead of assert (assertions disabled with python -O)
         if len(project_id_hash) != 64 or not all(
             c in "0123456789abcdef" for c in project_id_hash
@@ -592,17 +584,15 @@ class ScanExecutor:
             f"{len(metadata.access_patterns)} access patterns)"
         )
 
-        # Step 4: Send to server with progress indicators (AC3, AC4) and error handling (AC7, AC8)
+        # Step 4: Send to server with progress indicators and error handling
         try:
-            # AC3: Display server upload message
             show_server_upload()
 
-            # AC4: Start timer task for analysis progress
+            # Start timer task for analysis progress
             logger.info("Sending check request to server...")
             timer_task = asyncio.create_task(show_analysis_progress())
 
             try:
-                # Story 5.3: Global timeout for execute_check
                 # Prevents indefinite waits during retries or server-side processing
                 from bqcheck.constants import GLOBAL_CHECK_TIMEOUT_SECONDS
 
@@ -624,7 +614,6 @@ class ScanExecutor:
                     timer_task.cancel()
 
                 try:
-                    # Story 5.3: Add timeout to prevent race condition where timer doesn't cancel
                     await asyncio.wait_for(
                         timer_task, timeout=TIMER_CANCEL_TIMEOUT_SECONDS
                     )
@@ -644,17 +633,14 @@ class ScanExecutor:
                     # Don't re-raise - we're in cleanup, check error takes precedence
 
         except asyncio.TimeoutError:
-            # Story 5.3: Global timeout exceeded (20 minutes)
             exit_code = handle_timeout_error(console)
             raise ScanError(exit_code, "Check timeout exceeded")
 
         except httpx.TimeoutException:
-            # AC8: Timeout error
             exit_code = handle_timeout_error(console)
             raise ScanError(exit_code, "HTTP timeout")
 
         except (httpx.ConnectError, httpx.NetworkError):
-            # AC7: Network error
             exit_code = handle_network_error(console)
             raise ScanError(exit_code, "Network error")
 

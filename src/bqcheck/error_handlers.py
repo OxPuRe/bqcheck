@@ -1,9 +1,9 @@
-"""Actionable error message formatters for CLI (Story 5.3).
+"""Actionable error message formatters for CLI.
 
 Provides user-friendly error messages with actionable guidance for:
-- BigQuery permission errors (AC6)
-- Network errors (AC7)
-- Timeout errors (AC8)
+- BigQuery permission errors
+- Network errors
+- Timeout errors
 
 Design: Error handlers format/display messages and RETURN exit codes.
 This allows callers to decide when to exit (e.g., sys.exit(code)),
@@ -25,7 +25,7 @@ def handle_bigquery_permission_error(
     console: Console, project_id: str, email: Optional[str]
 ) -> int:
     """
-    Handle BigQuery permission denied errors (AC6).
+    Handle BigQuery permission denied errors.
 
     Args:
         console: Rich console for output
@@ -51,7 +51,7 @@ def handle_bigquery_permission_error(
 
 def handle_network_error(console: Console) -> int:
     """
-    Handle network communication errors (AC7).
+    Handle network communication errors.
 
     Args:
         console: Rich console for output
@@ -69,7 +69,7 @@ def handle_network_error(console: Console) -> int:
 
 def handle_timeout_error(console: Console) -> int:
     """
-    Handle server timeout errors (AC8).
+    Handle server timeout errors.
 
     Args:
         console: Rich console for output

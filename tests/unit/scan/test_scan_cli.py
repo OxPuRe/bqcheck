@@ -1,11 +1,11 @@
 """
-Unit tests for scan CLI command (Story 3.4).
+Unit tests for scan CLI command.
 
 Tests cover:
-- AC1: Execute scan with token management
-- AC4: Tokens never logged
-- AC5: Master key not transmitted during scan
-- AC7: Simulation notice displayed
+- Execute scan with token management
+- Tokens never logged
+- Master key not transmitted during scan
+- Simulation notice displayed
 """
 
 import json
@@ -75,7 +75,7 @@ class TestScanCommand:
     """Test scan command with token management."""
 
     def test_scan_without_credentials_fails(self, tmp_path, mock_creds_path):
-        """AC1: Scan fails if no credentials exist."""
+        """Scan fails if no credentials exist."""
         result = runner.invoke(app, ["scan", "--project", "test-project"])
 
         assert result.exit_code == ExitCode.FILE_ERROR
@@ -85,7 +85,7 @@ class TestScanCommand:
     def test_scan_with_credentials_executes_simulated_scan(
         self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
-        """AC1: Scan loads credentials and executes simulated scan."""
+        """Scan loads credentials and executes simulated scan."""
         # Create credentials file
         mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
         mock_creds_path.write_text(json.dumps(mock_credentials))
@@ -103,7 +103,7 @@ class TestScanCommand:
     def test_scan_displays_simulation_notice(
         self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
-        """AC7: Clear simulation notice displayed to user."""
+        """Clear simulation notice displayed to user."""
         # Create credentials file
         mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
         mock_creds_path.write_text(json.dumps(mock_credentials))
@@ -111,19 +111,19 @@ class TestScanCommand:
 
         result = runner.invoke(app, ["scan", "--project", "my-gcp-project"])
 
-        # AC7: Simulation notice
+        # Simulation notice
         assert "[SIMULATED]" in result.stdout
         assert "Scanning BigQuery project" in result.stdout
         assert "my-gcp-project" in result.stdout
 
-        # AC7: Guidance about Epic 3/4
-        assert "Epic 3" in result.stdout or "simulated scan" in result.stdout.lower()
-        assert "Epic 4" in result.stdout or "future" in result.stdout.lower()
+        # Guidance for switching from local simulation to real checks
+        assert "simulated scan" in result.stdout.lower()
+        assert "BQCHECK_REAL_SCAN=true" in result.stdout
 
     def test_scan_success_displays_balance(
         self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
-        """AC1: Scan success displays token pool balance."""
+        """Scan success displays token pool balance."""
         # Create credentials file
         mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
         mock_creds_path.write_text(json.dumps(mock_credentials))
@@ -138,7 +138,7 @@ class TestScanCommand:
     def test_scan_tokens_never_logged(
         self, tmp_path, mock_credentials, mock_creds_path, caplog, mock_bq_validation
     ):
-        """AC4: Ephemeral tokens NEVER appear in logs."""
+        """Ephemeral tokens NEVER appear in logs."""
         # Create credentials file
         mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
         mock_creds_path.write_text(json.dumps(mock_credentials))
@@ -148,7 +148,7 @@ class TestScanCommand:
         with caplog.at_level(logging.DEBUG):
             runner.invoke(app, ["scan", "--project", "test-project"])
 
-        # AC4: Token NEVER in logs
+        # Token NEVER in logs
         ephemeral_token = mock_credentials["ephemeral_token"]
         for record in caplog.records:
             assert ephemeral_token not in record.message, (
@@ -160,7 +160,7 @@ class TestScanCommand:
     def test_scan_master_key_never_logged(
         self, tmp_path, mock_credentials, mock_creds_path, caplog, mock_bq_validation
     ):
-        """AC5: Master key NEVER appears in logs."""
+        """Master key NEVER appears in logs."""
         # Create credentials file
         mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
         mock_creds_path.write_text(json.dumps(mock_credentials))
@@ -170,7 +170,7 @@ class TestScanCommand:
         with caplog.at_level(logging.DEBUG):
             runner.invoke(app, ["scan", "--project", "test-project"])
 
-        # AC5: Master key NEVER in logs
+        # Master key NEVER in logs
         master_key = mock_credentials["master_key"]
         for record in caplog.records:
             assert master_key not in record.message, (
@@ -180,7 +180,7 @@ class TestScanCommand:
     def test_scan_decrements_token_balance(
         self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation
     ):
-        """AC1: Successful scan decrements token pool balance by 1."""
+        """Successful scan decrements token pool balance by 1."""
         # Create credentials file with balance=10
         mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
         mock_creds_path.write_text(json.dumps(mock_credentials))

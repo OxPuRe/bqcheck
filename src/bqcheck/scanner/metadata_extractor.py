@@ -324,7 +324,7 @@ def extract_query_metadata(
 
     Privacy Note:
         This function accesses ONLY query metadata via INFORMATION_SCHEMA.
-        Query text will be anonymized in Story 2.4.
+        Query text is anonymized before transmission.
     """
     # Validate project_id to prevent SQL injection
     _validate_project_id(project_id)
@@ -523,7 +523,7 @@ def extract_access_patterns(
 
     Privacy Note:
         This function accesses ONLY metadata via INFORMATION_SCHEMA.
-        Table names will be anonymized in Story 2.4.
+        Table names are anonymized before transmission.
     """
     # Validate project_id to prevent SQL injection
     _validate_project_id(project_id)

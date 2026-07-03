@@ -1,16 +1,16 @@
 """
-Unit tests for scan simulator (Story 3.4, Task 5).
+Unit tests for scan simulator.
 
 Tests cover:
-- AC1: Simulated scan execution
-- AC7: Simulation notice and timing
+- Simulated scan execution
+- Simulation notice and timing
 """
 
 import time
 
 
 class TestScanSimulator:
-    """Test simulated scan functionality for Epic 3."""
+    """Test simulated scan functionality."""
 
     def test_simulator_imports(self):
         """Verify simulator module can be imported."""
@@ -19,7 +19,7 @@ class TestScanSimulator:
         assert simulate_scan is not None
 
     def test_simulate_scan_takes_configured_time(self):
-        """AC7: Simulated scan takes configured delay time."""
+        """Simulated scan takes configured delay time."""
         from bqcheck.scan.simulator import DEFAULT_SIMULATION_DELAY, simulate_scan
 
         start_time = time.time()
@@ -35,7 +35,7 @@ class TestScanSimulator:
         )
 
     def test_simulate_scan_returns_success_result(self):
-        """AC1: Simulated scan returns successful ScanResult."""
+        """Simulated scan returns successful ScanResult."""
         from bqcheck.scan.simulator import simulate_scan
 
         result = simulate_scan("my-gcp-project", "mock-token-abc")
@@ -46,7 +46,7 @@ class TestScanSimulator:
         assert result.findings == []
 
     def test_simulate_scan_never_logs_token(self, caplog):
-        """AC4: Simulator never logs ephemeral token."""
+        """Simulator never logs ephemeral token."""
         import logging
 
         from bqcheck.scan.simulator import simulate_scan
@@ -61,7 +61,7 @@ class TestScanSimulator:
             assert token not in record.message
 
     def test_simulator_displays_simulation_messages(self, capsys):
-        """AC7: Simulator displays [SIMULATED] messages."""
+        """Simulator displays [SIMULATED] messages."""
         from bqcheck.scan.simulator import simulate_scan
 
         result = simulate_scan("my-test-project", "mock-token")
@@ -72,12 +72,12 @@ class TestScanSimulator:
         # Verify [SIMULATED] tag appears
         assert "[SIMULATED]" in captured.out
         assert "my-test-project" in captured.out
-        assert "Epic 3 token testing" in captured.out
-        assert "Epic 4" in captured.out
+        assert "simulated scan for local testing" in captured.out
+        assert "BQCHECK_REAL_SCAN=true" in captured.out
         assert result.simulated is True
 
     def test_simulate_scan_with_different_projects(self):
-        """AC1: Simulator works with different project IDs."""
+        """Simulator works with different project IDs."""
         from bqcheck.scan.simulator import simulate_scan
 
         projects = ["project-a", "project-b", "project-c"]

@@ -431,7 +431,6 @@ def validate(
         f"\n[green bold]✓ Validation completed in {elapsed:.2f}s[/green bold]"
     )
 
-    # AC4 (Story 3.5): Clarify no tokens consumed
     console.print("[dim]Validation successful (no tokens consumed)[/dim]\n")
 
 
@@ -568,7 +567,7 @@ def scan(
     """
     Run full sanity check scan (consumes 1 token).
 
-    Executes complete BigQuery sanity check with server integration (Epic 5).
+    Executes complete BigQuery sanity check with server integration.
     Extracts metadata from INFORMATION_SCHEMA, sends to the analysis server,
     and generates Markdown report with cost-saving recommendations.
 
@@ -584,12 +583,12 @@ def scan(
                          --query-project roam-staging-dt-prc-0
 
     Mode Selection:
-        - Default: Simulated scan (Epic 3 compatibility)
-        - BQCHECK_REAL_SCAN=true: Real BigQuery extraction + server analysis
+        - Default: Real BigQuery extraction + server analysis
+        - BQCHECK_REAL_SCAN=false: Simulated local test scan
 
     Security:
         - Uses ephemeral token (auto-renewed after success)
-        - Master key only transmitted for token renewal
+        - Master key is not transmitted during scans
         - Tokens never logged
         - Project ID anonymized (SHA-256) before transmission
 
@@ -597,7 +596,7 @@ def scan(
         0: Scan completed successfully
         1: Scan failed or no license found
         2: File error (permission denied, file exists and user declined)
-        4: Token pool depleted (Story 3.5)
+        4: Token pool depleted
     """
     from bqcheck.api.client import BQCheckAPIClient
     from bqcheck.license.storage import CredentialStore
@@ -610,30 +609,31 @@ def scan(
             console.print("Run: [cyan]bqcheck license activate <key>[/cyan]")
             raise typer.Exit(ExitCode.FILE_ERROR)
 
-        # Step 2: Load credentials and check balance (AC1, Story 3.5)
+        # Step 2: Load credentials and check balance
         credentials = CredentialStore.load()
 
         if credentials["token_pool_balance"] == 0:
-            # AC1, AC5: Token depletion error
             console.print("\n[red]❌ Token pool depleted (0 scans remaining).[/red]\n")
             console.print("💰 Purchase more tokens at https://bqcheck.com/pricing\n")
             raise typer.Exit(ExitCode.NO_TOKENS)
 
-        # Step 3: Check if this is last token (AC2, Story 3.5)
+        # Step 3: Check if this is the last token
         is_last_token = credentials["token_pool_balance"] == 1
 
         # Step 4: Execute scan with token management
-        # Mock mode: True (default for Epic 3)
         from bqcheck.constants import is_real_mode
 
         mock_mode = not is_real_mode()
-        api_client = BQCheckAPIClient(mock_mode=mock_mode)
+        api_client = BQCheckAPIClient(
+            mock_mode=mock_mode,
+            server_url=credentials["server_url"],
+        )
         executor = ScanExecutor(api_client)
         executor.execute_scan_with_tokens(
             project, query_project=query_project, output_path=output, force=force
         )
 
-        # Step 5: Show warning if was last token (AC2, Story 3.5)
+        # Step 5: Show warning if this was the last token
         if is_last_token:
             console.print("\n[yellow]⚠️  Warning: This was your last token.[/yellow]")
             console.print(
@@ -648,7 +648,6 @@ def scan(
         raise
 
     except PermissionError:
-        # AC5: Permission denied writing file
         console.print(f"\n[red]❌ Error: Permission denied writing to {output}[/red]\n")
         raise typer.Exit(ExitCode.FILE_ERROR)
 
@@ -710,15 +709,13 @@ def license_activate(
     from bqcheck.license.security import mask_key
 
     try:
-        # AC4: Check for existing credentials
         # activate_license will raise FileExistsError if already activated
-        # Mock mode: True (default for Epic 3), False if BQCHECK_REAL_MODE=true
+        # Mock mode is used only when BQCHECK_REAL_MODE=false.
         from bqcheck.constants import is_real_mode
 
         mock_mode = not is_real_mode()
         result = activate_license(master_key, mock_mode=mock_mode)
 
-        # AC1: Success message with balance
         console.print("\n[green]✅ License activated successfully![/green]\n")
         console.print(f"Master Key: {mask_key(master_key)}")
         console.print(
@@ -733,9 +730,7 @@ def license_activate(
         # Success - no raise needed, typer will exit with 0
 
     except FileExistsError as e:
-        # AC4: Credentials already exist
         console.print(f"\n[yellow]⚠️  {e}[/yellow]\n")
-        # Exit with 0 (success) per AC4 specification
         # Rationale: "Already activated" is not an error state - it's a valid
         # system state where credentials exist and are functional. The user's
         # goal (having activated credentials) is already satisfied.
@@ -743,12 +738,10 @@ def license_activate(
         # If user wants to re-activate, they must explicitly revoke first.
 
     except InvalidLicenseKeyError as e:
-        # AC2: Invalid license key
         console.print(f"\n[red]❌ {e}[/red]\n")
         raise typer.Exit(ExitCode.AUTH_ERROR)
 
     except NetworkError as e:
-        # AC3: Network failure
         console.print(f"\n[red]❌ {e}[/red]\n")
         raise typer.Exit(ExitCode.NETWORK_ERROR)
 
@@ -796,18 +789,17 @@ def license_status() -> None:
 
         # Ensure timezone-aware datetime for proper display
         if activated_at.tzinfo is None:
-            # If naive datetime, assume UTC (from Story 3.1 implementation)
+            # If naive datetime, assume UTC for older credential files.
             activated_at = activated_at.replace(tzinfo=timezone.utc)
 
         # Convert to UTC for consistent display
         activated_utc = activated_at.astimezone(timezone.utc)
         formatted_time = activated_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
 
-        # Display status (AC1)
         console.print("\n[green]License Status: Active[/green]\n")
         console.print(f"Master Key: {mask_key(credentials['master_key'])}")
 
-        # AC3 (Story 3.5): Highlight depletion
+        # Highlight depletion clearly for users.
         balance = credentials["token_pool_balance"]
         if balance == 0:
             console.print(
@@ -824,7 +816,6 @@ def license_status() -> None:
         # No explicit raise typer.Exit(0) needed - function returns normally
 
     except CredentialNotFoundError:
-        # AC2: No credentials found
         console.print("\n[yellow]No active license found.[/yellow]\n")
         console.print("To activate your license, run:")
         console.print("  [cyan]bqcheck license activate <your-license-key>[/cyan]")
@@ -832,13 +823,11 @@ def license_status() -> None:
         raise typer.Exit(ExitCode.FILE_ERROR)
 
     except UnsafePermissionsError:
-        # AC3: Wrong file permissions
         console.print("\n[red]Credentials file has unsafe permissions.[/red]\n")
         console.print("Run: [cyan]chmod 600 ~/.bqcheck/credentials.json[/cyan]\n")
         raise typer.Exit(ExitCode.FILE_ERROR)
 
     except (json.JSONDecodeError, KeyError, ValueError):
-        # AC4: Corrupted credentials (invalid JSON or missing fields)
         console.print(
             "\n[red]Credentials file corrupted. "
             "Please re-activate your license.[/red]\n"
@@ -908,12 +897,10 @@ def license_revoke(
         CredentialStore,
     )
 
-    # AC3: Check if credentials exist
     if not CredentialStore.exists():
         console.print("\n[yellow]No active license to revoke.[/yellow]\n")
         raise typer.Exit(ExitCode.FILE_ERROR)
 
-    # AC1: Confirmation prompt (unless -y flag)
     if not yes:
         confirm = typer.confirm(
             "Are you sure you want to revoke your license?",
@@ -924,7 +911,7 @@ def license_revoke(
             # Exit code 0 (cancellation is not an error)
             return
 
-    # Delete credentials (required for both AC1 and AC2)
+    # Delete credentials
     try:
         # Activity logging for security trail
         logger = logging.getLogger(__name__)
@@ -935,7 +922,6 @@ def license_revoke(
 
         CredentialStore.delete()
 
-        # AC1: Success message
         console.print("\n[green]✅ License revoked successfully.[/green]\n")
         console.print("Credentials removed from this machine.\n")
         console.print("To activate a new license, run:")

@@ -427,7 +427,8 @@ class TestScanCommandProgressIndicators:
                                     # Verify error message was printed
                                     captured = capsys.readouterr()
                                     assert (
-                                        "Unable to reach analysis server" in captured.err
+                                        "Unable to reach analysis server"
+                                        in captured.err
                                         or "Unable to reach analysis server"
                                         in captured.out
                                     )

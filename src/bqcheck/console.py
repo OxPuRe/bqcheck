@@ -1,10 +1,10 @@
-"""Rich console configuration and progress helpers for CLI UX (Story 5.3).
+"""Rich console configuration and progress helpers for CLI UX.
 
 Provides centralized Rich console with progress indicators and styling for:
-- Check start/success messages (AC1, AC5)
-- Metadata extraction spinner (AC2)
-- Server communication progress (AC3)
-- Analysis progress with timer (AC4)
+- Check start/success messages
+- Metadata extraction spinner
+- Server communication progress
+- Analysis progress with timer
 """
 
 import asyncio
@@ -19,7 +19,7 @@ console = Console(stderr=True)
 
 def show_start_message(project_id: str) -> None:
     """
-    Display sanity check start message (AC1).
+    Display sanity check start message.
 
     Args:
         project_id: GCP project ID being checked
@@ -35,7 +35,7 @@ def show_start_message(project_id: str) -> None:
 
 def show_extraction_progress() -> Status:
     """
-    Show spinner during metadata extraction (AC2).
+    Show spinner during metadata extraction.
 
     Returns:
         Rich Status context manager with spinner
@@ -52,7 +52,7 @@ def show_extraction_progress() -> Status:
 
 def show_server_upload() -> None:
     """
-    Display server upload message (AC3).
+    Display server upload message.
 
     Example:
         >>> show_server_upload()
@@ -63,7 +63,7 @@ def show_server_upload() -> None:
 
 def show_success_message(count: int, savings: float) -> None:
     """
-    Display sanity check completion success message (AC5).
+    Display sanity check completion success message.
 
     Args:
         count: Number of recommendations found
@@ -81,7 +81,7 @@ def show_success_message(count: int, savings: float) -> None:
 
 async def show_analysis_progress() -> None:
     """
-    Show analysis progress with elapsed timer (AC4).
+    Show analysis progress with elapsed timer.
 
     Displays "⚙️  Analyzing BigQuery patterns..." with elapsed time
     updated every 5 seconds. Runs indefinitely until cancelled by caller.
@@ -139,7 +139,6 @@ async def show_analysis_progress() -> None:
         await asyncio.sleep(5)
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
 
-        # Story 5.3: Add max timeout protection to prevent infinite loop
         # Uses same timeout as executor.py execute_check() for consistency
         if elapsed >= GLOBAL_CHECK_TIMEOUT_SECONDS:
             await safe_print(

@@ -15,9 +15,7 @@ class TableMetadata(BaseModel):
     # Core table identification
     table_catalog: str = Field(..., description="Project ID")
     table_schema: str = Field(..., description="Dataset ID")
-    table_name: str = Field(
-        ..., description="Table name (will be anonymized in Story 2.4)"
-    )
+    table_name: str = Field(..., description="Table name")
     table_type: str = Field(..., description="TABLE, VIEW, EXTERNAL, etc.")
 
     # Temporal metadata
@@ -92,9 +90,7 @@ class AccessPattern(BaseModel):
     # Table identification
     table_catalog: str = Field(..., description="Project ID")
     table_schema: str = Field(..., description="Dataset ID")
-    table_name: str = Field(
-        ..., description="Table name (will be anonymized in Story 2.4)"
-    )
+    table_name: str = Field(..., description="Table name")
 
     # Access metadata
     last_modified_time: str = Field(

@@ -88,7 +88,8 @@ logs/
 *.csv
 sanity-check-reports/
 exports/
-sanity-check-report-*.md  # Generated reports from tests/CLI
+# Generated reports from tests/CLI
+sanity-check-report-*.md
 
 # OS
 Thumbs.db

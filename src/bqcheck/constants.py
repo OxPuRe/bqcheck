@@ -3,7 +3,7 @@
 from enum import IntEnum
 
 
-# Exit codes following UNIX convention (Story 5.3: Using IntEnum for type safety)
+# Exit codes following UNIX convention
 class ExitCode(IntEnum):
     """CLI exit codes following UNIX conventions."""
 
@@ -31,22 +31,22 @@ HTTP_RETRY_BACKOFF_MULTIPLIER = 1  # Exponential backoff: 1s, 2s, 4s
 HTTP_RETRY_MIN_WAIT = 1  # Minimum wait time (seconds)
 HTTP_RETRY_MAX_WAIT = 4  # Maximum wait time (seconds)
 
-# Check execution configuration (Story 5.3)
+# Check execution configuration
 GLOBAL_CHECK_TIMEOUT_SECONDS = 1200.0  # 20 minutes global timeout for execute_check
 TIMER_CANCEL_TIMEOUT_SECONDS = 5.0  # Timeout for timer task cancellation
 
-# HTTP client sync timeouts (Story 5.3 -  Issue #5)
+# HTTP client sync timeouts
 HTTP_SYNC_TIMEOUT_CHECK = 5.0  # Quick operations (license check)
 HTTP_SYNC_TIMEOUT_MUTATION = 10.0  # State-changing operations (activate, renew, report)
 
-# Environment variables for real vs mock mode (Story 5.3 -  Issue #3)
+# Environment variables for real vs mock mode
 ENV_VAR_REAL_MODE = (
     "BQCHECK_REAL_MODE"  # Controls API client mode (mock vs real server)
 )
 ENV_VAR_REAL_SCAN = "BQCHECK_REAL_SCAN"  # Controls scan execution (simulated vs real)
 
 
-# Helper functions for environment variable checks ( Issue #1 & #4)
+# Helper functions for environment variable checks
 def is_real_mode() -> bool:
     """
     Check if real mode is enabled via BQCHECK_REAL_MODE environment variable.

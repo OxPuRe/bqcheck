@@ -79,7 +79,7 @@ Use `--query-project` when your tables are stored in one project but queries run
 ### License Management
 
 **Get a license:**
-- 🚧 **WIP** - License distribution system coming soon
+- Licenses are currently issued manually while the product is in private testing.
 
 **Activate your license:**
 ```bash
@@ -105,9 +105,6 @@ Save sanity check reports to a custom location:
 ```bash
 # Save to specific file
 bqcheck scan --project my-gcp-project --output reports/sanity-check.md
-
-# Save to specific directory (auto-generates filename)
-bqcheck scan --project my-gcp-project --output-dir ./reports/
 
 # Force overwrite existing file
 bqcheck scan --project my-gcp-project --output report.md --force
