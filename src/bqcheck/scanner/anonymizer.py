@@ -524,6 +524,10 @@ def merge_table_metadata(
     """
     import re
 
+    from bqcheck.scanner.aggregator import (
+        _calculate_days_in_period,
+        _calculate_distinct_days,
+    )
     from bqcheck.scanner.query_analyzer import aggregate_filtered_columns_all_tables
 
     # Build lookup maps
@@ -537,6 +541,7 @@ def merge_table_metadata(
 
     # Aggregate queries by table
     query_stats_map: Dict[str, Dict[str, Any]] = {}
+    query_timestamps_map: Dict[str, List[str]] = {}
     for query in queries:
         # Extract table references from query (simplified - match dataset.table patterns)
         table_refs = re.findall(r"`?([a-z0-9_-]+)\.([a-z0-9_]+)`?", query.query.lower())
@@ -548,14 +553,24 @@ def merge_table_metadata(
                     "query_count": 0,
                     "filtered_columns": {},
                 }
+                query_timestamps_map[key] = []
             query_stats_map[key]["total_bytes_processed"] += query.total_bytes_processed
             query_stats_map[key]["query_count"] += 1
+            query_timestamps_map[key].append(query.creation_time)
 
     # Extract filtered columns for all tables in a single pass (much more efficient)
     all_filtered_columns = aggregate_filtered_columns_all_tables(query_dicts)
     for table_key, filtered_cols in all_filtered_columns.items():
         if table_key in query_stats_map and filtered_cols:
             query_stats_map[table_key]["filtered_columns"] = filtered_cols
+
+    for table_key, timestamps in query_timestamps_map.items():
+        query_stats_map[table_key]["query_days_in_period"] = _calculate_days_in_period(
+            timestamps
+        )
+        query_stats_map[table_key]["query_distinct_days"] = _calculate_distinct_days(
+            timestamps
+        )
 
     # Merge everything
     enriched_tables = []

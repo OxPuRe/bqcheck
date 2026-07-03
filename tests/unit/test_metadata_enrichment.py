@@ -51,6 +51,48 @@ def test_merge_table_metadata_basic():
     assert result[0]["schema"] == [{"name": "col1", "type": "STRING"}]
     assert result[0]["query_stats"]["total_bytes_processed"] == 5000
     assert result[0]["query_stats"]["query_count"] == 1
+    assert result[0]["query_stats"]["query_days_in_period"] == 1.0
+    assert result[0]["query_stats"]["query_distinct_days"] == 1
+
+
+def test_merge_table_metadata_tracks_query_activity_window():
+    """Query stats include the observed activity window for better savings estimates."""
+    tables = [
+        TableMetadata(
+            table_catalog="project",
+            table_schema="dataset",
+            table_name="table1",
+            table_type="TABLE",
+            creation_time="2024-01-01T00:00:00Z",
+            size_bytes=1000,
+            row_count=100,
+        )
+    ]
+
+    queries = [
+        QueryMetadata(
+            job_id="job1",
+            query="SELECT * FROM `dataset.table1`",
+            total_bytes_processed=5000,
+            creation_time="2024-01-01 00:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+        ),
+        QueryMetadata(
+            job_id="job2",
+            query="SELECT * FROM `dataset.table1`",
+            total_bytes_processed=5000,
+            creation_time="2024-01-31 00:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+        ),
+    ]
+
+    result = merge_table_metadata(tables, [], queries, {})
+
+    assert result[0]["query_stats"]["query_count"] == 2
+    assert result[0]["query_stats"]["query_days_in_period"] == 30.0
+    assert result[0]["query_stats"]["query_distinct_days"] == 2
 
 
 def test_merge_table_metadata_no_access_pattern():
