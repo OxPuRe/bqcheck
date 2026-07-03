@@ -47,6 +47,39 @@ app = typer.Typer(
 console = Console()
 
 
+@app.command("version")
+def version_cmd(
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show debugging details"),
+    ] = False,
+) -> None:
+    """Show the installed bqcheck version."""
+    import os
+    import platform
+    import sys
+
+    from bqcheck.constants import (
+        ENV_VAR_REAL_MODE,
+        ENV_VAR_REAL_SCAN,
+        get_pricing_url,
+        get_support_url,
+    )
+
+    console.print(f"bqcheck {__version__}")
+
+    if not verbose:
+        return
+
+    console.print(f"Python: {sys.version.split()[0]}")
+    console.print(f"Platform: {platform.platform()}")
+    console.print(f"API URL: {os.getenv('BQCHECK_API_URL', '(default)')}")
+    console.print(f"{ENV_VAR_REAL_MODE}: {os.getenv(ENV_VAR_REAL_MODE, '(default)')}")
+    console.print(f"{ENV_VAR_REAL_SCAN}: {os.getenv(ENV_VAR_REAL_SCAN, '(default)')}")
+    console.print(f"Pricing URL: {get_pricing_url()}")
+    console.print(f"Support URL: {get_support_url()}")
+
+
 @app.command()
 def validate(
     project: Annotated[

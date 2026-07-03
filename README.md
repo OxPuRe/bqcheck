@@ -31,7 +31,7 @@ The client anonymizes all project and table identifiers before sending metadata 
 ### Using UV (Recommended)
 
 ```bash
-uv pip install bqcheck
+uv tool install bqcheck
 ```
 
 ### Using pip
@@ -40,7 +40,35 @@ uv pip install bqcheck
 pip install bqcheck
 ```
 
+### Verify Install
+
+```bash
+bqcheck version
+```
+
+If you want support/debug details:
+
+```bash
+bqcheck version --verbose
+```
+
 ## Usage
+
+### Quickstart
+
+```bash
+# 1. Verify install
+bqcheck version
+
+# 2. Validate BigQuery access for free
+bqcheck validate --project my-gcp-project
+
+# 3. Activate a private-testing license
+bqcheck license activate sk_live_...
+
+# 4. Run a real check
+bqcheck scan --project my-gcp-project
+```
 
 ### Validate Access (Free)
 
