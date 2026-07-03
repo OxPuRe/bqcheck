@@ -233,6 +233,82 @@ class MarkdownReportGenerator:
         return None
 
     @staticmethod
+    def _build_evidence_points(rec_type: str, description: str) -> list[str]:
+        """Extract high-level confidence signals without exposing detector logic."""
+        evidence: list[str] = []
+
+        if rec_type == "storage":
+            match = re.search(
+                r"\(([\d.]+\s(?:GB|TB))\) has not been accessed for (\d+) days",
+                description,
+                re.IGNORECASE,
+            )
+            if match:
+                evidence.append("Large table with a sustained inactivity pattern")
+
+        elif rec_type == "partitioning":
+            match = re.search(
+                r"\(([\d.]+\s(?:GB|TB))\).*?queries scan (\d+)% of the table on "
+                r"average \(([\d.]+\s(?:GB|TB)) per query\).*?Partitioning on "
+                r"([A-Za-z0-9_]+)",
+                description,
+                re.IGNORECASE,
+            )
+            if match:
+                evidence.append(
+                    "Queries are repeatedly scanning a broad share of the table"
+                )
+                evidence.append(
+                    f"A time-based column stands out as a strong partitioning candidate: "
+                    f"`{match.group(4)}`"
+                )
+
+        elif rec_type == "clustering":
+            match = re.search(
+                r"\(([\d.]+\s(?:GB|TB))\).*?Queries scan ([\d.]+\sTB) with frequent "
+                r"filters on (.+?)\.",
+                description,
+                re.IGNORECASE,
+            )
+            if match:
+                evidence.append("A meaningful share of the workload hits this table")
+                evidence.append(
+                    f"Similar filter patterns recur on these columns: {match.group(3)}"
+                )
+
+        elif rec_type == "queries":
+            match = re.search(
+                r"executes ([\d.]+) times/day.*?processing ([\d.]+\sTB) per execution "
+                r"\(([\d.]+\sTB) total\)",
+                description,
+                re.IGNORECASE,
+            )
+            if match:
+                evidence.append(
+                    "This query pattern appears frequently enough to create repeat waste"
+                )
+                evidence.append(
+                    "Each execution scans enough data for materialization to be worth a look"
+                )
+
+            window = re.search(
+                r"\((\d+) executions over ([\d.]+) days, on (\d+) distinct day",
+                description,
+                re.IGNORECASE,
+            )
+            if window:
+                evidence.append(
+                    "The pattern repeats across multiple days, which suggests a stable workload"
+                )
+
+            last_run = re.search(r"Last run:\s+(\d+) days ago", description)
+            if last_run:
+                evidence.append("The workload is still recent, not just historical noise")
+
+        evidence = [point.rstrip(".") for point in evidence if point]
+        return evidence
+
+    @staticmethod
     def _extract_job_ids_from_steps(implementation_steps: list[str]) -> list[str]:
         """
         Extract BigQuery job IDs from implementation steps.
@@ -663,7 +739,19 @@ Top high-priority optimizations for immediate impact:
             detailed += f"""**Description:**
 {decrypted_description}
 
----
+"""
+
+            evidence_points = self._build_evidence_points(
+                rec.type, decrypted_description
+            )
+            if evidence_points:
+                detailed += """**Confidence Signals:**
+"""
+                for point in evidence_points:
+                    detailed += f"- {point}\n"
+                detailed += "\n"
+
+            detailed += """---
 
 """
 

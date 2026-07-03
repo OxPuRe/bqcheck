@@ -353,6 +353,55 @@ class TestDetailedRecommendations:
         assert "**Description:**" in detailed
         # Implementation Steps removed - guidance now in separate section
 
+    def test_detailed_recs_include_confidence_signals_for_query_recommendation(self):
+        """Report should inspire trust without exposing detector internals."""
+        response = CheckResponse(
+            recommendations=[
+                Recommendation(
+                    type="queries",
+                    priority="HIGH",
+                    title="Materialize repeated query (12.0/day)",
+                    description=(
+                        "Query pattern abcdef1234567890 executes 12.0 times/day "
+                        "(36 executions over 14.0 days, on 9 distinct day(s)), "
+                        "processing 1.50 TB per execution (54.00 TB total). "
+                        "Last run: 2 days ago. Materialized view would eliminate "
+                        "these repeated query costs."
+                    ),
+                    savings_eur=320.0,
+                    implementation_steps=["Create materialized view"],
+                )
+            ],
+            summary=CheckSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=320.0,
+                high_priority_count=1,
+                medium_priority_count=0,
+                low_priority_count=0,
+                categories_breakdown={"queries": 1},
+            ),
+            check_id="test",
+            new_ephemeral_token="token",
+        )
+        generator = MarkdownReportGenerator(response)
+
+        detailed = generator.generate_detailed_recommendations()
+
+        assert "**Confidence Signals:**" in detailed
+        assert (
+            "This query pattern appears frequently enough to create repeat waste"
+            in detailed
+        )
+        assert (
+            "Each execution scans enough data for materialization to be worth a look"
+            in detailed
+        )
+        assert (
+            "The pattern repeats across multiple days, which suggests a stable workload"
+            in detailed
+        )
+        assert "Most recent execution seen: 2 days ago" not in detailed
+
 
 class TestFileSaving:
     """Test file saving logic (Task 5)."""
