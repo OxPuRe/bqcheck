@@ -417,6 +417,85 @@ class MarkdownReportGenerator:
         ]
 
     @staticmethod
+    def _extract_storage_facts(description: str) -> Optional[dict[str, str]]:
+        """Extract structured facts from a storage recommendation description."""
+        match = re.search(
+            r"Table\s+([A-Za-z0-9_.-]+)\s+\(([\d.]+\s(?:GB|TB))\)\s+is about\s+"
+            r"(\d+)\s+days old and no query activity was observed",
+            description,
+            re.IGNORECASE,
+        )
+        if not match:
+            return None
+
+        return {
+            "table_id": match.group(1),
+            "size": match.group(2),
+            "age_days": match.group(3),
+        }
+
+    @staticmethod
+    def _format_table_identifier(table_id: str, max_length: int = 88) -> str:
+        """Format long table identifiers without repeating them across the report."""
+        if len(table_id) <= max_length:
+            return f"`{table_id}`"
+
+        if "." not in table_id:
+            return f"`{table_id[: max_length - 3]}...`"
+
+        dataset, table_name = table_id.split(".", 1)
+        if len(dataset) + len(table_name) + 1 <= max_length:
+            return f"`{table_id}`"
+
+        keep = max_length - len(dataset) - 8
+        shortened = f"{table_name[: max(keep, 16)]}..."
+        return f"`{dataset}.{shortened}`"
+
+    def _build_compact_summary(self, rec: Recommendation, description: str) -> str:
+        """Turn detector descriptions into concise report summaries."""
+        if rec.type in {"storage", "unused_storage"}:
+            facts = self._extract_storage_facts(description)
+            if facts:
+                return (
+                    f"{facts['size']} stored, about {facts['age_days']} days old, "
+                    "and no query activity observed in the scanned 90-day window."
+                )
+
+        return description
+
+    def _build_asset_label(
+        self, rec: Recommendation, description: str
+    ) -> Optional[str]:
+        """Extract the main asset affected by the recommendation."""
+        if rec.type in {"storage", "unused_storage"}:
+            facts = self._extract_storage_facts(description)
+            if facts:
+                return self._format_table_identifier(facts["table_id"])
+
+        file_ref = None
+        for step in rec.implementation_steps:
+            file_ref = self._extract_file_reference(step)
+            if file_ref:
+                return f"`{file_ref}`"
+
+        return None
+
+    def _build_suggested_action(
+        self, rec: Recommendation, implementation_steps: list[str]
+    ) -> Optional[str]:
+        """Return a compact action statement suited for engineers."""
+        if rec.type in {"storage", "unused_storage"}:
+            return (
+                "Confirm ownership and downstream dependencies, then archive or "
+                "delete the table if it is truly obsolete."
+            )
+
+        if not implementation_steps:
+            return None
+
+        return implementation_steps[0]
+
+    @staticmethod
     def _summarize_steps(implementation_steps: list[str], limit: int = 3) -> list[str]:
         """Return the first actionable implementation steps in report-friendly form."""
         summarized = []
@@ -701,6 +780,8 @@ class MarkdownReportGenerator:
 |----------|-------|-----------------|
 """
             for category, count in sorted(summary.categories_breakdown.items()):
+                if count == 0:
+                    continue
                 savings = category_savings.get(category, 0.0)
                 exec_summary += (
                     f"| {category.capitalize()} | {count} | €{savings:.2f} |\n"
@@ -750,17 +831,22 @@ Top high-priority optimizations for immediate impact:
 """
         for i, rec in enumerate(top_wins, 1):
             clean_title = self._clean_title(rec.title)
-            # Decrypt identifiers in description if encryption key available
             decrypted_description = self._decrypt_identifiers_in_text(rec.description)
-            # Convert large GB values to TB for readability
             decrypted_description = self._format_size_human_readable(
                 decrypted_description
             )
-            # Truncate long query hashes for readability
             decrypted_description = self._truncate_query_hash(decrypted_description)
-            first_move = self._sanitize_step_for_report(rec.implementation_steps[0])
+            summary_text = self._build_compact_summary(rec, decrypted_description)
+            first_move = self._build_suggested_action(
+                rec,
+                [
+                    sanitized
+                    for step in rec.implementation_steps
+                    if (sanitized := self._sanitize_step_for_report(step))
+                ],
+            )
             quick_wins += f"""{i}. **{clean_title}** - €{rec.savings_eur:.2f}/month
-   - {decrypted_description}
+   - {summary_text}
 """
             if first_move:
                 quick_wins += f"""   - First move: {first_move}
@@ -852,15 +938,27 @@ Top high-priority optimizations for immediate impact:
 
 """
         for i, rec in enumerate(sorted_recs, 1):
-            # Clean title (round decimals)
             clean_title = self._clean_title(rec.title)
-
-            # Extract file reference from steps if available
             file_ref = None
             for step in rec.implementation_steps:
                 file_ref = self._extract_file_reference(step)
                 if file_ref:
                     break
+
+            decrypted_description = self._decrypt_identifiers_in_text(rec.description)
+            decrypted_description = self._format_size_human_readable(
+                decrypted_description
+            )
+            decrypted_description = self._truncate_query_hash(decrypted_description)
+
+            summary_text = self._build_compact_summary(rec, decrypted_description)
+            asset_label = self._build_asset_label(rec, decrypted_description)
+            implementation_steps = [
+                sanitized
+                for step in rec.implementation_steps
+                if (sanitized := self._sanitize_step_for_report(step))
+            ]
+            suggested_action = self._build_suggested_action(rec, implementation_steps)
 
             detailed += f"""### Recommendation {i}: {clean_title}
 
@@ -872,13 +970,16 @@ Top high-priority optimizations for immediate impact:
 
 """
 
-            # Add source file reference if found (for query recommendations)
+            if asset_label:
+                detailed += f"""**Asset:** {asset_label}
+
+"""
+
             if file_ref and rec.type == "queries":
                 detailed += f"""**Query Source:** `{file_ref}`
 
 """
 
-            # Add query preview for query recommendations
             if rec.type == "queries":
                 query_preview = self._extract_query_preview_from_steps(
                     rec.implementation_steps
@@ -911,26 +1012,14 @@ Top high-priority optimizations for immediate impact:
                         )
                         pass
 
-            # Decrypt identifiers in description
-            decrypted_description = self._decrypt_identifiers_in_text(rec.description)
-            # Convert large GB values to TB for readability
-            decrypted_description = self._format_size_human_readable(
-                decrypted_description
-            )
-            # Truncate long query hashes for readability
-            decrypted_description = self._truncate_query_hash(decrypted_description)
-
-            detailed += f"""**Description:**
-{decrypted_description}
+            detailed += f"""**Why It Was Flagged:**
+{summary_text}
 
 """
 
-            first_move = None
-            if rec.implementation_steps:
-                first_move = self._sanitize_step_for_report(rec.implementation_steps[0])
-            if first_move:
-                detailed += f"""**Recommended First Move:**
-{first_move}
+            if suggested_action:
+                detailed += f"""**Suggested Action:**
+{suggested_action}
 
 """
 
@@ -942,18 +1031,6 @@ Top high-priority optimizations for immediate impact:
 """
                 for point in evidence_points:
                     detailed += f"- {point}\n"
-                detailed += "\n"
-
-            implementation_outline = [
-                sanitized
-                for step in self._summarize_steps(rec.implementation_steps)
-                if (sanitized := self._sanitize_step_for_report(step))
-            ]
-            if implementation_outline:
-                detailed += """**Implementation Outline:**
-"""
-                for step in implementation_outline:
-                    detailed += f"- {step}\n"
                 detailed += "\n"
 
             detailed += """---
@@ -1002,216 +1079,63 @@ Top high-priority optimizations for immediate impact:
                 )
 
     def generate_implementation_guidance(self) -> str:
-        """
-        Generate Implementation Guidance section with context-specific instructions.
-
-        Analyzes recommendation types present in the report and generates
-        relevant implementation guidance for each type.
-
-        Returns:
-            Markdown-formatted Implementation Guidance section
-        """
+        """Generate concise operator notes for the recommendation mix."""
         if not self.check_response.recommendations:
             return ""
 
-        # Detect which recommendation types are present
         rec_types = set(rec.type for rec in self.check_response.recommendations)
 
         guidance = """
-## Implementation Guidance
+## Operator Notes
 
-### Getting Started
-
-1. **Prioritize High-Impact Changes**: Start with HIGH priority recommendations that offer the largest monthly savings
-2. **Test in Non-Production**: Always test changes in a development or staging environment first
-3. **Backup Before Changes**: Create table snapshots before making destructive changes
-4. **Monitor After Changes**: Verify that queries continue to work and performance improves
+- Treat recommendations as decision support, not auto-remediation.
+- Start with the largest monthly savings and confirm ownership before changing anything.
+- Prefer reversible moves first: snapshot, clone, side-by-side replacement, then cleanup.
 
 """
 
-        # Add type-specific implementation sections
         if "storage" in rec_types:
-            guidance += """### Removing Unused Tables
+            guidance += """### Storage Hygiene
 
-For storage recommendations flagged as inactive:
-
-1. **Verify the table is truly inactive**
-
-   Check application code and documentation, confirm with data owners, review retention policies, and inspect recent query or pipeline activity before taking action.
-
-   To verify recent storage activity yourself:
-   ```sql
-   -- Review recent storage timeline entries for the table
-   SELECT
-     timestamp,
-     project_id,
-     table_schema,
-     table_name,
-   FROM
-     `project.region-us.INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE_BY_PROJECT`
-   WHERE
-     table_name = 'your_table_name'
-   ORDER BY timestamp DESC
-   LIMIT 20;
-   ```
-
-   And review recent jobs touching the table:
-   ```bash
-   bq ls -j --max_results=20 --filter='state:done'
-   ```
-
-2. **Create backup** (if needed)
-
-   Using bq CLI:
-   ```bash
-   # Create backup dataset if it doesn't exist
-   bq mk --dataset backup_dataset
-
-   # Copy table to backup
-   bq cp project.dataset.table_name backup_dataset.table_name
-   ```
-
-   Or using SQL:
-   ```sql
-   -- Create backup dataset
-   CREATE SCHEMA IF NOT EXISTS `project.backup_dataset`;
-
-   -- Copy table to backup
-   CREATE TABLE `project.backup_dataset.table_name`
-   AS SELECT * FROM `project.dataset.table_name`;
-   ```
-
-3. **Archive or delete only after confirmation**
-
-   Using bq CLI:
-   ```bash
-   bq rm -t project:dataset.table_name
-   ```
-
-   Or using SQL:
-   ```sql
-   DROP TABLE `project.dataset.table_name`;
-   ```
-
-4. **Verify and monitor**
-   - Monitor application logs for errors
-   - Check for failed scheduled queries
-   - If issues arise, restore from backup
+- Confirm the table is not required by scheduled jobs, dashboards, or downstream exports.
+- Snapshot or copy large tables before any destructive action.
+- Archive first when ownership is unclear; delete only after a quiet observation period.
 
 """
 
         if "clustering" in rec_types:
-            guidance += """### Adding Clustering
+            guidance += """### Table Layout
 
-For tables that would benefit from clustering:
-
-1. **Identify clustering columns**
-   - Review WHERE and GROUP BY clauses in your queries
-   - Choose columns with high cardinality
-   - Order columns by query filter frequency (max 4 columns)
-
-2. **Create clustered table**
-   ```sql
-   -- Option A: Create new table with clustering
-   CREATE TABLE `project.dataset.table_clustered`
-   CLUSTER BY column1, column2, column3
-   AS SELECT * FROM `project.dataset.table_original`
-
-   -- Option B: Copy to new table
-   bq mk --table \\
-     --clustering_fields=column1,column2,column3 \\
-     project:dataset.table_clustered
-
-   bq cp project:dataset.table_original project:dataset.table_clustered
-   ```
-
-3. **Validate query performance**
-   - Run test queries and compare bytes scanned
-   - Verify cost reduction in query execution details
-   - Update application to use new table name
+- Use clustering only on stable columns that repeatedly appear in filters or grouping.
+- Roll out on a copy first if the table supports critical production workloads.
+- Compare bytes scanned before and after to validate the improvement.
 
 """
 
         if "partitioning" in rec_types:
-            guidance += """### Adding Partitioning
+            guidance += """### Partitioning
 
-For tables that would benefit from partitioning:
-
-1. **Choose partition column**
-   - Prefer DATE or TIMESTAMP columns
-   - Select column frequently used in WHERE clauses
-   - Consider data distribution (avoid skewed partitions)
-
-2. **Create partitioned table**
-   ```sql
-   -- Daily partitioning example
-   CREATE TABLE `project.dataset.table_partitioned`
-   PARTITION BY DATE(timestamp_column)
-   AS SELECT * FROM `project.dataset.table_original`
-   ```
-
-3. **Verify partition pruning**
-   - Add partition filter to queries (WHERE DATE(timestamp_column) = '2024-01-01')
-   - Check query execution details for partition pruning
-   - Compare bytes scanned before/after
+- Favor columns already used in recurring date or timestamp predicates.
+- Backfill through a replacement table instead of hot-editing heavily used datasets.
+- Validate partition pruning on representative queries before switching traffic.
 
 """
 
         if "queries" in rec_types:
-            guidance += """### Materializing Repeated Queries
+            guidance += """### Query Efficiency
 
-For frequently-run expensive queries:
-
-1. **Create materialized view or scheduled query**
-   ```sql
-   -- Option A: Materialized view (auto-refresh)
-   CREATE MATERIALIZED VIEW `project.dataset.mv_name`
-   AS
-   SELECT ... FROM ...
-
-   -- Option B: Scheduled table update
-   -- Set up via Cloud Console > Scheduled Queries
-   ```
-
-2. **Update application queries**
-   - Replace original query with simple SELECT from materialized view
-   - Test query performance improvement
-   - Monitor view refresh costs vs. query savings
-
-3. **Configure refresh schedule**
-   - Balance freshness requirements vs. refresh costs
-   - Consider incremental updates for large datasets
+- Prefer the lightest intervention that removes repeated scan cost.
+- Check freshness and refresh cost before moving workloads to materialized outputs.
+- Keep the operational footprint small: an optimization is only useful if it stays maintainable.
 
 """
 
         if "temporal" in rec_types:
-            guidance += """### Archiving Old Data
+            guidance += """### Lifecycle Management
 
-For tables with historical data that's rarely accessed:
-
-1. **Identify data to archive**
-   - Determine cutoff date based on business requirements
-   - Separate active vs. historical data
-
-2. **Export to Cloud Storage**
-   ```bash
-   # Export old data to cheaper storage
-   bq extract \\
-     --destination_format=PARQUET \\
-     'project:dataset.table_name$20230101-20231231' \\
-     gs://bucket/archive/table_name_2023_*.parquet
-   ```
-
-3. **Delete archived data**
-   ```sql
-   -- For partitioned tables
-   DELETE FROM `project.dataset.table_name`
-   WHERE DATE(partition_column) < '2024-01-01'
-   ```
-
-4. **Document archive location**
-   - Maintain inventory of archived data
-   - Document restore procedure if needed
+- Separate true cold data from data that is just queried infrequently.
+- Export or tier historical slices before deleting them from expensive serving tables.
+- Document restore paths before adopting aggressive retention changes.
 
 """
 

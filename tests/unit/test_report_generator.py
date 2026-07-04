@@ -372,10 +372,55 @@ class TestDetailedRecommendations:
         assert "**Category:**" in detailed
         assert "**Priority:**" in detailed
         assert "**Estimated Monthly Savings:**" in detailed
-        assert "**Description:**" in detailed
-        # Implementation Steps removed - guidance now in separate section
-        assert "**Recommended First Move:**" in detailed
-        assert "**Implementation Outline:**" in detailed
+        assert "**Why It Was Flagged:**" in detailed
+        assert "**Suggested Action:**" in detailed
+
+    def test_storage_recommendation_mentions_long_table_once_in_asset_block(self):
+        """Long storage table names should not be repeated throughout the recommendation."""
+        long_table = (
+            "synthetic_data."
+            "mobility_synthetic_gb_antrim_and_newtownabbey_ards_and_north_down_"
+            "armagh_city_banbridge_and_craigavon_belfast_lisburn_and_castlereagh_"
+            "newry_mourne_and_down"
+        )
+        response = CheckResponse(
+            recommendations=[
+                Recommendation(
+                    type="storage",
+                    priority="LOW",
+                    title="Review idle 95GB table",
+                    description=(
+                        f"Table {long_table} (94.77 GB) is about 204 days old and no "
+                        "query activity was observed for it in the scanned 90-day "
+                        "workload window. The table has not appeared in the observed "
+                        "90-day query history."
+                    ),
+                    savings_eur=2.13,
+                    implementation_steps=[
+                        f"Confirm with the data owner and downstream jobs that {long_table} is no longer required",
+                        f"DROP TABLE {long_table}",
+                    ],
+                )
+            ],
+            summary=CheckSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=2.13,
+                high_priority_count=0,
+                medium_priority_count=0,
+                low_priority_count=1,
+                categories_breakdown={"storage": 1},
+            ),
+            check_id="test",
+            new_ephemeral_token="token",
+        )
+        generator = MarkdownReportGenerator(response)
+
+        detailed = generator.generate_detailed_recommendations()
+
+        assert "**Asset:**" in detailed
+        assert detailed.count(long_table) <= 1
+        assert "94.77 GB stored, about 204 days old" in detailed
+        assert "archive or delete the table" in detailed
 
     def test_detailed_recs_include_confidence_signals_for_query_recommendation(self):
         """Report should inspire trust without exposing detector internals."""
