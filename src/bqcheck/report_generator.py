@@ -385,6 +385,11 @@ class MarkdownReportGenerator:
         return labels.get(rec_type, rec_type.replace("_", " ").title())
 
     @staticmethod
+    def _format_currency(amount: float) -> str:
+        """Format EUR amounts consistently for client-facing reports."""
+        return f"€{amount:,.2f}"
+
+    @staticmethod
     def _build_summary_assessment(
         total_recommendations: int,
         total_savings_eur: float,
@@ -817,7 +822,7 @@ class MarkdownReportGenerator:
 |--------|-------|
 | Recommendations | {summary.total_recommendations} |
 | Dominant Category | {dominant_category} |
-| Estimated Savings | €{summary.total_potential_savings_eur:.2f}/month |
+| Estimated Savings | {self._format_currency(summary.total_potential_savings_eur)}/month |
 """
 
         # Add category breakdown if we have recommendations
@@ -841,7 +846,8 @@ class MarkdownReportGenerator:
                     continue
                 savings = category_savings.get(category, 0.0)
                 exec_summary += (
-                    f"| {self._format_recommendation_type(category)} | {count} | €{savings:.2f} |\n"
+                    f"| {self._format_recommendation_type(category)} | {count} | "
+                    f"{self._format_currency(savings)} |\n"
                 )
 
         return exec_summary
@@ -896,7 +902,7 @@ class MarkdownReportGenerator:
             suggested_action = self._build_suggested_action(rec, implementation_steps)
             metadata_lines = [
                 f"Category: {self._format_recommendation_type(rec.type)}",
-                f"Estimated Monthly Savings: €{rec.savings_eur:.2f}",
+                f"Estimated Monthly Savings: {self._format_currency(rec.savings_eur)}",
             ]
             if asset_label:
                 metadata_lines.append(f"Asset: {asset_label}")
