@@ -12,6 +12,27 @@ from bqcheck.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 logger = logging.getLogger(__name__)
 
 
+def _detect_project_locations(
+    client: bigquery.Client, project_id: str, fallback: Optional[List[str]] = None
+) -> List[str]:
+    """Detect dataset locations for a project in deterministic order."""
+    if fallback is None:
+        fallback = ["EU", "US"]
+
+    try:
+        datasets = list(client.list_datasets(project=project_id))
+        locations = {
+            client.get_dataset(f"{project_id}.{dataset.dataset_id}").location
+            for dataset in datasets
+        }
+        if locations:
+            return sorted(locations)
+    except GoogleAPIError:
+        pass
+
+    return sorted(fallback)
+
+
 def _parse_partitioning_from_ddl(ddl: str) -> Dict[str, Any]:
     """
     Parse partitioning information from DDL statement.
@@ -212,10 +233,7 @@ def extract_table_metadata(
             return []
 
         # Group datasets by location (region)
-        locations = set()
-        for dataset in datasets:
-            dataset_ref = client.get_dataset(f"{project_id}.{dataset.dataset_id}")
-            locations.add(dataset_ref.location)
+        locations = _detect_project_locations(client, project_id)
 
         logger.info(
             f"Found {len(datasets)} datasets across {len(locations)} region(s): {locations}"
@@ -317,7 +335,14 @@ def extract_table_metadata(
                 continue
 
         # Sort all tables by size (largest first)
-        all_tables.sort(key=lambda t: t.size_bytes or 0, reverse=True)
+        all_tables.sort(
+            key=lambda t: (
+                -(t.size_bytes or 0),
+                t.table_schema,
+                t.table_name,
+                t.table_type,
+            )
+        )
 
         logger.info(
             f"Extracted metadata for {len(all_tables)} tables across {len(locations)} region(s)"
@@ -366,17 +391,9 @@ def extract_query_metadata(
     _validate_project_id(project_id)
 
     # Detect locations by listing datasets
-    try:
-        datasets = list(client.list_datasets(project=project_id))
-        locations = set()
-        for dataset in datasets:
-            dataset_ref = client.get_dataset(f"{project_id}.{dataset.dataset_id}")
-            locations.add(dataset_ref.location)
-    except GoogleAPIError:
-        # Fallback to common regions if dataset listing fails
-        locations = {"US", "EU"}
+    locations = _detect_project_locations(client, project_id)
+    all_queries: List[QueryMetadata] = []
 
-    # Try each detected location
     for location in locations:
         query = f"""
         SELECT
@@ -441,30 +458,37 @@ def extract_query_metadata(
                 query_metadata = QueryMetadata(**query_dict)
                 queries.append(query_metadata)
 
-            # Success - log and return
             logger.info(f"Extracted {len(queries)} queries from location {location}")
-
-            # Warn if results were limited
-            if len(queries) == max_queries:
-                logger.warning(
-                    f"Query results limited to {max_queries} most expensive queries. "
-                    f"Project {project_id} may have more queries in the last {days} days."
-                )
-
-            return queries
+            all_queries.extend(queries)
 
         except GoogleAPIError as e:
             # Try next location
             logger.debug(f"Location {location} failed: {str(e)}")
             continue
 
-    # No location worked - return empty list with warning
-    logger.warning(
-        f"Could not extract query metadata from {project_id}. "
-        f"Tried locations: {locations}. This may be normal if the project "
-        "has no query history or uses a different location."
+    if not all_queries:
+        logger.warning(
+            f"Could not extract query metadata from {project_id}. "
+            f"Tried locations: {locations}. This may be normal if the project "
+            "has no query history or uses a different location."
+        )
+        return []
+
+    all_queries.sort(
+        key=lambda q: (
+            -q.total_bytes_processed,
+            q.creation_time,
+            q.job_id,
+        )
     )
-    return []
+    limited_queries = all_queries[:max_queries]
+    if len(all_queries) > max_queries:
+        logger.warning(
+            f"Query results limited to {max_queries} most expensive queries. "
+            f"Project {project_id} may have more queries in the last {days} days."
+        )
+
+    return limited_queries
 
 
 def extract_materialized_view_definitions(
@@ -482,14 +506,7 @@ def extract_materialized_view_definitions(
     """
     _validate_project_id(project_id)
 
-    try:
-        datasets = list(client.list_datasets(project=project_id))
-        locations = set()
-        for dataset in datasets:
-            dataset_ref = client.get_dataset(f"{project_id}.{dataset.dataset_id}")
-            locations.add(dataset_ref.location)
-    except GoogleAPIError:
-        locations = {"US", "EU"}
+    locations = _detect_project_locations(client, project_id)
 
     materialized_view_queries: List[str] = []
 
@@ -545,19 +562,8 @@ def extract_table_schemas(
     _validate_project_id(project_id)
 
     schemas: Dict[str, List[Dict[str, str]]] = {}
+    locations = _detect_project_locations(client, project_id)
 
-    try:
-        # List datasets to detect regions
-        datasets = list(client.list_datasets(project=project_id))
-        locations = set()
-        for dataset in datasets:
-            dataset_ref = client.get_dataset(f"{project_id}.{dataset.dataset_id}")
-            locations.add(dataset_ref.location)
-    except GoogleAPIError:
-        # Fallback to common regions
-        locations = {"US", "EU"}
-
-    # Try each location
     for location in locations:
         query = f"""
         SELECT
@@ -582,13 +588,13 @@ def extract_table_schemas(
                 )
 
             logger.info(f"Extracted schemas for {len(schemas)} tables from {location}")
-            return schemas
 
         except GoogleAPIError as e:
             logger.debug(f"Location {location} failed for schema extraction: {e}")
             continue
 
-    logger.warning(f"Could not extract table schemas from {project_id}")
+    if not schemas:
+        logger.warning(f"Could not extract table schemas from {project_id}")
     return schemas
 
 
@@ -624,19 +630,11 @@ def extract_access_patterns(
     _validate_project_id(project_id)
 
     # Detect locations by listing datasets
-    try:
-        datasets = list(client.list_datasets(project=project_id))
-        locations = set()
-        for dataset in datasets:
-            dataset_ref = client.get_dataset(f"{project_id}.{dataset.dataset_id}")
-            locations.add(dataset_ref.location)
-    except GoogleAPIError:
-        # Fallback to common regions if dataset listing fails
-        locations = {"US", "EU"}
+    locations = _detect_project_locations(client, project_id)
 
     failures = []
+    all_patterns: List[AccessPattern] = []
 
-    # Try each detected location
     for location in locations:
         query = f"""
         SELECT
@@ -674,11 +672,10 @@ def extract_access_patterns(
                 access_pattern = AccessPattern(**pattern_dict)
                 patterns.append(access_pattern)
 
-            # Success - log and return
             logger.info(
                 f"Extracted {len(patterns)} access patterns from location {location}"
             )
-            return patterns
+            all_patterns.extend(patterns)
 
         except GoogleAPIError as e:
             # Try next location
@@ -686,7 +683,16 @@ def extract_access_patterns(
             logger.debug(f"Location {location} failed: {str(e)}")
             continue
 
-    # No location worked - return empty list with warning
+    if all_patterns:
+        all_patterns.sort(
+            key=lambda pattern: (
+                pattern.last_access_time,
+                pattern.table_schema,
+                pattern.table_name,
+            )
+        )
+        return all_patterns[:max_patterns]
+
     last_error = failures[-1] if failures else "unknown error"
     logger.warning(
         f"Could not extract access patterns from {project_id}. "

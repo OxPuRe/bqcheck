@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import httpx
 import typer
@@ -40,6 +40,18 @@ app = typer.Typer(
 )
 
 console = Console()
+
+
+def _normalize_query_projects(
+    project: str, query_projects: Optional[Sequence[str]]
+) -> list[str]:
+    """Return deduplicated query projects, defaulting to the scanned project."""
+    ordered_projects = list(query_projects or [project])
+    normalized: list[str] = []
+    for candidate in ordered_projects:
+        if candidate not in normalized:
+            normalized.append(candidate)
+    return normalized or [project]
 
 
 @app.command("version")
@@ -81,12 +93,12 @@ def validate(
         str, typer.Option("--project", "-p", help="GCP project ID to validate")
     ],
     query_project: Annotated[
-        Optional[str],
+        list[str],
         typer.Option(
             "--query-project",
-            help="Optional GCP project ID where queries/jobs run",
+            help="Optional GCP project ID where queries/jobs run (repeatable)",
         ),
-    ] = None,
+    ] = [],
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Show detailed validation steps"),
@@ -179,12 +191,13 @@ def validate(
             )
             list(client.list_tables(dataset_ref, max_results=1))
 
-        jobs_project = query_project or project
-        jobs_client = client
-        if query_project and query_project != project:
-            jobs_client = authenticate_bigquery(query_project)
+        effective_query_projects = _normalize_query_projects(project, query_project)
+        for jobs_project in effective_query_projects:
+            jobs_client = client
+            if jobs_project != project:
+                jobs_client = authenticate_bigquery(jobs_project)
 
-        list(jobs_client.list_jobs(project=jobs_project, max_results=1))
+            list(jobs_client.list_jobs(project=jobs_project, max_results=1))
 
         console.print("[green]✓ Permissions verified (bigquery.metadataViewer)[/green]")
         validation_results.append(("IAM Permissions", "✓", "bigquery.metadataViewer"))
@@ -254,7 +267,7 @@ def validate(
 
             sample_queries = extract_query_metadata(
                 client,
-                query_project or project,
+                _normalize_query_projects(project, query_project)[0],
                 days=30,
                 max_queries=3,
             )
@@ -604,13 +617,13 @@ def scan(
         str, typer.Option("--project", "-p", help="GCP project ID to scan")
     ],
     query_project: Annotated[
-        Optional[str],
+        list[str],
         typer.Option(
             "--query-project",
             "-q",
-            help="GCP project ID for query metadata (defaults to --project)",
+            help="GCP project ID for query metadata (repeatable, defaults to --project)",
         ),
-    ] = None,
+    ] = [],
     output: Annotated[
         Optional[Path],
         typer.Option(
@@ -640,9 +653,10 @@ def scan(
     Multi-Project Support:
         For separated storage/processing architectures:
         - --project: Project with tables (e.g., *-dt-cur-0)
-        - --query-project: Project running queries (e.g., *-dt-prc-0)
+        - --query-project: Project(s) running queries (e.g., *-dt-prc-0)
 
         If --query-project is omitted, queries are extracted from --project.
+        Repeat --query-project to combine workloads from multiple projects.
 
         Example:
             bqcheck scan --project roam-staging-dt-cur-0 \\
@@ -699,7 +713,10 @@ def scan(
         )
         executor = ScanExecutor(api_client)
         executor.execute_scan_with_tokens(
-            project, query_project=query_project, output_path=output, force=force
+            project,
+            query_projects=_normalize_query_projects(project, query_project),
+            output_path=output,
+            force=force,
         )
 
         # Step 5: Show warning if this was the last token

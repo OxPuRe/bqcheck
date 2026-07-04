@@ -641,6 +641,49 @@ def test_extract_query_metadata_success(mock_client):
 
 
 @patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
+def test_extract_query_metadata_aggregates_multiple_locations(mock_client):
+    """Queries from multiple regions should be combined deterministically."""
+    eu_row = Mock()
+    eu_row.job_id = "job_eu"
+    eu_row.query = "SELECT * FROM eu.table"
+    eu_row.total_bytes_processed = 200
+    eu_row.creation_time = "2024-01-20 10:30:00 UTC"
+    eu_row.user_email = "user@example.com"
+    eu_row.job_type = "QUERY"
+    eu_row.state = "DONE"
+    eu_row.referenced_tables = [{"dataset_id": "eu", "table_id": "table"}]
+
+    us_row = Mock()
+    us_row.job_id = "job_us"
+    us_row.query = "SELECT * FROM us.table"
+    us_row.total_bytes_processed = 100
+    us_row.creation_time = "2024-01-19 10:30:00 UTC"
+    us_row.user_email = "user@example.com"
+    us_row.job_type = "QUERY"
+    us_row.state = "DONE"
+    us_row.referenced_tables = [{"dataset_id": "us", "table_id": "table"}]
+
+    eu_job = Mock()
+    eu_job.result.return_value = [eu_row]
+    us_job = Mock()
+    us_job.result.return_value = [us_row]
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.side_effect = [eu_job, us_job]
+    _setup_dataset_mocks(
+        mock_bq_client,
+        datasets=[("analytics_eu", "EU"), ("analytics_us", "US")],
+    )
+
+    queries = extract_query_metadata(mock_bq_client, "my-project", days=30)
+
+    assert len(queries) == 2
+    assert queries[0].job_id == "my-project:EU.job_eu"
+    assert queries[1].job_id == "my-project:US.job_us"
+    assert mock_bq_client.query.call_count == 2
+
+
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
 def test_extract_query_metadata_job_id_format_handling(mock_client):
     """Test that job_id is correctly formatted regardless of input format."""
 
@@ -902,6 +945,41 @@ def test_extract_access_patterns_success(mock_client):
     # Verify ASC ordering (oldest first to identify unused tables)
     assert "ASC" in query_sql or "last_access_time\n" in query_sql
     assert "LIMIT 10000" in query_sql
+
+
+@patch("bqcheck.scanner.metadata_extractor.bigquery.Client")
+def test_extract_access_patterns_aggregates_multiple_locations(mock_client):
+    """Access patterns from multiple regions should be merged and sorted."""
+    eu_row = Mock()
+    eu_row.table_catalog = "my-project"
+    eu_row.table_schema = "eu"
+    eu_row.table_name = "older_table"
+    eu_row.last_access_time = "2024-01-01 00:00:00 UTC"
+
+    us_row = Mock()
+    us_row.table_catalog = "my-project"
+    us_row.table_schema = "us"
+    us_row.table_name = "newer_table"
+    us_row.last_access_time = "2024-01-02 00:00:00 UTC"
+
+    eu_job = Mock()
+    eu_job.result.return_value = [eu_row]
+    us_job = Mock()
+    us_job.result.return_value = [us_row]
+
+    mock_bq_client = Mock()
+    mock_bq_client.query.side_effect = [eu_job, us_job]
+    _setup_dataset_mocks(
+        mock_bq_client,
+        datasets=[("analytics_eu", "EU"), ("analytics_us", "US")],
+    )
+
+    patterns = extract_access_patterns(mock_bq_client, "my-project")
+
+    assert len(patterns) == 2
+    assert patterns[0].table_name == "older_table"
+    assert patterns[1].table_name == "newer_table"
+    assert mock_bq_client.query.call_count == 2
 
 
 @patch("bqcheck.scanner.metadata_extractor.bigquery.Client")

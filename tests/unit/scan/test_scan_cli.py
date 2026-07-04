@@ -65,7 +65,7 @@ def mock_bq_validation(monkeypatch):
     # Mock the validation function
     monkeypatch.setattr(
         "bqcheck.scanner.bigquery_client.validate_multi_project_permissions",
-        lambda storage_project, query_project=None: None,
+        lambda storage_project, query_projects=None: None,
     )
     # Force simulated scan mode for unit tests
     monkeypatch.setenv("BQCHECK_REAL_SCAN", "false")
@@ -344,6 +344,52 @@ class TestScanMultiProjectSupport:
 
         # Should succeed
         assert result.exit_code == 0
+
+    def test_scan_accepts_multiple_query_projects(
+        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation, monkeypatch
+    ):
+        """Repeated --query-project flags should be forwarded as an ordered list."""
+        mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
+        mock_creds_path.write_text(json.dumps(mock_credentials))
+        mock_creds_path.chmod(0o600)
+
+        captured: dict[str, object] = {}
+
+        def fake_execute(self, project, query_projects=None, output_path=None, force=False):
+            captured["project"] = project
+            captured["query_projects"] = query_projects
+            from bqcheck.scan.models import ScanResult
+
+            return ScanResult(
+                success=True,
+                project_id=project,
+                simulated=True,
+                token_renewed=True,
+                old_balance=10,
+                new_balance=9,
+            )
+
+        monkeypatch.setattr(
+            "bqcheck.scan.executor.ScanExecutor.execute_scan_with_tokens",
+            fake_execute,
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "scan",
+                "--project",
+                "storage-project",
+                "--query-project",
+                "query-project-a",
+                "--query-project",
+                "query-project-b",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert captured["project"] == "storage-project"
+        assert captured["query_projects"] == ["query-project-a", "query-project-b"]
 
     def test_scan_works_without_query_project(
         self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation

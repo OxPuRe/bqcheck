@@ -23,6 +23,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Sequence
 
 import httpx
 import typer
@@ -58,6 +59,18 @@ logger = logging.getLogger(__name__)
 
 MAX_CHECK_REQUEST_SIZE_MB = 8.0
 QUERY_PATTERN_FALLBACK_LIMITS = (5000, 2500, 1000, 500)
+
+
+def _normalize_query_projects(
+    project_id: str, query_projects: "Sequence[str] | None"
+) -> list[str]:
+    """Return deduplicated query projects, defaulting to the scanned project."""
+    ordered_projects = list(query_projects or [project_id])
+    normalized: list[str] = []
+    for candidate in ordered_projects:
+        if candidate not in normalized:
+            normalized.append(candidate)
+    return normalized or [project_id]
 
 
 class ScanError(Exception):
@@ -153,7 +166,7 @@ class ScanExecutor:
     def execute_scan_with_tokens(
         self,
         project_id: str,
-        query_project: "str | None" = None,
+        query_projects: "Sequence[str] | None" = None,
         output_path: "Path | None" = None,
         force: bool = False,
     ) -> ScanResult:
@@ -168,9 +181,9 @@ class ScanExecutor:
 
         Args:
             project_id: GCP project ID to scan for table metadata
-            query_project: Optional GCP project ID for query metadata.
-                          If None, uses project_id for both tables and queries.
-                          Use this for separated storage/processing architectures.
+            query_projects: Optional GCP project IDs for query metadata.
+                            If omitted, uses project_id for both tables and queries.
+                            Use this for separated storage/processing architectures.
             output_path: Optional custom output file path
             force: Force overwrite existing file without prompt
 
@@ -231,7 +244,7 @@ class ScanExecutor:
             )
 
             logger.info("Validating BigQuery permissions...")
-            validate_multi_project_permissions(project_id, query_project)
+            validate_multi_project_permissions(project_id, query_projects)
             logger.info("✓ Permissions validated")
 
         except ProjectNotFoundError as e:
@@ -267,7 +280,7 @@ class ScanExecutor:
                 try:
                     check_response = asyncio.run(
                         self.execute_real_scan(
-                            project_id, credentials["ephemeral_token"], query_project
+                            project_id, credentials["ephemeral_token"], query_projects
                         )
                     )
                 except ScanError as e:
@@ -459,7 +472,10 @@ class ScanExecutor:
         return simulate_scan(project_id, ephemeral_token)
 
     async def execute_real_scan(
-        self, project_id: str, ephemeral_token: str, query_project: "str | None" = None
+        self,
+        project_id: str,
+        ephemeral_token: str,
+        query_projects: "Sequence[str] | None" = None,
     ) -> CheckResponse:
         """
         Execute a real BigQuery scan with server integration.
@@ -474,8 +490,8 @@ class ScanExecutor:
         Args:
             project_id: GCP project ID to scan for table metadata
             ephemeral_token: Ephemeral token for authentication
-            query_project: Optional GCP project ID for query metadata.
-                          If None, uses project_id for both tables and queries.
+            query_projects: Optional GCP project IDs for query metadata.
+                            If omitted, uses project_id for both tables and queries.
 
         Returns:
             CheckResponse with recommendations and new ephemeral token
@@ -527,15 +543,30 @@ class ScanExecutor:
                 logger.info("Extracting table metadata...")
                 table_metadata = extract_table_metadata(client, project_id)
 
-                # Use query_project if specified, otherwise use project_id
-                query_project_id = query_project or project_id
+                effective_query_projects = _normalize_query_projects(
+                    project_id, query_projects
+                )
                 logger.info(
-                    f"Extracting query metadata from project: {query_project_id}"
+                    "Extracting query metadata from projects: %s",
+                    ", ".join(effective_query_projects),
                 )
-                query_metadata = extract_query_metadata(
-                    client, query_project_id, days=90
+                query_metadata = []
+                query_observation_limited = False
+                for query_project_id in effective_query_projects:
+                    project_queries = extract_query_metadata(
+                        client, query_project_id, days=90
+                    )
+                    query_metadata.extend(project_queries)
+                    if len(project_queries) >= 10000:
+                        query_observation_limited = True
+
+                query_metadata.sort(
+                    key=lambda q: (
+                        -q.total_bytes_processed,
+                        q.creation_time,
+                        q.job_id,
+                    )
                 )
-                query_observation_limited = len(query_metadata) >= 10000
 
                 logger.info("Extracting access patterns...")
                 access_patterns = extract_access_patterns(client, project_id)

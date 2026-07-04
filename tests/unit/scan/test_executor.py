@@ -63,7 +63,7 @@ def mock_real_scan_mode(monkeypatch):
     monkeypatch.setenv("BQCHECK_REAL_SCAN", "false")
     monkeypatch.setattr(
         "bqcheck.scanner.bigquery_client.validate_multi_project_permissions",
-        lambda storage_project, query_project=None: None,
+        lambda storage_project, query_projects=None: None,
     )
 
 
@@ -126,12 +126,16 @@ def mock_bigquery_and_server(monkeypatch):
             "bqcheck.scanner.metadata_extractor.extract_table_schemas",
             return_value={},
         ),
+        mock.patch(
+            "bqcheck.scanner.metadata_extractor.extract_materialized_view_definitions",
+            return_value=[],
+        ),
         mock.patch("httpx.AsyncClient", return_value=mock_async_client),
     ]
 
     with patches[0], patches[1], patches[2], patches[3], patches[4], patches[
         5
-    ], patches[6]:
+    ], patches[6], patches[7]:
         yield mock_http_response
 
 
@@ -448,11 +452,13 @@ class TestMultiProjectPermissionValidation:
             "bqcheck.scanner.bigquery_client.validate_multi_project_permissions"
         ) as mock_validate:
             executor.execute_scan_with_tokens(
-                "storage-project", query_project="query-project"
+                "storage-project", query_projects=["query-project"]
             )
 
             # Validation should be called with both projects
-            mock_validate.assert_called_once_with("storage-project", "query-project")
+            mock_validate.assert_called_once_with(
+                "storage-project", ["query-project"]
+            )
 
     def test_validation_with_single_project(
         self, test_credentials, mock_creds_path, mock_real_scan_mode
@@ -492,7 +498,7 @@ class TestMultiProjectPermissionValidation:
             # Should exit with code 3 (caught by sys.exit in executor)
             with pytest.raises(SystemExit) as exc_info:
                 executor.execute_scan_with_tokens(
-                    "storage-project", query_project="query-project"
+                    "storage-project", query_projects=["query-project"]
                 )
             assert exc_info.value.code == 3
 
@@ -520,7 +526,7 @@ class TestMultiProjectPermissionValidation:
             # Should exit with code 2
             with pytest.raises(SystemExit) as exc_info:
                 executor.execute_scan_with_tokens(
-                    "storage-project", query_project="fake-project"
+                    "storage-project", query_projects=["fake-project"]
                 )
             assert exc_info.value.code == 2
 
@@ -542,7 +548,7 @@ class TestMultiProjectPermissionValidation:
             "bqcheck.scanner.bigquery_client.validate_multi_project_permissions"
         ):
             result = executor.execute_scan_with_tokens(
-                "storage-project", query_project="query-project"
+                "storage-project", query_projects=["query-project"]
             )
 
             # Scan should succeed

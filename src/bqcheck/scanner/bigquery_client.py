@@ -1,6 +1,6 @@
 """BigQuery client authentication and initialization."""
 
-from typing import Optional
+from typing import Optional, Sequence
 
 from google.api_core.exceptions import Forbidden, NotFound
 from google.auth import default
@@ -70,7 +70,8 @@ def authenticate_bigquery(project_id: str) -> bigquery.Client:
 
 
 def validate_multi_project_permissions(
-    storage_project: str, query_project: Optional[str] = None
+    storage_project: str,
+    query_projects: Optional[Sequence[str]] = None,
 ) -> None:
     """
     Validate BigQuery permissions for multi-project scan.
@@ -81,7 +82,7 @@ def validate_multi_project_permissions(
 
     Args:
         storage_project: Project containing tables (--project)
-        query_project: Optional project running queries (--query-project)
+        query_projects: Optional projects running queries (--query-project)
 
     Raises:
         AuthenticationError: When GCP authentication fails
@@ -110,8 +111,10 @@ def validate_multi_project_permissions(
             f"Required: bigquery.metadataViewer or bigquery.tables.get"
         )
 
-    # Validate query project (jobs) if specified
-    if query_project and query_project != storage_project:
+    # Validate query projects (jobs) if specified
+    for query_project in query_projects or []:
+        if query_project == storage_project:
+            continue
         try:
             query_client = authenticate_bigquery(query_project)
 
