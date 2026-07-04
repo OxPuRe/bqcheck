@@ -7,6 +7,7 @@ from google.api_core.exceptions import GoogleAPIError
 
 from bqcheck.scanner.metadata_extractor import (
     _extract_materialized_view_query_from_ddl,
+    _parse_partitioning_from_ddl,
     _validate_project_id,
     extract_access_patterns,
     extract_materialized_view_definitions,
@@ -137,6 +138,20 @@ def test_extract_table_metadata_success(mock_client):
     assert tables[2].table_name == "summary_view"
     assert tables[2].size_bytes is None
     assert tables[2].row_count is None
+
+
+def test_parse_partitioning_from_ddl_supports_date_trunc_month():
+    """DATE_TRUNC partition expressions should expose the underlying field."""
+    ddl = """
+    CREATE TABLE foo.bar
+    PARTITION BY DATE_TRUNC(event_month, MONTH)
+    AS SELECT 1
+    """
+
+    parsed = _parse_partitioning_from_ddl(ddl)
+
+    assert parsed["type"] == "MONTH"
+    assert parsed["field"] == "event_month"
 
 
 @patch("bqcheck.scanner.metadata_extractor.bigquery.Client")

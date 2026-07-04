@@ -224,8 +224,8 @@ class TestDetailedRecommendations:
 
         assert "Category: Storage Hygiene" in detailed
         assert "Estimated Monthly Savings: €150.00" in detailed
-        assert "##### Observation" in detailed
-        assert "##### Recommended Change" in detailed
+        assert "**Observation**" in detailed
+        assert "**Recommended Change**" in detailed
 
     def test_storage_recommendation_mentions_long_table_once_in_asset_block(self):
         """Long storage table names should not be repeated throughout the recommendation."""
@@ -240,12 +240,12 @@ class TestDetailedRecommendations:
                 Recommendation(
                     type="storage",
                     priority="LOW",
-                    title="Review idle 95GB table",
+                    title="Review cold 95GB table",
                     description=(
-                        f"Table {long_table} (94.77 GB) is about 204 days old and no "
-                        "query activity was observed for it in the scanned 90-day "
-                        "workload window. The table has not appeared in the observed "
-                        "90-day query history."
+                        f"Table {long_table} (94.77 GB) is about 204 days old. "
+                        "Storage activity has not been observed for about 204 days. "
+                        "Treat this as a cleanup candidate to verify with owners and "
+                        "downstream jobs."
                     ),
                     savings_eur=2.13,
                     implementation_steps=[
@@ -310,7 +310,7 @@ class TestDetailedRecommendations:
 
         detailed = generator.generate_detailed_recommendations()
 
-        assert "##### Supporting Signals" in detailed
+        assert "**Supporting Signals**" in detailed
         assert (
             "This query pattern appears frequently enough to create repeat waste"
             in detailed
@@ -363,7 +363,7 @@ class TestDetailedRecommendations:
         detailed = generator.generate_detailed_recommendations()
 
         assert "Asset: `user.user_attribute`" in detailed
-        assert "##### Supporting Signals" in detailed
+        assert "**Supporting Signals**" in detailed
         assert "Observed queries are still scanning a large share" in detailed
         assert "The partition field to verify first is `month`" in detailed
 

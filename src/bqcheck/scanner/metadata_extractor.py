@@ -36,7 +36,9 @@ def _parse_partitioning_from_ddl(ddl: str) -> Dict[str, Any]:
 
     # First try function-based partitioning
     partition_match = re.search(
-        r"PARTITION\s+BY\s+(DATE|DATETIME_TRUNC|TIMESTAMP_TRUNC|RANGE)\s*\(([^)]+)\)",
+        r"PARTITION\s+BY\s+"
+        r"(DATE|DATE_TRUNC|DATETIME_TRUNC|TIMESTAMP_TRUNC|RANGE)"
+        r"\s*\(([^)]+)\)",
         ddl,
         re.IGNORECASE,
     )
@@ -47,6 +49,15 @@ def _parse_partitioning_from_ddl(ddl: str) -> Dict[str, Any]:
         # Simplify type names
         if partition_type in ("DATE", "DATETIME_TRUNC", "TIMESTAMP_TRUNC"):
             partition_info["type"] = "DAY"
+        elif partition_type == "DATE_TRUNC":
+            granularity_match = re.search(
+                r",\s*(DAY|MONTH|YEAR)\s*$",
+                partition_expr,
+                re.IGNORECASE,
+            )
+            partition_info["type"] = (
+                granularity_match.group(1).upper() if granularity_match else "DAY"
+            )
         elif partition_type == "RANGE":
             partition_info["type"] = "RANGE"
         else:

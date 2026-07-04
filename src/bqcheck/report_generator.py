@@ -238,14 +238,15 @@ class MarkdownReportGenerator:
         evidence: list[str] = []
 
         if rec_type == "storage":
-            match = re.search(
-                r"\(([\d.]+\s(?:GB|TB))\) is about (\d+) days old and no query "
-                r"activity was observed",
-                description,
-                re.IGNORECASE,
-            )
-            if match:
-                evidence.append("Large table with no observed workload activity")
+            if "storage activity has not been observed" in description.lower():
+                evidence.append("Large table with an old storage activity signal")
+            elif "no query activity was observed" in description.lower():
+                evidence.append("Large table absent from the observed workload window")
+
+            if "query coverage was capped to the busiest 10,000 jobs" in description:
+                evidence.append(
+                    "Observed query history was capped, so ownership verification still matters"
+                )
 
         elif rec_type == "partitioning":
             match = re.search(
@@ -419,17 +420,30 @@ class MarkdownReportGenerator:
         """Extract structured facts from a storage recommendation description."""
         match = re.search(
             r"Table\s+([A-Za-z0-9_.-]+)\s+\(([\d.]+\s(?:GB|TB))\)\s+is about\s+"
-            r"(\d+)\s+days old and no query activity was observed",
+            r"(\d+)\s+days old\.",
             description,
             re.IGNORECASE,
         )
         if not match:
             return None
 
+        cold_match = re.search(
+            r"Storage activity has not been observed for about (\d+) days",
+            description,
+            re.IGNORECASE,
+        )
+        query_match = re.search(
+            r"No query activity was observed .* scanned 90-day workload window",
+            description,
+            re.IGNORECASE,
+        )
+
         return {
             "table_id": match.group(1),
             "size": match.group(2),
             "age_days": match.group(3),
+            "cold_days": cold_match.group(1) if cold_match else "",
+            "query_inactive": "yes" if query_match else "",
         }
 
     @staticmethod
@@ -454,9 +468,14 @@ class MarkdownReportGenerator:
         if rec.type in {"storage", "unused_storage"}:
             facts = self._extract_storage_facts(description)
             if facts:
+                if facts.get("cold_days"):
+                    return (
+                        f"{facts['size']} stored, about {facts['age_days']} days old, "
+                        f"and no storage activity signal for about {facts['cold_days']} days."
+                    )
                 return (
                     f"{facts['size']} stored, about {facts['age_days']} days old, "
-                    "and no query activity observed in the scanned 90-day window."
+                    "and no observed query activity in the scanned 90-day window."
                 )
 
         return description
@@ -856,6 +875,9 @@ class MarkdownReportGenerator:
             decrypted_description = self._truncate_query_hash(decrypted_description)
 
             summary_text = self._build_compact_summary(rec, decrypted_description)
+            summary_is_duplicate = (
+                summary_text.strip() == decrypted_description.strip()
+            )
             asset_label = self._build_asset_label(rec, decrypted_description)
             implementation_steps = [
                 sanitized
@@ -871,15 +893,17 @@ class MarkdownReportGenerator:
                 metadata_lines.append(f"Asset: {asset_label}")
             if file_ref and rec.type == "queries":
                 metadata_lines.append(f"Query Source: `{file_ref}`")
-            metadata_block = "\n".join(metadata_lines)
+            metadata_block = "\n".join(f"- {line}" for line in metadata_lines)
 
             detailed += f"""### Recommendation {i} - {clean_title}
 
-{summary_text}
-
-{metadata_block}
 """
-            detailed += "\n"
+            if not summary_is_duplicate:
+                detailed += f"{summary_text}\n\n"
+
+            detailed += f"""{metadata_block}
+
+"""
 
             if rec.type == "queries":
                 query_preview = self._extract_query_preview_from_steps(
@@ -913,13 +937,12 @@ class MarkdownReportGenerator:
                         )
                         pass
 
-            detailed += f"""##### Observation
-{summary_text}
-
-"""
+            detailed += """**Observation**\n\n"""
+            detailed += f"{decrypted_description}\n\n"
 
             if suggested_action:
-                detailed += f"""##### Recommended Change
+                detailed += f"""**Recommended Change**
+
 {suggested_action}
 
 """
@@ -928,7 +951,7 @@ class MarkdownReportGenerator:
                 rec.type, decrypted_description
             )
             if evidence_points:
-                detailed += """##### Supporting Signals
+                detailed += """**Supporting Signals**
 """
                 for point in evidence_points:
                     detailed += f"- {point}\n"
