@@ -73,6 +73,29 @@ def _normalize_query_projects(
     return normalized or [project_id]
 
 
+def _build_scan_coverage_notes(
+    project_id: str,
+    query_projects: "Sequence[str]",
+    query_observation_limited: bool,
+) -> list[str]:
+    """Summarize scan coverage boundaries for the generated report."""
+    quoted_projects = ", ".join(f"`{project}`" for project in query_projects)
+    notes = [
+        f"Observed query workload sources: {quoted_projects}.",
+        (
+            f"Dormant-table recommendations compare tables in `{project_id}` against "
+            "the observed workload sources above. Queries executed from unlisted "
+            "projects are out of scope for this report."
+        ),
+    ]
+    if query_observation_limited:
+        notes.append(
+            "Query extraction was capped at the busiest 10,000 jobs per observed "
+            "workload source over the scanned 90-day window."
+        )
+    return notes
+
+
 class ScanError(Exception):
     """
     Base exception for scan errors that should exit the CLI.
@@ -567,6 +590,11 @@ class ScanExecutor:
                         q.job_id,
                     )
                 )
+                self._last_report_notes = _build_scan_coverage_notes(
+                    project_id,
+                    effective_query_projects,
+                    query_observation_limited,
+                )
 
                 logger.info("Extracting access patterns...")
                 access_patterns = extract_access_patterns(client, project_id)
@@ -702,14 +730,16 @@ class ScanExecutor:
             f"{len(metadata.access_patterns)} access patterns)"
         )
         if reduced_query_limit is not None:
-            self._last_report_notes = [
-                (
-                    "Query-pattern analysis was narrowed to the top "
-                    f"{reduced_query_limit} patterns by bytes scanned to fit "
-                    "network transport limits."
-                ),
-                "Table-level analyses still used the full extracted table metadata.",
-            ]
+            self._last_report_notes.extend(
+                [
+                    (
+                        "Query-pattern analysis was narrowed to the top "
+                        f"{reduced_query_limit} patterns by bytes scanned to fit "
+                        "network transport limits."
+                    ),
+                    "Table-level analyses still used the full extracted table metadata.",
+                ]
+            )
             console.print(
                 "[yellow]Large workload detected.[/yellow] "
                 f"Sending the top {reduced_query_limit} query patterns to fit "

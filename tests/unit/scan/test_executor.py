@@ -18,7 +18,10 @@ import pytest
 from bqcheck.api.client import BQCheckAPIClient
 from bqcheck.api.models import CheckMetadata
 from bqcheck.license.storage import CredentialStore
-from bqcheck.scan.executor import _fit_metadata_to_payload_limit
+from bqcheck.scan.executor import (
+    _build_scan_coverage_notes,
+    _fit_metadata_to_payload_limit,
+)
 from bqcheck.scanner.encryption import IdentifierEncryptor
 
 
@@ -427,6 +430,31 @@ class TestPayloadSizing:
         expected_hash = hashlib.sha256(original_token.encode("utf-8")).hexdigest()
         used_token_hashes = [ut["token_hash"] for ut in updated_creds["used_tokens"]]
         assert expected_hash in used_token_hashes
+
+
+class TestCoverageNotes:
+    """Coverage notes should explain workload scope clearly."""
+
+    def test_coverage_notes_include_workload_sources(self):
+        notes = _build_scan_coverage_notes(
+            "storage-project",
+            ["query-project-a", "query-project-b"],
+            query_observation_limited=False,
+        )
+
+        assert "Observed query workload sources" in notes[0]
+        assert "`query-project-a`" in notes[0]
+        assert "`query-project-b`" in notes[0]
+        assert "`storage-project`" in notes[1]
+
+    def test_coverage_notes_include_limit_warning_when_capped(self):
+        notes = _build_scan_coverage_notes(
+            "storage-project",
+            ["query-project-a"],
+            query_observation_limited=True,
+        )
+
+        assert any("10,000 jobs" in note for note in notes)
 
 
 class TestMultiProjectPermissionValidation:
