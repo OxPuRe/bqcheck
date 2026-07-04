@@ -142,14 +142,12 @@ class TestExecutiveSummary:
         assert "Potential Monthly Savings | €250.00" in summary
 
     def test_executive_summary_includes_priority_breakdown(self, sample_check_response):
-        """Test that Executive Summary includes priority counts."""
+        """Test that Executive Summary includes focus information."""
         generator = MarkdownReportGenerator(sample_check_response)
 
         summary = generator.generate_executive_summary()
 
-        assert "High Priority | 1" in summary
-        assert "Medium Priority | 1" in summary
-        assert "Low Priority | 1" in summary
+        assert "Dominant Category | Storage Hygiene" in summary
         assert "### Focus Areas" in summary
         assert "Primary focus area:" in summary
 
@@ -177,155 +175,27 @@ class TestExecutiveSummary:
         assert "No material optimization opportunities were detected" in summary
 
 
-class TestQuickWins:
-    """Test Quick Wins section generation (Task 3)."""
-
-    def test_quick_wins_shows_top_5_high_priority(self):
-        """Test Quick Wins shows top 5 HIGH priority recommendations."""
-        # Create 7 HIGH priority recommendations
-        recommendations = [
-            Recommendation(
-                type=f"type_{i}",
-                priority="HIGH",
-                title=f"High priority {i}",
-                description=f"Description {i}",
-                savings_eur=float(100 - i * 10),  # Descending savings
-                implementation_steps=["Step 1"],
-            )
-            for i in range(7)
-        ]
-        response = CheckResponse(
-            recommendations=recommendations,
-            summary=CheckSummary(
-                total_recommendations=7,
-                total_potential_savings_eur=700.0,
-                high_priority_count=7,
-                medium_priority_count=0,
-                low_priority_count=0,
-                categories_breakdown={},
-            ),
-            check_id="test",
-            new_ephemeral_token="token",
-        )
-        generator = MarkdownReportGenerator(response)
-
-        quick_wins = generator.generate_quick_wins()
-
-        # Should show exactly 5 recommendations
-        assert quick_wins.count("1. **") == 1
-        assert quick_wins.count("5. **") == 1
-        assert quick_wins.count("6. **") == 0
-
-    def test_quick_wins_with_only_2_high_priority(self):
-        """Test Quick Wins with fewer than 5 HIGH priority recs."""
-        recommendations = [
-            Recommendation(
-                type="type_1",
-                priority="HIGH",
-                title="High 1",
-                description="Desc 1",
-                savings_eur=100.0,
-                implementation_steps=["Step 1"],
-            ),
-            Recommendation(
-                type="type_2",
-                priority="HIGH",
-                title="High 2",
-                description="Desc 2",
-                savings_eur=50.0,
-                implementation_steps=["Step 1"],
-            ),
-        ]
-        response = CheckResponse(
-            recommendations=recommendations,
-            summary=CheckSummary(
-                total_recommendations=2,
-                total_potential_savings_eur=150.0,
-                high_priority_count=2,
-                medium_priority_count=0,
-                low_priority_count=0,
-                categories_breakdown={},
-            ),
-            check_id="test",
-            new_ephemeral_token="token",
-        )
-        generator = MarkdownReportGenerator(response)
-
-        quick_wins = generator.generate_quick_wins()
-
-        # Should show only 2
-        assert quick_wins.count("1. **") == 1
-        assert quick_wins.count("2. **") == 1
-        assert quick_wins.count("3. **") == 0
-        assert "First move:" in quick_wins
-
-    def test_quick_wins_with_zero_high_priority(self):
-        """Test Quick Wins with 0 HIGH priority recommendations."""
-        # Create recommendations with no HIGH priority
-        recommendations = [
-            Recommendation(
-                type=f"type_{i}",
-                priority="MEDIUM",
-                title=f"Medium priority {i}",
-                description=f"Description {i}",
-                savings_eur=float(50 - i * 5),
-                implementation_steps=["Step 1"],
-            )
-            for i in range(7)
-        ] + [
-            Recommendation(
-                type="type_low",
-                priority="LOW",
-                title="Low priority",
-                description="Low priority desc",
-                savings_eur=10.0,
-                implementation_steps=["Step 1"],
-            )
-        ]
-        response = CheckResponse(
-            recommendations=recommendations,
-            summary=CheckSummary(
-                total_recommendations=8,
-                total_potential_savings_eur=200.0,
-                high_priority_count=0,
-                medium_priority_count=7,
-                low_priority_count=1,
-                categories_breakdown={},
-            ),
-            check_id="test",
-            new_ephemeral_token="token",
-        )
-        generator = MarkdownReportGenerator(response)
-
-        quick_wins = generator.generate_quick_wins()
-
-        # Should show message about no high-priority recommendations
-        assert "_No urgent issues were flagged in this scan._" in quick_wins
-
-
 class TestActionPlan:
-    """Test suggested action plan section."""
+    """Test suggested starting points section."""
 
     def test_action_plan_groups_items_by_priority(self, sample_check_response):
-        """Action plan should phase work into Now/Next/Later buckets."""
+        """Action plan should highlight a neutral shortlist."""
         generator = MarkdownReportGenerator(sample_check_response)
 
         action_plan = generator.generate_action_plan()
 
-        assert "## Suggested Action Plan" in action_plan
-        assert "### Now" in action_plan
-        assert "### Next" in action_plan
-        assert "### Later" in action_plan
+        assert "## Suggested Starting Points" in action_plan
+        assert "ordered by estimated savings" in action_plan
         assert "Storage Hygiene" in action_plan
         assert "Table Layout" in action_plan
-        assert "_Estimated value in this phase:" in action_plan
+        assert "Estimated value across these starting points" in action_plan
 
 
 class TestDetailedRecommendations:
     """Test Detailed Recommendations section (Task 4)."""
 
     def test_detailed_recs_sorted_by_priority(self, sample_recommendations):
-        """Test that recommendations are sorted by priority."""
+        """Test that recommendations are sorted by savings."""
         response = CheckResponse(
             recommendations=sample_recommendations,
             summary=CheckSummary(
@@ -343,12 +213,11 @@ class TestDetailedRecommendations:
 
         detailed = generator.generate_detailed_recommendations()
 
-        # HIGH should come before MEDIUM before LOW
-        high_pos = detailed.find("unused_storage")  # HIGH priority
-        medium_pos = detailed.find("partitioning")  # MEDIUM priority
-        low_pos = detailed.find("clustering")  # LOW priority
+        storage_pos = detailed.find("Storage Hygiene")
+        partitioning_pos = detailed.find("Table Layout")
+        clustering_pos = detailed.rfind("Table Layout")
 
-        assert high_pos < medium_pos < low_pos
+        assert storage_pos < partitioning_pos < clustering_pos
 
     def test_detailed_recs_includes_all_fields(self, sample_recommendations):
         """Test that all recommendation fields are included."""
@@ -369,11 +238,10 @@ class TestDetailedRecommendations:
 
         detailed = generator.generate_detailed_recommendations()
 
-        assert "**Category:**" in detailed
-        assert "**Priority:**" in detailed
-        assert "**Estimated Monthly Savings:**" in detailed
-        assert "**Why It Was Flagged:**" in detailed
-        assert "**Suggested Action:**" in detailed
+        assert "| Category | Storage Hygiene |" in detailed
+        assert "| Estimated Monthly Savings | €150.00 |" in detailed
+        assert "> **Why It Was Flagged**" in detailed
+        assert "> **Suggested Action**" in detailed
 
     def test_storage_recommendation_mentions_long_table_once_in_asset_block(self):
         """Long storage table names should not be repeated throughout the recommendation."""
@@ -490,7 +358,7 @@ class TestDetailedRecommendations:
 
         detailed = generator.generate_detailed_recommendations()
 
-        assert "**Category:** Storage Hygiene" in detailed
+        assert "| Category | Storage Hygiene |" in detailed
 
 
 class TestFileSaving:
@@ -527,7 +395,7 @@ class TestFileSaving:
         # Should contain all sections
         assert "# BigQuery Sanity Check Report - test-project" in content
         assert "## Executive Summary" in content
-        assert "## Quick Wins" in content
+        assert "## Suggested Starting Points" in content
         assert "## Detailed Recommendations" in content
 
     def test_save_report_auto_suffix_when_file_exists(
@@ -788,7 +656,7 @@ class TestEdgeCases:
         # Verify report generates successfully
         assert "# BigQuery Sanity Check Report" in report
         assert "Total Recommendations | 150" in report
-        assert "## Quick Wins" in report
+        assert "## Suggested Starting Points" in report
         assert "## Detailed Recommendations" in report
 
         # Verify all 150 recommendations are in detailed section

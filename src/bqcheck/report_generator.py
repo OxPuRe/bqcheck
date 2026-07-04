@@ -355,19 +355,12 @@ class MarkdownReportGenerator:
     def _build_summary_assessment(
         total_recommendations: int,
         total_savings_eur: float,
-        high_priority_count: int,
     ) -> str:
         """Produce a short executive assessment paragraph."""
         if total_recommendations == 0:
             return (
                 "No material optimization opportunities were detected in this scan. "
                 "The current BigQuery setup looks disciplined on the signals reviewed."
-            )
-
-        if high_priority_count > 0 and total_savings_eur >= 500:
-            return (
-                "This scan found meaningful near-term savings with at least one "
-                "high-priority issue worth addressing first."
             )
 
         if total_savings_eur >= 100:
@@ -415,6 +408,16 @@ class MarkdownReportGenerator:
                 f"(€{top_recommendation.savings_eur:.2f}/month)"
             ),
         ]
+
+    def _sorted_recommendations(self) -> list[Recommendation]:
+        """Sort recommendations for client-facing output."""
+        return sorted(
+            self.check_response.recommendations,
+            key=lambda rec: (
+                -rec.savings_eur,
+                self._format_recommendation_type(rec.type),
+            ),
+        )
 
     @staticmethod
     def _extract_storage_facts(description: str) -> Optional[dict[str, str]]:
@@ -750,7 +753,6 @@ class MarkdownReportGenerator:
             self._build_summary_assessment(
                 summary.total_recommendations,
                 summary.total_potential_savings_eur,
-                summary.high_priority_count,
             )
         }
 
@@ -758,9 +760,20 @@ class MarkdownReportGenerator:
 |--------|-------|
 | Total Recommendations | {summary.total_recommendations} |
 | Potential Monthly Savings | €{summary.total_potential_savings_eur:.2f} |
-| High Priority | {summary.high_priority_count} |
-| Medium Priority | {summary.medium_priority_count} |
-| Low Priority | {summary.low_priority_count} |
+| Dominant Category | {
+            self._format_recommendation_type(
+                max(
+                    self.check_response.summary.categories_breakdown or {"storage": 0},
+                    key=lambda key: self.check_response.summary.categories_breakdown.get(
+                        key, 0
+                    )
+                    if self.check_response.summary.categories_breakdown
+                    else 0,
+                )
+            )
+            if self.check_response.recommendations
+            else "None"
+        } |
 """
 
         # Add category breakdown if we have recommendations
@@ -798,114 +811,41 @@ class MarkdownReportGenerator:
 
         return exec_summary
 
-    def generate_quick_wins(self) -> str:
-        """
-        Generate Quick Wins section with top HIGH priority recommendations.
-
-        Returns:
-            Markdown-formatted Quick Wins section
-        """
-        # Filter HIGH priority and sort by savings
-        high_priority = [
-            rec for rec in self.check_response.recommendations if rec.priority == "HIGH"
-        ]
-        high_priority_sorted = sorted(
-            high_priority, key=lambda r: r.savings_eur, reverse=True
-        )
-
-        # Take top 5
-        top_wins = high_priority_sorted[:5]
-
-        if not top_wins:
-            return """
-## Quick Wins
-
-_No urgent issues were flagged in this scan._
-"""
-
-        quick_wins = """
-## Quick Wins
-
-Top high-priority optimizations for immediate impact:
-
-"""
-        for i, rec in enumerate(top_wins, 1):
-            clean_title = self._clean_title(rec.title)
-            decrypted_description = self._decrypt_identifiers_in_text(rec.description)
-            decrypted_description = self._format_size_human_readable(
-                decrypted_description
-            )
-            decrypted_description = self._truncate_query_hash(decrypted_description)
-            summary_text = self._build_compact_summary(rec, decrypted_description)
-            first_move = self._build_suggested_action(
-                rec,
-                [
-                    sanitized
-                    for step in rec.implementation_steps
-                    if (sanitized := self._sanitize_step_for_report(step))
-                ],
-            )
-            quick_wins += f"""{i}. **{clean_title}** - €{rec.savings_eur:.2f}/month
-   - {summary_text}
-"""
-            if first_move:
-                quick_wins += f"""   - First move: {first_move}
-
-"""
-            else:
-                quick_wins += "\n"
-
-        return quick_wins
-
     def generate_action_plan(self) -> str:
-        """Generate a simple phased action plan from the recommendation set."""
+        """Generate a neutral shortlist of starting points."""
         if not self.check_response.recommendations:
             return ""
 
-        priority_buckets = {
-            "HIGH": ("Now", 3),
-            "MEDIUM": ("Next", 3),
-            "LOW": ("Later", 2),
-        }
+        candidates = self._sorted_recommendations()[:4]
+        total_shortlist_value = sum(rec.savings_eur for rec in candidates)
 
-        sorted_recs = sorted(
-            self.check_response.recommendations,
-            key=lambda r: (
-                {"HIGH": 0, "MEDIUM": 1, "LOW": 2}.get(str(r.priority), 3),
-                -r.savings_eur,
-            ),
-        )
-
-        grouped: dict[str, list[Recommendation]] = {}
         action_plan = """
-## Suggested Action Plan
+## Suggested Starting Points
+
+_A pragmatic shortlist ordered by estimated savings, not by business criticality._
 
 """
-
-        for rec in sorted_recs:
-            grouped.setdefault(str(rec.priority), []).append(rec)
-
-        has_content = False
-        for priority, (label, limit) in priority_buckets.items():
-            items = grouped.get(priority, [])[:limit]
-            if not items:
-                continue
-            has_content = True
-            phase_savings = sum(rec.savings_eur for rec in items)
-            action_plan += f"### {label}\n\n"
+        action_plan += (
+            f"**Estimated value across these starting points:** "
+            f"€{total_shortlist_value:.2f}/month\n\n"
+        )
+        action_plan += "| Opportunity | Category | Estimated Savings |\n"
+        action_plan += "|-------------|----------|-------------------|\n"
+        for rec in candidates:
+            clean_title = self._clean_title(rec.title)
             action_plan += (
-                f"_Estimated value in this phase: €{phase_savings:.2f}/month_\n\n"
+                f"| {clean_title} | {self._format_recommendation_type(rec.type)} | "
+                f"€{rec.savings_eur:.2f}/month |\n"
             )
-            for rec in items:
-                clean_title = self._clean_title(rec.title)
-                action_plan += (
-                    f"- **{clean_title}** "
-                    f"({self._format_recommendation_type(rec.type)}, "
-                    f"€{rec.savings_eur:.2f}/month)\n"
-                )
-            action_plan += "\n"
 
-        return action_plan if has_content else ""
+        if len(self.check_response.recommendations) > len(candidates):
+            remaining = len(self.check_response.recommendations) - len(candidates)
+            action_plan += (
+                f"\n{remaining} additional opportunity"
+                f"{'ies' if remaining > 1 else 'y'} are documented below.\n"
+            )
+
+        return action_plan
 
     def generate_detailed_recommendations(self) -> str:
         """
@@ -924,14 +864,7 @@ Top high-priority optimizations for immediate impact:
 **No optimization opportunities detected. Your BigQuery setup is well-optimized!** ✅
 """
 
-        # Define priority order
-        priority_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
-
-        # Sort recommendations
-        sorted_recs = sorted(
-            self.check_response.recommendations,
-            key=lambda r: (priority_order.get(r.priority, 3), -r.savings_eur),
-        )
+        sorted_recs = self._sorted_recommendations()
 
         detailed = """
 ## Detailed Recommendations
@@ -962,11 +895,10 @@ Top high-priority optimizations for immediate impact:
 
             detailed += f"""### Recommendation {i}: {clean_title}
 
-**Category:** {self._format_recommendation_type(rec.type)}
-
-**Priority:** {rec.priority}
-
-**Estimated Monthly Savings:** €{rec.savings_eur:.2f}
+| Field | Value |
+|-------|-------|
+| Category | {self._format_recommendation_type(rec.type)} |
+| Estimated Monthly Savings | €{rec.savings_eur:.2f} |
 
 """
 
@@ -1012,13 +944,13 @@ Top high-priority optimizations for immediate impact:
                         )
                         pass
 
-            detailed += f"""**Why It Was Flagged:**
+            detailed += f"""> **Why It Was Flagged**\
 {summary_text}
 
 """
 
             if suggested_action:
-                detailed += f"""**Suggested Action:**
+                detailed += f"""> **Suggested Action**\
 {suggested_action}
 
 """
@@ -1153,9 +1085,6 @@ Top high-priority optimizations for immediate impact:
 
         # Add Executive Summary
         report += self.generate_executive_summary()
-
-        # Add Quick Wins
-        report += self.generate_quick_wins()
 
         # Add Suggested Action Plan
         report += self.generate_action_plan()
