@@ -9,13 +9,16 @@ Tests cover:
 """
 
 import json
+import stat
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from bqcheck.api.client import BQCheckAPIClient
+from bqcheck.api.models import CheckMetadata
 from bqcheck.license.storage import CredentialStore
+from bqcheck.scan.executor import _fit_metadata_to_payload_limit
 from bqcheck.scanner.encryption import IdentifierEncryptor
 
 
@@ -338,13 +341,60 @@ class TestScanExecutor:
         executor.execute_scan_with_tokens("test-project")
 
         # Verify file permissions are still 600
-        import stat
-
         file_mode = mock_creds_path.stat().st_mode
         permissions = stat.filemode(file_mode)
 
         # Should be -rw------- (owner read/write only)
         assert permissions == "-rw-------"
+
+
+class TestPayloadSizing:
+    """Payload sizing helpers should keep scans under transport limits."""
+
+    def test_fit_metadata_keeps_full_payload_when_under_budget(self):
+        metadata = CheckMetadata(
+            tables=[{"table_id": "a", "size_bytes": 1}],
+            queries=[{"query_hash": "x", "total_bytes_processed": 10}],
+            access_patterns=[],
+        )
+
+        fitted, size_mb, reduced_limit = _fit_metadata_to_payload_limit(
+            "a" * 64,
+            metadata,
+            max_size_mb=5.0,
+        )
+
+        assert fitted == metadata
+        assert size_mb < 5.0
+        assert reduced_limit is None
+
+    def test_fit_metadata_trims_queries_by_cost_when_over_budget(self):
+        oversized_queries = [
+            {
+                "query_hash": f"hash-{i}",
+                "total_bytes_processed": 1000 - i,
+                "padding": "x" * 20000,
+            }
+            for i in range(6000)
+        ]
+        metadata = CheckMetadata(
+            tables=[{"table_id": "a", "size_bytes": 1}],
+            queries=oversized_queries,
+            access_patterns=[],
+        )
+
+        fitted, size_mb, reduced_limit = _fit_metadata_to_payload_limit(
+            "a" * 64,
+            metadata,
+            max_size_mb=1.0,
+        )
+
+        assert reduced_limit is not None
+        assert len(fitted.queries) == reduced_limit
+        assert size_mb > 0
+        assert fitted.queries[0]["total_bytes_processed"] >= fitted.queries[-1][
+            "total_bytes_processed"
+        ]
 
     def test_single_use_token_tracking(
         self, test_credentials, mock_creds_path, mock_bigquery_and_server

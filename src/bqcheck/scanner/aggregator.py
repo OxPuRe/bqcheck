@@ -23,10 +23,27 @@ from bqcheck.scanner.models import QueryMetadata
 
 logger = logging.getLogger(__name__)
 
+MV_UNSUPPORTED_PATTERNS = [
+    r"\bjoin\b",
+    r"\bunion\b",
+    r"\bover\s*\(",
+    r"\bdistinct\b",
+    r"\bqualify\b",
+]
+
 
 def _normalize_query_text(query: str) -> str:
     """Normalize query formatting for stable pattern comparisons."""
     return re.sub(r"\s+", " ", query.strip().rstrip(";"))
+
+
+def _choose_materialization_strategy(query_text: str) -> str:
+    """Choose a compact strategy hint without shipping full SQL to the server."""
+    normalized = query_text.lower()
+    for pattern in MV_UNSUPPORTED_PATTERNS:
+        if pattern and re.search(pattern, normalized):
+            return "scheduled_table"
+    return "materialized_view"
 
 
 def _parse_iso_timestamp(timestamp_str: str) -> datetime:
@@ -274,6 +291,7 @@ def aggregate_query_metadata(
         # Get encrypted query text (same for all queries in group)
         normalized_query = _normalize_query_text(pattern_queries[0].query)
         encrypted_query = anonymize_query_pattern(normalized_query, encryption_key)
+        materialization_strategy = _choose_materialization_strategy(normalized_query)
 
         # Extract query type (SELECT, MERGE, INSERT, etc.) before encryption
         # This helps server-side filtering without exposing query content
@@ -308,8 +326,8 @@ def aggregate_query_metadata(
         # Create aggregated entry
         aggregated_entry = {
             "query_hash": pattern_hash,
-            "query_text": encrypted_query,
             "query_type": query_type,
+            "materialization_strategy": materialization_strategy,
             "executions_per_day": executions_per_day,
             "bytes_per_execution": bytes_per_execution,
             "total_bytes_processed": total_bytes,

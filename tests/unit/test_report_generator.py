@@ -96,6 +96,21 @@ class TestReportHeader:
         assert "| Generated |" in header
         assert "T" in header  # ISO format has 'T' separator
 
+    def test_header_includes_scan_notes_when_present(self, sample_check_response):
+        """Coverage notes should be embedded in the report header when available."""
+        generator = MarkdownReportGenerator(
+            sample_check_response,
+            report_notes=[
+                "Query-pattern analysis was narrowed to the top 2500 patterns.",
+                "Table-level analyses still used the full extracted table metadata.",
+            ],
+        )
+
+        header = generator.generate_header()
+
+        assert "## Scan Notes" in header
+        assert "top 2500 patterns" in header
+
 
 class TestReportGeneration:
     """Test complete report generation."""

@@ -234,7 +234,7 @@ class TestQueryAggregation:
         assert result[0]["total_bytes_processed"] == 2199023255552
 
     def test_aggregate_query_text_anonymized(self):
-        """Test that query text has table references anonymized."""
+        """Test that query payload keeps a compact strategy hint instead of SQL."""
         salt = IdentifierEncryptor.generate_key()
         queries = [
             QueryMetadata(
@@ -249,10 +249,8 @@ class TestQueryAggregation:
 
         result = aggregate_query_metadata(queries, salt)
 
-        # Original table reference should not appear in anonymized query
-        assert "dataset.table" not in result[0]["query_text"]
-        # SQL structure should be preserved
-        assert "SELECT * FROM" in result[0]["query_text"]
+        assert "query_text" not in result[0]
+        assert result[0]["materialization_strategy"] == "materialized_view"
 
     def test_aggregate_executions_per_day_calculation(self):
         """Test accurate executions per day calculation across time range."""
@@ -295,8 +293,8 @@ class TestQueryAggregation:
         # Verify all required fields are present (may have additional fields)
         required_fields = {
             "query_hash",
-            "query_text",
             "query_type",
+            "materialization_strategy",
             "executions_per_day",
             "bytes_per_execution",
             "total_bytes_processed",
@@ -410,6 +408,25 @@ class TestQueryAggregation:
         assert len(result) == 1
         assert result[0]["query_type"] == "SELECT"
         assert "last_execution_time" in result[0]
+
+    def test_aggregate_marks_join_queries_as_scheduled_table_candidates(self):
+        """Complex queries should carry a compact scheduled-table strategy hint."""
+        salt = IdentifierEncryptor.generate_key()
+        query = QueryMetadata(
+            job_id="project:us.job1",
+            query=(
+                "SELECT u.id, COUNT(*) FROM dataset.users u "
+                "JOIN dataset.events e ON u.id = e.user_id GROUP BY u.id"
+            ),
+            total_bytes_processed=1099511627776,
+            creation_time="2024-01-01 10:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+        )
+
+        result = aggregate_query_metadata([query], salt)
+
+        assert result[0]["materialization_strategy"] == "scheduled_table"
 
 
 def test_normalize_query_text_collapses_whitespace_and_semicolons():

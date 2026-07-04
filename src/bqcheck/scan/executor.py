@@ -17,6 +17,7 @@ core dump), credentials may be recoverable.
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 import sys
@@ -28,7 +29,7 @@ import typer
 from google.api_core.exceptions import Forbidden, NotFound, PermissionDenied
 
 from bqcheck.api.client import BQCheckAPIClient
-from bqcheck.api.models import CheckResponse
+from bqcheck.api.models import CheckMetadata, CheckRequest, CheckResponse
 from bqcheck.console import (
     console,
     show_analysis_progress,
@@ -55,6 +56,9 @@ from bqcheck.scan.simulator import simulate_scan
 
 logger = logging.getLogger(__name__)
 
+MAX_CHECK_REQUEST_SIZE_MB = 8.0
+QUERY_PATTERN_FALLBACK_LIMITS = (5000, 2500, 1000, 500)
+
 
 class ScanError(Exception):
     """
@@ -69,6 +73,59 @@ class ScanError(Exception):
         self.exit_code = exit_code
         self.message = message
         super().__init__(message)
+
+
+def _sort_queries_for_payload(queries: list[dict]) -> list[dict]:
+    """Keep the highest-value query patterns first when payload trimming is needed."""
+    return sorted(
+        queries,
+        key=lambda item: float(item.get("total_bytes_processed") or 0),
+        reverse=True,
+    )
+
+
+def _check_request_size_mb(check_request: CheckRequest) -> float:
+    """Return serialized request size in MB."""
+    payload_json = json.dumps(check_request.model_dump())
+    return len(payload_json.encode("utf-8")) / (1024 * 1024)
+
+
+def _fit_metadata_to_payload_limit(
+    project_id_hash: str,
+    metadata: CheckMetadata,
+    max_size_mb: float = MAX_CHECK_REQUEST_SIZE_MB,
+) -> tuple[CheckMetadata, float, int | None]:
+    """Trim query patterns until the request fits under the size budget."""
+    query_count = len(metadata.queries)
+    check_request = CheckRequest(project_id=project_id_hash, metadata=metadata)
+    payload_size_mb = _check_request_size_mb(check_request)
+    if payload_size_mb <= max_size_mb or query_count == 0:
+        return metadata, payload_size_mb, None
+
+    sorted_queries = _sort_queries_for_payload(metadata.queries)
+    for limit in QUERY_PATTERN_FALLBACK_LIMITS:
+        if query_count <= limit:
+            continue
+        reduced_metadata = CheckMetadata(
+            tables=metadata.tables,
+            queries=sorted_queries[:limit],
+            access_patterns=metadata.access_patterns,
+        )
+        reduced_request = CheckRequest(
+            project_id=project_id_hash, metadata=reduced_metadata
+        )
+        reduced_size_mb = _check_request_size_mb(reduced_request)
+        if reduced_size_mb <= max_size_mb:
+            return reduced_metadata, reduced_size_mb, limit
+
+    smallest_limit = QUERY_PATTERN_FALLBACK_LIMITS[-1]
+    reduced_metadata = CheckMetadata(
+        tables=metadata.tables,
+        queries=sorted_queries[:smallest_limit],
+        access_patterns=metadata.access_patterns,
+    )
+    reduced_request = CheckRequest(project_id=project_id_hash, metadata=reduced_metadata)
+    return reduced_metadata, _check_request_size_mb(reduced_request), smallest_limit
 
 
 class ScanExecutor:
@@ -91,6 +148,7 @@ class ScanExecutor:
             api_client: API client for token renewal
         """
         self.api_client = api_client
+        self._last_report_notes: list[str] = []
 
     def execute_scan_with_tokens(
         self,
@@ -130,6 +188,8 @@ class ScanExecutor:
         - Tokens are never logged
         - Master key is not transmitted during scans
         """
+        self._last_report_notes = []
+
         # Step 1: Load credentials (with specific error handling)
         try:
             credentials = CredentialStore.load()
@@ -219,6 +279,7 @@ class ScanExecutor:
                     check_response.summary.total_recommendations,
                     check_response.summary.total_potential_savings_eur,
                 )
+                report_notes = list(self._last_report_notes)
 
                 # Generate and save Markdown report
                 from bqcheck.report_generator import MarkdownReportGenerator
@@ -236,6 +297,7 @@ class ScanExecutor:
                     check_response,
                     project_name=project_id,
                     encryption_key=encryption_key,  # Pass encryption key for decryption
+                    report_notes=report_notes,
                 )
                 report_path = generator.save_report(
                     output_path=output_path,
@@ -248,6 +310,19 @@ class ScanExecutor:
                         "[yellow]⚠️  Report not saved: file exists (use --force to overwrite)[/yellow]"
                     )
                 else:
+                    if report_notes:
+                        report_content = report_path.read_text()
+                        if "## Scan Notes" not in report_content:
+                            notes_block = "## Scan Notes\n\n"
+                            for note in report_notes:
+                                notes_block += f"- {note}\n"
+                            notes_block += "\n"
+                            report_content = report_content.replace(
+                                "---\n\n",
+                                f"---\n\n{notes_block}",
+                                1,
+                            )
+                            report_path.write_text(report_content)
                     console.print(
                         f"[green]✅ Sanity check report saved to:[/green] {report_path}"
                     )
@@ -258,6 +333,7 @@ class ScanExecutor:
                     success=True,
                     project_id=project_id,
                     check_response=check_response,
+                    report_notes=report_notes,
                 )
             else:
                 logger.info("Executing SIMULATED check")
@@ -418,7 +494,6 @@ class ScanExecutor:
         import asyncio
         import hashlib
 
-        from bqcheck.api.models import CheckRequest
         from bqcheck.scanner import authenticate_bigquery
 
         # Display start message
@@ -583,22 +658,37 @@ class ScanExecutor:
                 f"Invalid SHA-256 hash format (expected 64 hex chars): {project_id_hash}"
             )
 
-        # Step 3: Create check request
-        check_request = CheckRequest(
-            project_id=project_id_hash,
-            metadata=metadata,
+        # Step 3: Create check request and fit within a conservative payload budget.
+        metadata, payload_size_mb, reduced_query_limit = _fit_metadata_to_payload_limit(
+            project_id_hash,
+            metadata,
         )
+        check_request = CheckRequest(project_id=project_id_hash, metadata=metadata)
 
-        # Log payload size for debugging (helps diagnose 422 validation errors)
-        import json
-
-        payload_json = json.dumps(check_request.model_dump())
-        payload_size_mb = len(payload_json.encode("utf-8")) / (1024 * 1024)
         logger.info(
             f"Check request payload size: {payload_size_mb:.2f} MB "
             f"({len(metadata.tables)} tables, {len(metadata.queries)} queries, "
             f"{len(metadata.access_patterns)} access patterns)"
         )
+        if reduced_query_limit is not None:
+            self._last_report_notes = [
+                (
+                    "Query-pattern analysis was narrowed to the top "
+                    f"{reduced_query_limit} patterns by bytes scanned to fit "
+                    "network transport limits."
+                ),
+                "Table-level analyses still used the full extracted table metadata.",
+            ]
+            console.print(
+                "[yellow]Large workload detected.[/yellow] "
+                f"Sending the top {reduced_query_limit} query patterns to fit "
+                "network limits while keeping table-level analyses complete."
+            )
+            logger.warning(
+                "Reduced query pattern payload to top %d entries to fit %.2f MB budget",
+                reduced_query_limit,
+                MAX_CHECK_REQUEST_SIZE_MB,
+            )
 
         # Step 4: Send to server with progress indicators and error handling
         try:

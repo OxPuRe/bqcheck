@@ -38,6 +38,7 @@ class MarkdownReportGenerator:
         check_response: CheckResponse,
         project_name: str = "Unknown",
         encryption_key: Optional[bytes] = None,
+        report_notes: Optional[list[str]] = None,
     ):
         """
         Initialize report generator.
@@ -53,6 +54,7 @@ class MarkdownReportGenerator:
         self.project_name = project_name
         self.timestamp = datetime.now(timezone.utc)
         self.encryption_key = encryption_key
+        self.report_notes = report_notes or []
 
         # Initialize encryptor if key provided
         self.encryptor: Optional[IdentifierEncryptor]
@@ -758,7 +760,7 @@ class MarkdownReportGenerator:
         check_date = self.timestamp.strftime("%Y-%m-%d")
         timestamp_iso = self.timestamp.isoformat()
 
-        return f"""# BigQuery Sanity Check Report
+        header = f"""# BigQuery Sanity Check Report
 
 > Scope: `{self.project_name}`
 
@@ -769,6 +771,13 @@ class MarkdownReportGenerator:
 
 ---
 """
+        if self.report_notes:
+            header += "\n## Scan Notes\n\n"
+            for note in self.report_notes:
+                header += f"- {note}\n"
+            header += "\n"
+
+        return header
 
     def generate_executive_summary(self) -> str:
         """
