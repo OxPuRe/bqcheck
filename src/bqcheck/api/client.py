@@ -27,8 +27,12 @@ from bqcheck.api.models import (
     CheckResponse,
     TokenRenewalResponse,
 )
-from bqcheck.constants import HTTP_SYNC_TIMEOUT_CHECK, HTTP_SYNC_TIMEOUT_MUTATION
-from bqcheck.constants import DEFAULT_API_URL, ENV_VAR_API_URL
+from bqcheck.constants import (
+    DEFAULT_API_URL,
+    ENV_VAR_API_URL,
+    HTTP_SYNC_TIMEOUT_CHECK,
+    HTTP_SYNC_TIMEOUT_MUTATION,
+)
 
 # Mock mode test keys
 # Use exact keys instead of prefix matching
