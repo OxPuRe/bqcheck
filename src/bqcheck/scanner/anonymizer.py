@@ -510,6 +510,7 @@ def merge_table_metadata(
     access_patterns: List[AccessPattern],
     queries: List[QueryMetadata],
     schemas: Dict[str, List[Dict[str, str]]],
+    query_observation_limited: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Merge tables, access patterns, queries, and schemas into server format.
@@ -526,6 +527,7 @@ def merge_table_metadata(
         access_patterns: List of AccessPattern (for last_access_time)
         queries: List of QueryMetadata (for query_stats)
         schemas: Dict mapping "dataset.table" to column list
+        query_observation_limited: Whether query extraction hit the max query cap
 
     Returns:
         List of enriched table dictionaries ready for anonymization
@@ -592,11 +594,19 @@ def merge_table_metadata(
     shard_query_stats_map: Dict[str, Dict[str, Any]] = {}
     shard_timestamps_map: Dict[str, List[str]] = {}
     for query in queries:
-        # Extract table references from query (simplified - match dataset.table patterns)
-        table_refs = re.findall(r"`?([a-z0-9_-]+)\.([a-z0-9_]+)`?", query.query.lower())
+        referenced_tables = query.referenced_tables or []
+        if referenced_tables:
+            table_keys = [table_ref.lower() for table_ref in referenced_tables]
+        else:
+            # Fallback for legacy query metadata without referenced_tables.
+            table_keys = []
+            for table_ref in _extract_table_references(query.query.lower()):
+                parts = table_ref.split(".")
+                if len(parts) >= 2:
+                    table_keys.append(".".join(parts[-2:]))
+
         referenced_shard_groups = set()
-        for dataset, table in table_refs:
-            key = f"{dataset}.{table}"
+        for key in table_keys:
             if key not in query_stats_map:
                 query_stats_map[key] = {
                     "total_bytes_processed": 0,
@@ -685,6 +695,7 @@ def merge_table_metadata(
             table_dict["query_stats"] = query_stats_map[table_key]
         else:
             table_dict["query_stats"] = {"total_bytes_processed": 0, "query_count": 0}
+        table_dict["query_stats"]["observation_limited"] = query_observation_limited
 
         shard_group_id = table_to_shard_group.get(table_key)
         if shard_group_id:

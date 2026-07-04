@@ -23,8 +23,8 @@ class MarkdownReportGenerator:
 
     Features:
     - Executive Summary with aggregate statistics
-    - Quick Wins (top 3-5 HIGH priority recommendations)
-    - Detailed Recommendations sorted by priority and savings
+    - Suggested starting points ordered by estimated savings
+    - Detailed recommendations with compact evidence and action framing
     - Zero-recommendations handling
 
     Usage:
@@ -278,6 +278,36 @@ class MarkdownReportGenerator:
                 )
 
         elif rec_type == "queries":
+            partition_gap = re.search(
+                r"Table\s+([A-Za-z0-9_.-]+)\s+\(([\d.]+\s(?:GB|TB))\)\s+is "
+                r"partitioned on\s+([A-Za-z0-9_]+),\s+but queries still scan "
+                r"(\d+)% of the table on average \(([\d.]+\s(?:GB|TB)) per query\)",
+                description,
+                re.IGNORECASE,
+            )
+            if partition_gap:
+                evidence.append(
+                    "Observed queries are still scanning a large share of a partitioned table"
+                )
+                evidence.append(
+                    f"The partition field to verify first is `{partition_gap.group(3)}`"
+                )
+
+            hot_view = re.search(
+                r"Logical view\s+([A-Za-z0-9_.-]+)\s+is queried repeatedly and "
+                r"drives about\s+([\d.]+\s(?:GB|TB)) scanned per execution "
+                r"\(([\d.]+\s(?:GB|TB)) observed in this scan window\)",
+                description,
+                re.IGNORECASE,
+            )
+            if hot_view:
+                evidence.append(
+                    "Repeated reads are recomputing the same logical view definition"
+                )
+                evidence.append(
+                    f"Each execution still scans about {hot_view.group(2)}"
+                )
+
             match = re.search(
                 r"executes ([\d.]+) times/day.*?processing ([\d.]+\sTB) per execution "
                 r"\(([\d.]+\sTB) total\)",
@@ -365,49 +395,14 @@ class MarkdownReportGenerator:
 
         if total_savings_eur >= 100:
             return (
-                "This scan found a worthwhile set of optimizations, mostly concentrated "
-                "in medium-impact improvements."
+                "This scan found a worthwhile set of optimization opportunities with "
+                "meaningful potential savings."
             )
 
         return (
-            "This scan found a small number of lower-impact optimizations. They are "
-            "worth addressing if you want to tighten long-tail costs."
+            "This scan found a small number of optimization opportunities worth "
+            "reviewing."
         )
-
-    def _build_focus_highlights(self) -> list[str]:
-        """Surface the main commercial takeaways from the recommendation mix."""
-        recommendations = self.check_response.recommendations
-        if not recommendations:
-            return []
-
-        category_totals: dict[str, dict[str, float]] = {}
-        for rec in recommendations:
-            bucket = category_totals.setdefault(
-                rec.type,
-                {"count": 0.0, "savings": 0.0},
-            )
-            bucket["count"] += 1
-            bucket["savings"] += rec.savings_eur
-
-        top_category, top_category_stats = max(
-            category_totals.items(),
-            key=lambda item: (item[1]["savings"], item[1]["count"]),
-        )
-        top_recommendation = max(recommendations, key=lambda rec: rec.savings_eur)
-
-        return [
-            (
-                "Primary focus area: "
-                f"{self._format_recommendation_type(top_category)} "
-                f"(€{top_category_stats['savings']:.2f}/month across "
-                f"{int(top_category_stats['count'])} recommendation(s))"
-            ),
-            (
-                "Best single starting point: "
-                f"{self._clean_title(top_recommendation.title)} "
-                f"(€{top_recommendation.savings_eur:.2f}/month)"
-            ),
-        ]
 
     def _sorted_recommendations(self) -> list[Recommendation]:
         """Sort recommendations for client-facing output."""
@@ -474,6 +469,22 @@ class MarkdownReportGenerator:
             facts = self._extract_storage_facts(description)
             if facts:
                 return self._format_table_identifier(facts["table_id"])
+
+        table_match = re.search(
+            r"Table\s+([A-Za-z0-9_.-]+)\s+\(",
+            description,
+            re.IGNORECASE,
+        )
+        if table_match:
+            return self._format_table_identifier(table_match.group(1))
+
+        view_match = re.search(
+            r"Logical view\s+([A-Za-z0-9_.-]+)\s+is queried",
+            description,
+            re.IGNORECASE,
+        )
+        if view_match:
+            return self._format_table_identifier(view_match.group(1))
 
         file_ref = None
         for step in rec.implementation_steps:
@@ -728,10 +739,14 @@ class MarkdownReportGenerator:
         check_date = self.timestamp.strftime("%Y-%m-%d")
         timestamp_iso = self.timestamp.isoformat()
 
-        return f"""# BigQuery Sanity Check Report - {self.project_name}
+        return f"""# BigQuery Sanity Check Report
 
-**Check Date:** {check_date}
-**Generated:** {timestamp_iso}
+> Scope: `{self.project_name}`
+
+| Field | Value |
+|-------|-------|
+| Check Date | {check_date} |
+| Generated | `{timestamp_iso}` |
 
 ---
 """
@@ -745,22 +760,7 @@ class MarkdownReportGenerator:
         """
         summary = self.check_response.summary
 
-        # Build summary table
-        exec_summary = f"""
-## Executive Summary
-
-{
-            self._build_summary_assessment(
-                summary.total_recommendations,
-                summary.total_potential_savings_eur,
-            )
-        }
-
-| Metric | Value |
-|--------|-------|
-| Total Recommendations | {summary.total_recommendations} |
-| Potential Monthly Savings | €{summary.total_potential_savings_eur:.2f} |
-| Dominant Category | {
+        dominant_category = (
             self._format_recommendation_type(
                 max(
                     self.check_response.summary.categories_breakdown or {"storage": 0},
@@ -773,7 +773,23 @@ class MarkdownReportGenerator:
             )
             if self.check_response.recommendations
             else "None"
-        } |
+        )
+
+        exec_summary = f"""
+## Executive Summary
+
+{
+            self._build_summary_assessment(
+                summary.total_recommendations,
+                summary.total_potential_savings_eur,
+            )
+        }
+
+| Metric | Value |
+|--------|-------|
+| Recommendations | {summary.total_recommendations} |
+| Dominant Category | {dominant_category} |
+| Estimated Savings | €{summary.total_potential_savings_eur:.2f}/month |
 """
 
         # Add category breakdown if we have recommendations
@@ -797,55 +813,10 @@ class MarkdownReportGenerator:
                     continue
                 savings = category_savings.get(category, 0.0)
                 exec_summary += (
-                    f"| {category.capitalize()} | {count} | €{savings:.2f} |\n"
+                    f"| {self._format_recommendation_type(category)} | {count} | €{savings:.2f} |\n"
                 )
 
-        focus_highlights = self._build_focus_highlights()
-        if focus_highlights:
-            exec_summary += """
-### Focus Areas
-
-"""
-            for highlight in focus_highlights:
-                exec_summary += f"- {highlight}\n"
-
         return exec_summary
-
-    def generate_action_plan(self) -> str:
-        """Generate a neutral shortlist of starting points."""
-        if not self.check_response.recommendations:
-            return ""
-
-        candidates = self._sorted_recommendations()[:4]
-        total_shortlist_value = sum(rec.savings_eur for rec in candidates)
-
-        action_plan = """
-## Suggested Starting Points
-
-_A pragmatic shortlist ordered by estimated savings, not by business criticality._
-
-"""
-        action_plan += (
-            f"**Estimated value across these starting points:** "
-            f"€{total_shortlist_value:.2f}/month\n\n"
-        )
-        action_plan += "| Opportunity | Category | Estimated Savings |\n"
-        action_plan += "|-------------|----------|-------------------|\n"
-        for rec in candidates:
-            clean_title = self._clean_title(rec.title)
-            action_plan += (
-                f"| {clean_title} | {self._format_recommendation_type(rec.type)} | "
-                f"€{rec.savings_eur:.2f}/month |\n"
-            )
-
-        if len(self.check_response.recommendations) > len(candidates):
-            remaining = len(self.check_response.recommendations) - len(candidates)
-            action_plan += (
-                f"\n{remaining} additional opportunity"
-                f"{'ies' if remaining > 1 else 'y'} are documented below.\n"
-            )
-
-        return action_plan
 
     def generate_detailed_recommendations(self) -> str:
         """
@@ -892,32 +863,30 @@ _A pragmatic shortlist ordered by estimated savings, not by business criticality
                 if (sanitized := self._sanitize_step_for_report(step))
             ]
             suggested_action = self._build_suggested_action(rec, implementation_steps)
-
-            detailed += f"""### Recommendation {i}: {clean_title}
-
-| Field | Value |
-|-------|-------|
-| Category | {self._format_recommendation_type(rec.type)} |
-| Estimated Monthly Savings | €{rec.savings_eur:.2f} |
-
-"""
-
+            metadata_lines = [
+                f"Category: {self._format_recommendation_type(rec.type)}",
+                f"Estimated Monthly Savings: €{rec.savings_eur:.2f}",
+            ]
             if asset_label:
-                detailed += f"""**Asset:** {asset_label}
-
-"""
-
+                metadata_lines.append(f"Asset: {asset_label}")
             if file_ref and rec.type == "queries":
-                detailed += f"""**Query Source:** `{file_ref}`
+                metadata_lines.append(f"Query Source: `{file_ref}`")
+            metadata_block = "\n".join(metadata_lines)
 
+            detailed += f"""### Recommendation {i} - {clean_title}
+
+{summary_text}
+
+{metadata_block}
 """
+            detailed += "\n"
 
             if rec.type == "queries":
                 query_preview = self._extract_query_preview_from_steps(
                     rec.implementation_steps
                 )
                 if query_preview:
-                    detailed += f"""**Query Preview:**
+                    detailed += f"""##### Query Preview
 ```sql
 {query_preview}
 ```
@@ -944,13 +913,13 @@ _A pragmatic shortlist ordered by estimated savings, not by business criticality
                         )
                         pass
 
-            detailed += f"""> **Why It Was Flagged**\
+            detailed += f"""##### Observation
 {summary_text}
 
 """
 
             if suggested_action:
-                detailed += f"""> **Suggested Action**\
+                detailed += f"""##### Recommended Change
 {suggested_action}
 
 """
@@ -959,7 +928,7 @@ _A pragmatic shortlist ordered by estimated savings, not by business criticality
                 rec.type, decrypted_description
             )
             if evidence_points:
-                detailed += """**Confidence Signals:**
+                detailed += """##### Supporting Signals
 """
                 for point in evidence_points:
                     detailed += f"- {point}\n"
@@ -1085,9 +1054,6 @@ _A pragmatic shortlist ordered by estimated savings, not by business criticality
 
         # Add Executive Summary
         report += self.generate_executive_summary()
-
-        # Add Suggested Action Plan
-        report += self.generate_action_plan()
 
         # Add Detailed Recommendations
         report += self.generate_detailed_recommendations()

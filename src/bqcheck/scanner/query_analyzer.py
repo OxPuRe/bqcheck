@@ -12,6 +12,14 @@ from typing import Any, Dict, List
 logger = logging.getLogger(__name__)
 
 
+def _normalize_table_reference(table_ref: str) -> str:
+    """Normalize table references to dataset.table for local matching."""
+    parts = table_ref.lower().split(".")
+    if len(parts) >= 2:
+        return ".".join(parts[-2:])
+    return table_ref.lower()
+
+
 def extract_filtered_columns(query: str) -> List[str]:
     """
     Extract column names used in WHERE/HAVING clauses from a SQL query.
@@ -148,8 +156,17 @@ def aggregate_filtered_columns_all_tables(
         if not table_refs:
             # Fallback: Extract table references using regex (backwards compatibility)
             query_lower = query.lower()
-            table_pattern = r'(?:from|join)\s+[`"]?([a-z0-9_-]+\.[a-z0-9_]+)[`"]?'
-            table_refs = re.findall(table_pattern, query_lower)
+            table_pattern = (
+                r'(?:from|join)\s+[`"]?'
+                r'([a-z0-9_-]+(?:\.[a-z0-9_-]+){1,2})'
+                r'[`"]?'
+            )
+            table_refs = [
+                _normalize_table_reference(table_ref)
+                for table_ref in re.findall(table_pattern, query_lower)
+            ]
+        else:
+            table_refs = [_normalize_table_reference(table_ref) for table_ref in table_refs]
 
         # Extract filtered columns once for this query
         filtered_columns = extract_filtered_columns(query)
@@ -211,7 +228,10 @@ def aggregate_filtered_columns_by_table(
         references_table = False
         if referenced_tables:
             # Use BigQuery metadata if available
-            references_table = table_key in referenced_tables
+            references_table = table_key in {
+                _normalize_table_reference(table_ref)
+                for table_ref in referenced_tables
+            }
         else:
             # Fallback: regex parsing (backwards compatibility)
             query_lower = query.lower()

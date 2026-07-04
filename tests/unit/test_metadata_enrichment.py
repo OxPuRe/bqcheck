@@ -98,6 +98,63 @@ def test_merge_table_metadata_tracks_query_activity_window():
     assert result[0]["query_stats"]["last_query_time"] == "2024-01-31T00:00:00"
 
 
+def test_merge_table_metadata_uses_referenced_tables_for_fully_qualified_queries():
+    """Fully-qualified refs should still enrich the matching dataset.table entry."""
+    tables = [
+        TableMetadata(
+            table_catalog="project",
+            table_schema="mobility",
+            table_name="locations",
+            table_type="TABLE",
+            creation_time="2024-01-01T00:00:00Z",
+            size_bytes=1000,
+            row_count=100,
+        )
+    ]
+
+    queries = [
+        QueryMetadata(
+            job_id="job1",
+            query="SELECT * FROM `roam-prod-dt-cur-0.mobility.locations`",
+            total_bytes_processed=5000,
+            creation_time="2024-01-01 00:00:00 UTC",
+            job_type="QUERY",
+            state="DONE",
+            referenced_tables=["mobility.locations"],
+        )
+    ]
+
+    result = merge_table_metadata(tables, [], queries, {})
+
+    assert result[0]["query_stats"]["query_count"] == 1
+    assert result[0]["query_stats"]["total_bytes_processed"] == 5000
+
+
+def test_merge_table_metadata_marks_limited_query_observation():
+    """Tables should carry the truncated-query-window signal to the server."""
+    tables = [
+        TableMetadata(
+            table_catalog="project",
+            table_schema="dataset",
+            table_name="table1",
+            table_type="TABLE",
+            creation_time="2024-01-01T00:00:00Z",
+            size_bytes=1000,
+            row_count=100,
+        )
+    ]
+
+    result = merge_table_metadata(
+        tables,
+        [],
+        [],
+        {},
+        query_observation_limited=True,
+    )
+
+    assert result[0]["query_stats"]["observation_limited"] is True
+
+
 def test_merge_table_metadata_no_access_pattern():
     """Test merging when access pattern is missing."""
     tables = [
@@ -118,7 +175,11 @@ def test_merge_table_metadata_no_access_pattern():
     assert result[0]["last_modified_time"] == "2024-01-01T00:00:00Z"
     assert "last_access_time" not in result[0]
     assert result[0]["schema"] == []
-    assert result[0]["query_stats"] == {"total_bytes_processed": 0, "query_count": 0}
+    assert result[0]["query_stats"] == {
+        "total_bytes_processed": 0,
+        "query_count": 0,
+        "observation_limited": False,
+    }
 
 
 def test_merge_table_metadata_detects_date_sharded_table_groups():

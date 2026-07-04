@@ -1,5 +1,6 @@
 """Unit tests for Markdown report generator (Story 5.2)."""
 
+import re
 from datetime import date, datetime, timezone
 
 import pytest
@@ -75,7 +76,8 @@ class TestReportHeader:
 
         header = generator.generate_header()
 
-        assert "# BigQuery Sanity Check Report - test-project" in header
+        assert "# BigQuery Sanity Check Report" in header
+        assert "> Scope: `test-project`" in header
 
     def test_header_includes_check_date(self, sample_check_response):
         """Test that header includes check date."""
@@ -83,8 +85,7 @@ class TestReportHeader:
 
         header = generator.generate_header()
 
-        # Should contain **Check Date:** line
-        assert "**Check Date:**" in header
+        assert "| Check Date |" in header
 
     def test_header_includes_timestamp(self, sample_check_response):
         """Test that header includes ISO timestamp."""
@@ -92,8 +93,7 @@ class TestReportHeader:
 
         header = generator.generate_header()
 
-        # Should contain **Generated:** line with ISO format
-        assert "**Generated:**" in header
+        assert "| Generated |" in header
         assert "T" in header  # ISO format has 'T' separator
 
 
@@ -117,7 +117,8 @@ class TestReportGeneration:
 
         report = generator.generate_report()
 
-        assert "# BigQuery Sanity Check Report - my-project" in report
+        assert "# BigQuery Sanity Check Report" in report
+        assert "> Scope: `my-project`" in report
 
 
 class TestExecutiveSummary:
@@ -131,7 +132,7 @@ class TestExecutiveSummary:
 
         summary = generator.generate_executive_summary()
 
-        assert "Total Recommendations | 3" in summary
+        assert "| Recommendations | 3 |" in summary
 
     def test_executive_summary_includes_total_savings(self, sample_check_response):
         """Test that Executive Summary includes total potential savings."""
@@ -139,7 +140,7 @@ class TestExecutiveSummary:
 
         summary = generator.generate_executive_summary()
 
-        assert "Potential Monthly Savings | €250.00" in summary
+        assert "| Estimated Savings | €250.00/month |" in summary
 
     def test_executive_summary_includes_priority_breakdown(self, sample_check_response):
         """Test that Executive Summary includes focus information."""
@@ -148,8 +149,7 @@ class TestExecutiveSummary:
         summary = generator.generate_executive_summary()
 
         assert "Dominant Category | Storage Hygiene" in summary
-        assert "### Focus Areas" in summary
-        assert "Primary focus area:" in summary
+        assert "### Savings Breakdown by Category" in summary
 
     def test_executive_summary_zero_recommendations(self):
         """Test Executive Summary with 0 recommendations."""
@@ -170,25 +170,9 @@ class TestExecutiveSummary:
 
         summary = generator.generate_executive_summary()
 
-        assert "Total Recommendations | 0" in summary
-        assert "€0.00" in summary
+        assert "| Recommendations | 0 |" in summary
+        assert "€0.00/month" in summary
         assert "No material optimization opportunities were detected" in summary
-
-
-class TestActionPlan:
-    """Test suggested starting points section."""
-
-    def test_action_plan_groups_items_by_priority(self, sample_check_response):
-        """Action plan should highlight a neutral shortlist."""
-        generator = MarkdownReportGenerator(sample_check_response)
-
-        action_plan = generator.generate_action_plan()
-
-        assert "## Suggested Starting Points" in action_plan
-        assert "ordered by estimated savings" in action_plan
-        assert "Storage Hygiene" in action_plan
-        assert "Table Layout" in action_plan
-        assert "Estimated value across these starting points" in action_plan
 
 
 class TestDetailedRecommendations:
@@ -238,10 +222,10 @@ class TestDetailedRecommendations:
 
         detailed = generator.generate_detailed_recommendations()
 
-        assert "| Category | Storage Hygiene |" in detailed
-        assert "| Estimated Monthly Savings | €150.00 |" in detailed
-        assert "> **Why It Was Flagged**" in detailed
-        assert "> **Suggested Action**" in detailed
+        assert "Category: Storage Hygiene" in detailed
+        assert "Estimated Monthly Savings: €150.00" in detailed
+        assert "##### Observation" in detailed
+        assert "##### Recommended Change" in detailed
 
     def test_storage_recommendation_mentions_long_table_once_in_asset_block(self):
         """Long storage table names should not be repeated throughout the recommendation."""
@@ -285,7 +269,7 @@ class TestDetailedRecommendations:
 
         detailed = generator.generate_detailed_recommendations()
 
-        assert "**Asset:**" in detailed
+        assert "Asset: `synthetic_data." in detailed
         assert detailed.count(long_table) <= 1
         assert "94.77 GB stored, about 204 days old" in detailed
         assert "archive or delete the table" in detailed
@@ -306,7 +290,9 @@ class TestDetailedRecommendations:
                         "these repeated query costs."
                     ),
                     savings_eur=320.0,
-                    implementation_steps=["Create materialized view"],
+                    implementation_steps=[
+                        "Create materialized view from mobility/queries/reporting.sql"
+                    ],
                 )
             ],
             summary=CheckSummary(
@@ -324,7 +310,7 @@ class TestDetailedRecommendations:
 
         detailed = generator.generate_detailed_recommendations()
 
-        assert "**Confidence Signals:**" in detailed
+        assert "##### Supporting Signals" in detailed
         assert (
             "This query pattern appears frequently enough to create repeat waste"
             in detailed
@@ -338,6 +324,94 @@ class TestDetailedRecommendations:
             in detailed
         )
         assert "Most recent execution seen: 2 days ago" not in detailed
+        assert "| Asset |" not in detailed
+        assert "Query Source: `mobility/queries/reporting.sql`" in detailed
+
+    def test_partition_pruning_recommendation_shows_asset_and_signals(self):
+        """Partition-pruning recommendations should expose asset and evidence."""
+        response = CheckResponse(
+            recommendations=[
+                Recommendation(
+                    type="queries",
+                    priority="HIGH",
+                    title="Fix partition pruning on 5.27TB table",
+                    description=(
+                        "Table user.user_attribute (5.27 TB) is partitioned on month, "
+                        "but queries still scan 88% of the table on average "
+                        "(4.64 TB per query). This usually means date filters are "
+                        "missing or not aligned with the partition column."
+                    ),
+                    savings_eur=3180.84,
+                    implementation_steps=[
+                        "Review queries hitting user.user_attribute and confirm they filter on month"
+                    ],
+                )
+            ],
+            summary=CheckSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=3180.84,
+                high_priority_count=1,
+                medium_priority_count=0,
+                low_priority_count=0,
+                categories_breakdown={"queries": 1},
+            ),
+            check_id="test",
+            new_ephemeral_token="token",
+        )
+        generator = MarkdownReportGenerator(response)
+
+        detailed = generator.generate_detailed_recommendations()
+
+        assert "Asset: `user.user_attribute`" in detailed
+        assert "##### Supporting Signals" in detailed
+        assert "Observed queries are still scanning a large share" in detailed
+        assert "The partition field to verify first is `month`" in detailed
+
+    def test_hot_view_recommendation_shows_asset_and_signals(self):
+        """Hot-view recommendations should identify the affected logical view."""
+        response = CheckResponse(
+            recommendations=[
+                Recommendation(
+                    type="queries",
+                    priority="HIGH",
+                    title="Materialize hot logical view",
+                    description=(
+                        "Logical view device_associations_identifiers.ip_maid_mapping_input_vw "
+                        "is queried repeatedly and drives about 3.87 TB scanned per "
+                        "execution (340.68 TB observed in this scan window). "
+                        "Recomputing the same view logic at read time is likely "
+                        "creating avoidable query spend."
+                    ),
+                    savings_eur=477.25,
+                    implementation_steps=[
+                        "Review the definition of device_associations_identifiers.ip_maid_mapping_input_vw and identify whether it fits a materialized view or a scheduled precomputed table"
+                    ],
+                )
+            ],
+            summary=CheckSummary(
+                total_recommendations=1,
+                total_potential_savings_eur=477.25,
+                high_priority_count=1,
+                medium_priority_count=0,
+                low_priority_count=0,
+                categories_breakdown={"queries": 1},
+            ),
+            check_id="test",
+            new_ephemeral_token="token",
+        )
+        generator = MarkdownReportGenerator(response)
+
+        detailed = generator.generate_detailed_recommendations()
+
+        assert (
+            "Asset: `device_associations_identifiers.ip_maid_mapping_input_vw`"
+            in detailed
+        )
+        assert (
+            "Repeated reads are recomputing the same logical view definition"
+            in detailed
+        )
+        assert "Each execution still scans about 3.87 TB" in detailed
 
     def test_detailed_recs_format_category_label(self, sample_recommendations):
         """Internal types should render as user-facing category labels."""
@@ -358,7 +432,7 @@ class TestDetailedRecommendations:
 
         detailed = generator.generate_detailed_recommendations()
 
-        assert "| Category | Storage Hygiene |" in detailed
+        assert "Category: Storage Hygiene" in detailed
 
 
 class TestFileSaving:
@@ -393,9 +467,9 @@ class TestFileSaving:
         content = output_path.read_text()
 
         # Should contain all sections
-        assert "# BigQuery Sanity Check Report - test-project" in content
+        assert "# BigQuery Sanity Check Report" in content
+        assert "> Scope: `test-project`" in content
         assert "## Executive Summary" in content
-        assert "## Suggested Starting Points" in content
         assert "## Detailed Recommendations" in content
 
     def test_save_report_auto_suffix_when_file_exists(
@@ -655,12 +729,20 @@ class TestEdgeCases:
 
         # Verify report generates successfully
         assert "# BigQuery Sanity Check Report" in report
-        assert "Total Recommendations | 150" in report
-        assert "## Suggested Starting Points" in report
+        assert "| Recommendations | 150 |" in report
         assert "## Detailed Recommendations" in report
 
         # Verify all 150 recommendations are in detailed section
-        assert report.count("### Recommendation") == 150
+        assert (
+            len(
+                re.findall(
+                    r"^### Recommendation \d+ - .+$",
+                    report,
+                    flags=re.MULTILINE,
+                )
+            )
+            == 150
+        )
 
 
 class TestJobIdHandling:

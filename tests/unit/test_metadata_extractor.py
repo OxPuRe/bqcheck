@@ -886,6 +886,7 @@ def test_extract_access_patterns_success(mock_client):
     assert "last_access_time" in query_sql
     # Verify ASC ordering (oldest first to identify unused tables)
     assert "ASC" in query_sql or "last_access_time\n" in query_sql
+    assert "LIMIT 10000" in query_sql
 
 
 @patch("bqcheck.scanner.metadata_extractor.bigquery.Client")

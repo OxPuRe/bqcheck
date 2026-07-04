@@ -607,6 +607,8 @@ def extract_access_patterns(
         This function accesses ONLY metadata via INFORMATION_SCHEMA.
         Table names are anonymized before transmission.
     """
+    max_patterns = 10000
+
     # Validate project_id to prevent SQL injection
     _validate_project_id(project_id)
 
@@ -638,6 +640,7 @@ def extract_access_patterns(
         HAVING MAX(timestamp) IS NOT NULL
 
         ORDER BY last_access_time ASC
+        LIMIT {max_patterns}
         """
 
         try:

@@ -729,15 +729,17 @@ def scan(
         from pydantic import ValidationError
 
         if isinstance(e, ValidationError):
-            console.print(
-                "\n[red]❌ Credentials file has invalid data "
-                "(e.g., negative balance).[/red]\n"
-            )
-            console.print(
-                "Run: [cyan]bqcheck license revoke && "
-                "bqcheck license activate <key>[/cyan]\n"
-            )
-            raise typer.Exit(ExitCode.FILE_ERROR)
+            model_title = getattr(e, "title", "")
+            if "Credential" in model_title:
+                console.print(
+                    "\n[red]❌ Credentials file has invalid data "
+                    "(e.g., negative balance).[/red]\n"
+                )
+                console.print(
+                    "Run: [cyan]bqcheck license revoke && "
+                    "bqcheck license activate <key>[/cyan]\n"
+                )
+                raise typer.Exit(ExitCode.FILE_ERROR)
 
         # General error handler
         console.print(f"\n[red]❌ Scan error: {e}[/red]\n")

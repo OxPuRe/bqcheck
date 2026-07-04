@@ -460,6 +460,7 @@ class ScanExecutor:
                 query_metadata = extract_query_metadata(
                     client, query_project_id, days=90
                 )
+                query_observation_limited = len(query_metadata) >= 10000
 
                 logger.info("Extracting access patterns...")
                 access_patterns = extract_access_patterns(client, project_id)
@@ -475,7 +476,11 @@ class ScanExecutor:
             # Merge metadata into enriched format with table_id, access/activity
             # timestamps, schema, and query stats.
             enriched_tables = merge_table_metadata(
-                table_metadata, access_patterns, query_metadata, table_schemas
+                table_metadata,
+                access_patterns,
+                query_metadata,
+                table_schemas,
+                query_observation_limited=query_observation_limited,
             )
 
             # Load encryption key from credentials for anonymization (privacy-critical)

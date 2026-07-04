@@ -306,3 +306,17 @@ class TestAggregateFilteredColumnsAllTables:
         result = aggregate_filtered_columns_all_tables(queries)
         assert "dataset.users" in result
         assert result["dataset.users"]["user_id"] == 1
+
+    def test_fallback_to_regex_with_fully_qualified_table(self):
+        """Fallback parsing should normalize project.dataset.table refs."""
+        queries = [
+            {
+                "query": (
+                    "SELECT * FROM `roam-prod-dt-cur-0.dataset.users` "
+                    "WHERE user_id = 1"
+                )
+            }
+        ]
+        result = aggregate_filtered_columns_all_tables(queries)
+        assert "dataset.users" in result
+        assert result["dataset.users"]["user_id"] == 1
