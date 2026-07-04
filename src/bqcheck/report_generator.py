@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from bqcheck.api.models import CheckResponse
+from bqcheck.api.models import CheckResponse, Recommendation
 from bqcheck.scanner.encryption import IdentifierEncryptor
 
 logger = logging.getLogger(__name__)
@@ -239,13 +239,13 @@ class MarkdownReportGenerator:
 
         if rec_type == "storage":
             match = re.search(
-                r"\(([\d.]+\s(?:GB|TB))\) has shown no observed storage activity "
-                r"for (\d+) days",
+                r"\(([\d.]+\s(?:GB|TB))\) is about (\d+) days old and no query "
+                r"activity was observed",
                 description,
                 re.IGNORECASE,
             )
             if match:
-                evidence.append("Large table with a sustained inactivity pattern")
+                evidence.append("Large table with no observed workload activity")
 
         elif rec_type == "partitioning":
             match = re.search(
@@ -304,7 +304,9 @@ class MarkdownReportGenerator:
 
             last_run = re.search(r"Last run:\s+(\d+) days ago", description)
             if last_run:
-                evidence.append("The workload is still recent, not just historical noise")
+                evidence.append(
+                    "The workload is still recent, not just historical noise"
+                )
 
         evidence = [point.rstrip(".") for point in evidence if point]
         return evidence
@@ -665,11 +667,13 @@ class MarkdownReportGenerator:
         exec_summary = f"""
 ## Executive Summary
 
-{self._build_summary_assessment(
-    summary.total_recommendations,
-    summary.total_potential_savings_eur,
-    summary.high_priority_count,
-)}
+{
+            self._build_summary_assessment(
+                summary.total_recommendations,
+                summary.total_potential_savings_eur,
+                summary.high_priority_count,
+            )
+        }
 
 | Metric | Value |
 |--------|-------|
@@ -786,7 +790,7 @@ Top high-priority optimizations for immediate impact:
             ),
         )
 
-        grouped: dict[str, list] = {}
+        grouped: dict[str, list[Recommendation]] = {}
         action_plan = """
 ## Suggested Action Plan
 

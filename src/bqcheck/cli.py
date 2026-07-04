@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 import typer
@@ -468,9 +468,9 @@ def validate(
     console.print("[dim]Validation successful (no tokens consumed)[/dim]\n")
 
 
-def _list_sample_tables(client: object, project: str, limit: int = 3) -> list[object]:
+def _list_sample_tables(client: Any, project: str, limit: int = 3) -> list[Any]:
     """List a few tables from the project using BigQuery metadata APIs."""
-    sample_tables: list[object] = []
+    sample_tables: list[Any] = []
 
     for dataset in client.list_datasets(project=project):
         dataset_ref = (
@@ -484,7 +484,7 @@ def _list_sample_tables(client: object, project: str, limit: int = 3) -> list[ob
     return sample_tables
 
 
-def _count_project_tables(client: object, project: str) -> int:
+def _count_project_tables(client: Any, project: str) -> int:
     """Count tables in the project using metadata listing APIs."""
     table_count = 0
 

@@ -313,7 +313,10 @@ class BQCheckAPIClient:
                 "API client initialized in MOCK MODE - using test responses. "
                 "Set BQCHECK_REAL_MODE=true for production use."
             )
-        server_url_raw = server_url or os.getenv(ENV_VAR_API_URL, DEFAULT_API_URL)
+        if server_url is None:
+            server_url_raw = os.getenv(ENV_VAR_API_URL) or DEFAULT_API_URL
+        else:
+            server_url_raw = server_url
 
         self.set_server_url(server_url_raw)
 

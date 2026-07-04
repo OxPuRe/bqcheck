@@ -33,8 +33,42 @@ def _create_count_row(count):
 def _create_query_row(query_text):
     """Helper to create mock query row."""
     row = Mock()
+    row.job_id = "job_123"
     row.query = query_text
+    row.total_bytes_processed = 1024
+    row.creation_time = "2026-07-04T00:00:00+00:00"
+    row.user_email = "user@example.com"
+    row.job_type = "QUERY"
+    row.state = "DONE"
+    row.referenced_tables = []
     return row
+
+
+def _create_dataset(dataset_id):
+    """Helper to create mock dataset item."""
+    dataset = Mock()
+    dataset.dataset_id = dataset_id
+    dataset.reference = None
+    return dataset
+
+
+def _configure_metadata_listing(
+    mock_client,
+    project="test-project",
+    dataset_id="dataset",
+    table_name="table1",
+):
+    """Configure dataset/table listing APIs used by validate command."""
+    dataset = _create_dataset(dataset_id)
+    sample_table = _create_table_row(project, dataset_id, table_name)
+    sample_table.dataset_id = dataset_id
+    sample_table.reference = None
+    dataset_ref = Mock()
+    dataset_ref.location = "EU"
+
+    mock_client.list_datasets.return_value = [dataset]
+    mock_client.list_tables.return_value = [sample_table]
+    mock_client.get_dataset.return_value = dataset_ref
 
 
 class TestValidateVerboseFlag:
@@ -49,7 +83,7 @@ class TestValidateVerboseFlag:
         mock_auth.return_value = mock_client
 
         # Create mock query results for different queries
-        def query_side_effect(query_str):
+        def query_side_effect(query_str, *args, **kwargs):
             mock_job = Mock()
             if "COUNT" in query_str:
                 mock_job.result.return_value = [_create_count_row(10)]
@@ -72,6 +106,12 @@ class TestValidateVerboseFlag:
 
         mock_client.query.side_effect = query_side_effect
         mock_client.list_jobs.return_value = []
+        _configure_metadata_listing(
+            mock_client,
+            project="test-project",
+            dataset_id="test_dataset",
+            table_name="test_table",
+        )
 
         mock_health.return_value = {"status": "ok"}
 
@@ -94,7 +134,7 @@ class TestValidateVerboseFlag:
         mock_client = Mock()
         mock_auth.return_value = mock_client
 
-        def query_side_effect(query_str):
+        def query_side_effect(query_str, *args, **kwargs):
             mock_job = Mock()
             if "COUNT" in query_str:
                 mock_job.result.return_value = [_create_count_row(5)]
@@ -106,6 +146,12 @@ class TestValidateVerboseFlag:
 
         mock_client.query.side_effect = query_side_effect
         mock_client.list_jobs.return_value = []
+        _configure_metadata_listing(
+            mock_client,
+            project="test-project",
+            dataset_id="test_dataset",
+            table_name="test_table",
+        )
 
         mock_health.return_value = {"status": "ok"}
 
@@ -129,7 +175,7 @@ class TestMetadataPreview:
         mock_auth.return_value = mock_client
 
         # Mock query results - different results for different queries
-        def query_side_effect(query_str):
+        def query_side_effect(query_str, *args, **kwargs):
             mock_job = Mock()
             if "COUNT" in query_str:
                 # Count query
@@ -155,6 +201,7 @@ class TestMetadataPreview:
 
         mock_client.query.side_effect = query_side_effect
         mock_client.list_jobs.return_value = []
+        _configure_metadata_listing(mock_client, project="my-project")
 
         mock_health.return_value = {"status": "ok"}
 
@@ -179,7 +226,7 @@ class TestAnonymizationPreview:
         mock_client = Mock()
         mock_auth.return_value = mock_client
 
-        def query_side_effect(query_str):
+        def query_side_effect(query_str, *args, **kwargs):
             mock_job = Mock()
             if "COUNT" in query_str:
                 mock_job.result.return_value = [_create_count_row(5)]
@@ -200,6 +247,12 @@ class TestAnonymizationPreview:
 
         mock_client.query.side_effect = query_side_effect
         mock_client.list_jobs.return_value = []
+        _configure_metadata_listing(
+            mock_client,
+            project="test-project",
+            dataset_id="test_dataset",
+            table_name="test_table",
+        )
 
         mock_health.return_value = {"status": "ok"}
 
@@ -231,7 +284,7 @@ class TestPayloadSizeEstimation:
         mock_client = Mock()
         mock_auth.return_value = mock_client
 
-        def query_side_effect(query_str):
+        def query_side_effect(query_str, *args, **kwargs):
             mock_job = Mock()
             if "COUNT" in query_str:
                 mock_job.result.return_value = [_create_count_row(3)]
@@ -251,6 +304,7 @@ class TestPayloadSizeEstimation:
 
         mock_client.query.side_effect = query_side_effect
         mock_client.list_jobs.return_value = []
+        _configure_metadata_listing(mock_client)
 
         mock_health.return_value = {"status": "ok"}
 
@@ -285,7 +339,7 @@ class TestPrivacyGuarantees:
         mock_client = Mock()
         mock_auth.return_value = mock_client
 
-        def query_side_effect(query_str):
+        def query_side_effect(query_str, *args, **kwargs):
             mock_job = Mock()
             if "COUNT" in query_str:
                 mock_job.result.return_value = [_create_count_row(1)]
@@ -305,6 +359,7 @@ class TestPrivacyGuarantees:
 
         mock_client.query.side_effect = query_side_effect
         mock_client.list_jobs.return_value = []
+        _configure_metadata_listing(mock_client)
 
         mock_health.return_value = {"status": "ok"}
 
@@ -336,7 +391,7 @@ class TestTransmissionStatement:
         mock_client = Mock()
         mock_auth.return_value = mock_client
 
-        def query_side_effect(query_str):
+        def query_side_effect(query_str, *args, **kwargs):
             mock_job = Mock()
             if "COUNT" in query_str:
                 mock_job.result.return_value = [_create_count_row(1)]
@@ -356,6 +411,7 @@ class TestTransmissionStatement:
 
         mock_client.query.side_effect = query_side_effect
         mock_client.list_jobs.return_value = []
+        _configure_metadata_listing(mock_client)
 
         mock_health.return_value = {"status": "ok"}
 

@@ -396,42 +396,46 @@ class TestScanCommandProgressIndicators:
                             "bqcheck.scanner.metadata_extractor.extract_access_patterns"
                         ) as mock_access:
                             with patch(
-                                "bqcheck.scanner.metadata_extractor.extract_table_schemas"
-                            ) as mock_schemas:
-                                with patch("httpx.AsyncClient.post") as mock_post:
-                                    # Setup mocks
-                                    mock_auth.return_value = Mock()
-                                    mock_tables.return_value = []
-                                    mock_queries.return_value = []
-                                    mock_access.return_value = []
-                                    mock_schemas.return_value = {}
+                                "bqcheck.scanner.metadata_extractor.extract_materialized_view_definitions"
+                            ) as mock_materialized_views:
+                                with patch(
+                                    "bqcheck.scanner.metadata_extractor.extract_table_schemas"
+                                ) as mock_schemas:
+                                    with patch("httpx.AsyncClient.post") as mock_post:
+                                        # Setup mocks
+                                        mock_auth.return_value = Mock()
+                                        mock_tables.return_value = []
+                                        mock_queries.return_value = []
+                                        mock_access.return_value = []
+                                        mock_materialized_views.return_value = []
+                                        mock_schemas.return_value = {}
 
-                                    # Simulate network error
-                                    mock_post.side_effect = httpx.ConnectError(
-                                        "Connection refused"
-                                    )
-
-                                    # Execute scan
-                                    client = BQCheckAPIClient(mock_mode=False)
-                                    executor = ScanExecutor(client)
-
-                                    # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
-                                    with pytest.raises(ScanError) as exc_info:
-                                        await executor.execute_real_scan(
-                                            project_id="my-project",
-                                            ephemeral_token="eph_test_token",
+                                        # Simulate network error
+                                        mock_post.side_effect = httpx.ConnectError(
+                                            "Connection refused"
                                         )
 
-                                    assert exc_info.value.exit_code == 1
+                                        # Execute scan
+                                        client = BQCheckAPIClient(mock_mode=False)
+                                        executor = ScanExecutor(client)
 
-                                    # Verify error message was printed
-                                    captured = capsys.readouterr()
-                                    assert (
-                                        "Unable to reach analysis server"
-                                        in captured.err
-                                        or "Unable to reach analysis server"
-                                        in captured.out
-                                    )
+                                        # Story 5.3: Should raise ScanError with code 1 instead of sys.exit()
+                                        with pytest.raises(ScanError) as exc_info:
+                                            await executor.execute_real_scan(
+                                                project_id="my-project",
+                                                ephemeral_token="eph_test_token",
+                                            )
+
+                                        assert exc_info.value.exit_code == 1
+
+                                        # Verify error message was printed
+                                        captured = capsys.readouterr()
+                                        assert (
+                                            "Unable to reach analysis server"
+                                            in captured.err
+                                            or "Unable to reach analysis server"
+                                            in captured.out
+                                        )
 
     @pytest.mark.skip(reason="Flaky test - timeout error message inconsistent")
     @pytest.mark.asyncio
