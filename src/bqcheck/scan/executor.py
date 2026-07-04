@@ -472,7 +472,8 @@ class ScanExecutor:
                     client, project_id
                 )
 
-            # Merge metadata into enriched format with table_id, last_modified_time, schema, query_stats
+            # Merge metadata into enriched format with table_id, access/activity
+            # timestamps, schema, and query stats.
             enriched_tables = merge_table_metadata(
                 table_metadata, access_patterns, query_metadata, table_schemas
             )

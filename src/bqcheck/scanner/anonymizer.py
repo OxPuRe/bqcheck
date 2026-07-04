@@ -443,9 +443,10 @@ def anonymize_metadata(
         "job_type",
         "state",
         # AccessPattern non-sensitive fields
-        "last_modified_time",
+        "last_access_time",
         # Merged/enriched table fields (from merge_table_metadata)
         "table_id",  # Will be anonymized since it contains table_catalog/schema/name
+        "last_modified_time",
         "schema",
         "query_stats",
         "filtered_columns",  # Sub-field of query_stats (column filtering patterns)
@@ -515,13 +516,14 @@ def merge_table_metadata(
 
     Creates enriched table metadata with:
     - table_id: "dataset.table" format
-    - last_modified_time: from access_patterns
+    - last_access_time: from access_patterns when available
+    - last_modified_time: conservative fallback from table creation metadata
     - schema: column definitions
     - query_stats: aggregated query statistics (bytes, count, filtered_columns)
 
     Args:
         tables: List of TableMetadata
-        access_patterns: List of AccessPattern (for last_modified_time)
+        access_patterns: List of AccessPattern (for last_access_time)
         queries: List of QueryMetadata (for query_stats)
         schemas: Dict mapping "dataset.table" to column list
 
@@ -543,7 +545,7 @@ def merge_table_metadata(
     access_map = {}
     for pattern in access_patterns:
         key = f"{pattern.table_schema}.{pattern.table_name}"
-        access_map[key] = pattern.last_modified_time
+        access_map[key] = pattern.last_access_time
 
     # Convert queries to list of dicts for query_analyzer
     query_dicts = [q.model_dump() for q in queries]
@@ -665,12 +667,12 @@ def merge_table_metadata(
         # Add table_id
         table_dict["table_id"] = table_key
 
-        # Add last_modified_time
+        # Preserve a conservative fallback timestamp from table metadata.
+        table_dict["last_modified_time"] = table.creation_time
+
+        # Add latest observed storage activity when available.
         if table_key in access_map:
-            table_dict["last_modified_time"] = access_map[table_key]
-        else:
-            # Fallback to creation_time if no access pattern
-            table_dict["last_modified_time"] = table.creation_time
+            table_dict["last_access_time"] = access_map[table_key]
 
         # Add schema
         if table_key in schemas:
@@ -823,7 +825,7 @@ def anonymize_access_patterns(
 
     Converts Pydantic AccessPattern models to dictionaries and encrypts
     sensitive fields (table_catalog, table_schema, table_name) while
-    preserving last_modified_time metadata.
+    preserving last_access_time metadata.
 
     Args:
         patterns: List of AccessPattern Pydantic models
@@ -840,7 +842,7 @@ def anonymize_access_patterns(
         ...         table_catalog="my-project",
         ...         table_schema="analytics",
         ...         table_name="users",
-        ...         last_modified_time="2024-01-20 10:30:00 UTC"
+        ...         last_access_time="2024-01-20 10:30:00 UTC"
         ...     )
         ... ]
         >>> key = IdentifierEncryptor.generate_key()

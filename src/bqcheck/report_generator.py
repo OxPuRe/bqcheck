@@ -239,7 +239,8 @@ class MarkdownReportGenerator:
 
         if rec_type == "storage":
             match = re.search(
-                r"\(([\d.]+\s(?:GB|TB))\) has not been accessed for (\d+) days",
+                r"\(([\d.]+\s(?:GB|TB))\) has shown no observed storage activity "
+                r"for (\d+) days",
                 description,
                 re.IGNORECASE,
             )
@@ -1028,30 +1029,31 @@ Top high-priority optimizations for immediate impact:
         if "storage" in rec_types:
             guidance += """### Removing Unused Tables
 
-For tables identified as unused:
+For storage recommendations flagged as inactive:
 
-1. **Verify table is truly unused**
+1. **Verify the table is truly inactive**
 
-   Check application code and documentation, confirm with data owners, and review retention policies.
+   Check application code and documentation, confirm with data owners, review retention policies, and inspect recent query or pipeline activity before taking action.
 
-   To verify last access time yourself:
+   To verify recent storage activity yourself:
    ```sql
-   -- Check when table was last accessed
+   -- Review recent storage timeline entries for the table
    SELECT
+     timestamp,
+     project_id,
+     table_schema,
      table_name,
-     TIMESTAMP_MILLIS(last_modified_time) as last_modified,
-     TIMESTAMP_MILLIS(CAST(JSON_VALUE(option_value) AS INT64)) as last_access
    FROM
-     `project.dataset.INFORMATION_SCHEMA.TABLE_OPTIONS`
+     `project.region-us.INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE_BY_PROJECT`
    WHERE
      table_name = 'your_table_name'
-     AND option_name = 'lastAccessTime';
+   ORDER BY timestamp DESC
+   LIMIT 20;
    ```
 
-   Or check table metadata:
+   And review recent jobs touching the table:
    ```bash
-   # Get table metadata including last access time
-   bq show --format=prettyjson project:dataset.table_name | grep -A 2 lastModifiedTime
+   bq ls -j --max_results=20 --filter='state:done'
    ```
 
 2. **Create backup** (if needed)
@@ -1075,7 +1077,7 @@ For tables identified as unused:
    AS SELECT * FROM `project.dataset.table_name`;
    ```
 
-3. **Delete the table**
+3. **Archive or delete only after confirmation**
 
    Using bq CLI:
    ```bash

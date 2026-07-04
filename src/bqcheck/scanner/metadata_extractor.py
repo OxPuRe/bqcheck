@@ -589,15 +589,15 @@ def extract_access_patterns(
     Extract table access patterns from INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE.
 
     Queries INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE_BY_PROJECT to get:
-    - Last modification timestamp per table (approximates last access)
-    - Identifies potentially unused tables
+    - Latest observable storage activity timestamp per table
+    - A conservative inactivity signal for storage-focused recommendations
 
     Args:
         client: Authenticated BigQuery client (from authenticate_bigquery)
         project_id: GCP project ID to scan
 
     Returns:
-        List of AccessPattern objects with last modification timestamps
+        List of AccessPattern objects with observed storage activity timestamps
 
     Raises:
         ValueError: If project_id format is invalid
@@ -621,21 +621,23 @@ def extract_access_patterns(
         # Fallback to common regions if dataset listing fails
         locations = {"US", "EU"}
 
+    failures = []
+
     # Try each detected location
     for location in locations:
         query = f"""
         SELECT
-            table_catalog,
+            project_id as table_catalog,
             table_schema,
             table_name,
-            CAST(MAX(timestamp) AS STRING) as last_modified_time
+            CAST(MAX(timestamp) AS STRING) as last_access_time
 
         FROM `{project_id}.region-{location.lower()}.INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE_BY_PROJECT`
 
-        GROUP BY table_catalog, table_schema, table_name
+        GROUP BY project_id, table_schema, table_name
         HAVING MAX(timestamp) IS NOT NULL
 
-        ORDER BY last_modified_time ASC
+        ORDER BY last_access_time ASC
         """
 
         try:
@@ -651,7 +653,7 @@ def extract_access_patterns(
                     "table_catalog": row.table_catalog,
                     "table_schema": row.table_schema,
                     "table_name": row.table_name,
-                    "last_modified_time": row.last_modified_time,
+                    "last_access_time": row.last_access_time,
                 }
 
                 # Validate and create Pydantic model
@@ -666,13 +668,15 @@ def extract_access_patterns(
 
         except GoogleAPIError as e:
             # Try next location
+            failures.append(f"{location}: {e}")
             logger.debug(f"Location {location} failed: {str(e)}")
             continue
 
     # No location worked - return empty list with warning
+    last_error = failures[-1] if failures else "unknown error"
     logger.warning(
         f"Could not extract access patterns from {project_id}. "
-        f"Tried locations: {locations}. This may be normal if the project "
-        "has no storage timeline data or uses a different location."
+        f"Tried locations: {locations}. Continuing without inactivity evidence. "
+        f"Last error: {last_error}"
     )
     return []

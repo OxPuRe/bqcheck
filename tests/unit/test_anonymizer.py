@@ -350,13 +350,13 @@ class TestMetadataBatchAnonymization:
                 table_catalog="my-project",
                 table_schema="analytics",
                 table_name="users",
-                last_modified_time="2024-01-20 10:30:00 UTC",
+                last_access_time="2024-01-20 10:30:00 UTC",
             ),
             AccessPattern(
                 table_catalog="my-project",
                 table_schema="analytics",
                 table_name="payments",
-                last_modified_time="2024-01-19 08:15:00 UTC",
+                last_access_time="2024-01-19 08:15:00 UTC",
             ),
         ]
 
@@ -369,7 +369,7 @@ class TestMetadataBatchAnonymization:
         assert len(anonymized[0]["table_name"]) > 0
 
         # Verify timestamps are preserved
-        assert anonymized[0]["last_modified_time"] == "2024-01-20 10:30:00 UTC"
+        assert anonymized[0]["last_access_time"] == "2024-01-20 10:30:00 UTC"
 
         # Verify no raw names in output
         anonymized_json = json.dumps(anonymized)

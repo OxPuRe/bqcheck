@@ -543,14 +543,14 @@ def test_access_pattern_pydantic_validation():
         "table_catalog": "test-project",
         "table_schema": "analytics",
         "table_name": "events",
-        "last_modified_time": "2024-01-15 08:30:00 UTC",
+        "last_access_time": "2024-01-15 08:30:00 UTC",
     }
 
     pattern = AccessPattern(**valid_data)
     assert pattern.table_catalog == "test-project"
     assert pattern.table_schema == "analytics"
     assert pattern.table_name == "events"
-    assert pattern.last_modified_time == "2024-01-15 08:30:00 UTC"
+    assert pattern.last_access_time == "2024-01-15 08:30:00 UTC"
 
     # Test that required fields are enforced
     with pytest.raises(Exception):  # Pydantic validation error
@@ -840,21 +840,21 @@ def test_extract_access_patterns_success(mock_client):
     mock_row_1.table_catalog = "my-project"
     mock_row_1.table_schema = "analytics"
     mock_row_1.table_name = "old_events"
-    mock_row_1.last_modified_time = "2023-06-15 08:30:00 UTC"  # Very old
+    mock_row_1.last_access_time = "2023-06-15 08:30:00 UTC"  # Very old
 
     mock_row_2 = Mock()
     mock_row_2.ddl = ""
     mock_row_2.table_catalog = "my-project"
     mock_row_2.table_schema = "analytics"
     mock_row_2.table_name = "recent_users"
-    mock_row_2.last_modified_time = "2024-01-20 14:00:00 UTC"  # Recent
+    mock_row_2.last_access_time = "2024-01-20 14:00:00 UTC"  # Recent
 
     mock_row_3 = Mock()
     mock_row_3.ddl = ""
     mock_row_3.table_catalog = "my-project"
     mock_row_3.table_schema = "warehouse"
     mock_row_3.table_name = "products"
-    mock_row_3.last_modified_time = "2024-01-10 10:00:00 UTC"  # Older
+    mock_row_3.last_access_time = "2024-01-10 10:00:00 UTC"  # Older
 
     # Mock query result
     mock_query_job = Mock()
@@ -873,7 +873,7 @@ def test_extract_access_patterns_success(mock_client):
 
     # Verify first table (oldest - unused)
     assert patterns[0].table_name == "old_events"
-    assert patterns[0].last_modified_time == "2023-06-15 08:30:00 UTC"
+    assert patterns[0].last_access_time == "2023-06-15 08:30:00 UTC"
 
     # Verify query was called
     mock_bq_client.query.assert_called_once()
@@ -882,9 +882,10 @@ def test_extract_access_patterns_success(mock_client):
     call_args = mock_bq_client.query.call_args
     query_sql = call_args[0][0]
     assert "ORDER BY" in query_sql
-    assert "last_modified_time" in query_sql
+    assert "project_id as table_catalog" in query_sql
+    assert "last_access_time" in query_sql
     # Verify ASC ordering (oldest first to identify unused tables)
-    assert "ASC" in query_sql or "last_modified_time\n" in query_sql
+    assert "ASC" in query_sql or "last_access_time\n" in query_sql
 
 
 @patch("bqcheck.scanner.metadata_extractor.bigquery.Client")

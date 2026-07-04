@@ -83,8 +83,8 @@ class QueryMetadata(BaseModel):
 class AccessPattern(BaseModel):
     """Table access pattern from INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE.
 
-    This model captures the last access/modification timestamp for tables,
-    used to identify unused tables. All fields use Python 3.8 compatible type hints.
+    This model captures the latest observable storage activity timestamp for tables.
+    All fields use Python 3.8 compatible type hints.
     """
 
     # Table identification
@@ -92,9 +92,9 @@ class AccessPattern(BaseModel):
     table_schema: str = Field(..., description="Dataset ID")
     table_name: str = Field(..., description="Table name")
 
-    # Access metadata
-    last_modified_time: str = Field(
-        ..., description="Last modification timestamp (approximates last access)"
+    # Activity metadata
+    last_access_time: str = Field(
+        ..., description="Latest observed storage activity timestamp (ISO format)"
     )
 
     model_config = ConfigDict(
