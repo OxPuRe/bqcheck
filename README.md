@@ -6,16 +6,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
 
-**Open-source CLI client** for BigQuery sanity checks with privacy-first architecture.
+Open-source CLI for BigQuery sanity checks with a privacy-first architecture.
 
 ## Features
 
-- 🔒 **Privacy-first**: Metadata-only analysis (no raw data access)
-- 🔐 **Client-side anonymization**: SHA-256 hashing of project/table IDs
-- 🎫 **Token-based licensing**: Pay-per-scan model
-- 💰 **Actionable recommendations**: Storage, partitioning, clustering, query optimizations
-- 📊 **Markdown reports**: Well-formatted sanity check reports with savings breakdown
-- ✅ **Free validation**: Check BigQuery access before purchasing tokens
+- Metadata-only analysis with no raw table data access
+- Client-side identifier protection before transmission
+- Token-based licensing for private testing and commercial usage
+- Actionable recommendations across storage, table layout, and query efficiency
+- Markdown reports with savings breakdown and operator guidance
+- Free validation flow before any token is consumed
 
 ## Architecture
 
@@ -24,20 +24,27 @@ bqcheck is a client-server architecture:
 - **Client** (this repo): Open-source CLI tool that extracts BigQuery metadata locally
 - **Server** ([bqcheck-server](https://github.com/OxPuRe/bqcheck-server)): Proprietary analysis engine that analyzes metadata and generates recommendations
 
-The client anonymizes all project and table identifiers before sending metadata to the server, ensuring your data stays private.
+The client protects project, dataset, table, and query identifiers before
+sending metadata to the server, so your data stays private.
 
 ## Installation
 
 ### Using UV (Recommended)
 
 ```bash
-uv tool install bqcheck
+uv tool install --from git+https://github.com/OxPuRe/bqcheck.git bqcheck
 ```
 
-### Using pip
+### From a Local Checkout
 
 ```bash
-pip install bqcheck
+uv tool install --from /path/to/bqcheck bqcheck
+```
+
+### Using pipx
+
+```bash
+pipx install git+https://github.com/OxPuRe/bqcheck.git
 ```
 
 ### Verify Install
@@ -84,6 +91,15 @@ Validate multi-project setup:
 bqcheck validate --project storage-project --query-project processing-project
 ```
 
+Validate against multiple query-running projects:
+
+```bash
+bqcheck validate \
+  --project storage-project \
+  --query-project processing-project-a \
+  --query-project processing-project-b
+```
+
 Show detailed validation steps:
 
 ```bash
@@ -102,7 +118,16 @@ bqcheck scan --project my-gcp-project
 bqcheck scan --project storage-project --query-project processing-project
 ```
 
-Use `--query-project` when your tables are stored in one project but queries run in another. This dramatically improves query-based recommendations (materialized views, clustering opportunities).
+Use `--query-project` when your tables are stored in one project but queries
+run in another. Repeat it when multiple projects generate workload against the
+same datasets.
+
+```bash
+bqcheck scan \
+  --project storage-project \
+  --query-project processing-project-a \
+  --query-project processing-project-b
+```
 
 ### License Management
 
@@ -233,13 +258,14 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv ru
 ## How It Works
 
 1. **Extract metadata** - Client queries BigQuery INFORMATION_SCHEMA for table/query metadata
-2. **Anonymize locally** - SHA-256 hash all project and table identifiers
-3. **Send to server** - Encrypted HTTPS request with ephemeral token
+2. **Protect identifiers locally** - Project IDs are hashed and sensitive identifiers are encrypted before upload
+3. **Send to server** - Encrypted HTTPS request with an ephemeral token
 4. **Analyze** - Server runs 6 active detection algorithms (storage, date sharding, partitioning, partition pruning, clustering, queries)
 5. **Receive recommendations** - Markdown report with prioritized optimizations and EUR savings
 6. **Auto-renew token** - Server returns fresh ephemeral token for next scan
 
-**Privacy guarantee:** Only metadata and statistics are sent. No table data, query results, or business logic ever leaves your GCP project.
+**Privacy guarantee:** Only metadata and statistics are sent. No table data,
+query results, or business logic ever leaves your GCP project.
 
 ## Related Repositories
 
