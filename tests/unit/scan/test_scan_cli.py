@@ -346,7 +346,12 @@ class TestScanMultiProjectSupport:
         assert result.exit_code == 0
 
     def test_scan_accepts_multiple_query_projects(
-        self, tmp_path, mock_credentials, mock_creds_path, mock_bq_validation, monkeypatch
+        self,
+        tmp_path,
+        mock_credentials,
+        mock_creds_path,
+        mock_bq_validation,
+        monkeypatch,
     ):
         """Repeated --query-project flags should be forwarded as an ordered list."""
         mock_creds_path.parent.mkdir(parents=True, exist_ok=True)
@@ -355,7 +360,9 @@ class TestScanMultiProjectSupport:
 
         captured: dict[str, object] = {}
 
-        def fake_execute(self, project, query_projects=None, output_path=None, force=False):
+        def fake_execute(
+            self, project, query_projects=None, output_path=None, force=False
+        ):
             captured["project"] = project
             captured["query_projects"] = query_projects
             from bqcheck.scan.models import ScanResult

@@ -307,9 +307,7 @@ class MarkdownReportGenerator:
                 evidence.append(
                     "Repeated reads are recomputing the same logical view definition"
                 )
-                evidence.append(
-                    f"Each execution still scans about {hot_view.group(2)}"
-                )
+                evidence.append(f"Each execution still scans about {hot_view.group(2)}")
 
             match = re.search(
                 r"executes ([\d.]+) times/day.*?processing ([\d.]+\sTB) per execution "
@@ -822,7 +820,9 @@ class MarkdownReportGenerator:
 |--------|-------|
 | Recommendations | {summary.total_recommendations} |
 | Dominant Category | {dominant_category} |
-| Estimated Savings | {self._format_currency(summary.total_potential_savings_eur)}/month |
+| Estimated Savings | {
+            self._format_currency(summary.total_potential_savings_eur)
+        }/month |
 """
 
         # Add category breakdown if we have recommendations
@@ -890,9 +890,7 @@ class MarkdownReportGenerator:
             decrypted_description = self._truncate_query_hash(decrypted_description)
 
             summary_text = self._build_compact_summary(rec, decrypted_description)
-            summary_is_duplicate = (
-                summary_text.strip() == decrypted_description.strip()
-            )
+            summary_is_duplicate = summary_text.strip() == decrypted_description.strip()
             asset_label = self._build_asset_label(rec, decrypted_description)
             implementation_steps = [
                 sanitized

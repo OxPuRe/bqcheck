@@ -158,7 +158,7 @@ def aggregate_filtered_columns_all_tables(
             query_lower = query.lower()
             table_pattern = (
                 r'(?:from|join)\s+[`"]?'
-                r'([a-z0-9_-]+(?:\.[a-z0-9_-]+){1,2})'
+                r"([a-z0-9_-]+(?:\.[a-z0-9_-]+){1,2})"
                 r'[`"]?'
             )
             table_refs = [
@@ -166,7 +166,9 @@ def aggregate_filtered_columns_all_tables(
                 for table_ref in re.findall(table_pattern, query_lower)
             ]
         else:
-            table_refs = [_normalize_table_reference(table_ref) for table_ref in table_refs]
+            table_refs = [
+                _normalize_table_reference(table_ref) for table_ref in table_refs
+            ]
 
         # Extract filtered columns once for this query
         filtered_columns = extract_filtered_columns(query)
@@ -229,8 +231,7 @@ def aggregate_filtered_columns_by_table(
         if referenced_tables:
             # Use BigQuery metadata if available
             references_table = table_key in {
-                _normalize_table_reference(table_ref)
-                for table_ref in referenced_tables
+                _normalize_table_reference(table_ref) for table_ref in referenced_tables
             }
         else:
             # Fallback: regex parsing (backwards compatibility)

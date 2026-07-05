@@ -174,42 +174,50 @@ def test_validate_and_scan_both_work_when_tokens_available(tmp_path: Path):
                                 return_value={},
                             ):
                                 with patch(
-                                    "httpx.AsyncClient", return_value=mock_async_client
+                                    "bqcheck.scanner.metadata_extractor.extract_materialized_view_definitions",
+                                    return_value=[],
                                 ):
-                                    # ACT 1: Run validate (should succeed)
-                                    validate_result = runner.invoke(
-                                        app, ["validate", "--project", "test-project"]
-                                    )
+                                    with patch(
+                                        "httpx.AsyncClient",
+                                        return_value=mock_async_client,
+                                    ):
+                                        # ACT 1: Run validate (should succeed)
+                                        validate_result = runner.invoke(
+                                            app,
+                                            ["validate", "--project", "test-project"],
+                                        )
 
-                                    # ASSERT 1: Validate doesn't fail due to token issues
-                                    assert validate_result.exit_code != 4, (
-                                        "Validate should not check token balance"
-                                    )
+                                        # ASSERT 1: Validate doesn't fail due to token issues
+                                        assert validate_result.exit_code != 4, (
+                                            "Validate should not check token balance"
+                                        )
 
-                                    # Verify balance unchanged (validate doesn't consume)
-                                    creds_after_validate = json.loads(
-                                        mock_creds_path.read_text()
-                                    )
-                                    assert (
-                                        creds_after_validate["token_pool_balance"] == 5
-                                    ), "Validate should not consume tokens"
+                                        # Verify balance unchanged (validate doesn't consume)
+                                        creds_after_validate = json.loads(
+                                            mock_creds_path.read_text()
+                                        )
+                                        assert (
+                                            creds_after_validate["token_pool_balance"]
+                                            == 5
+                                        ), "Validate should not consume tokens"
 
-                                    # ACT 2: Run scan (should succeed and consume 1 token)
-                                    scan_result = runner.invoke(
-                                        app, ["scan", "--project", "test-project"]
-                                    )
+                                        # ACT 2: Run scan (should succeed and consume 1 token)
+                                        scan_result = runner.invoke(
+                                            app,
+                                            ["scan", "--project", "test-project"],
+                                        )
 
-                                    # ASSERT 2: Scan succeeds
-                                    assert scan_result.exit_code == 0, (
-                                        f"Scan should succeed with available tokens. "
-                                        f"Got exit code: {scan_result.exit_code}\n"
-                                        f"Output: {scan_result.stdout}"
-                                    )
+                                        # ASSERT 2: Scan succeeds
+                                        assert scan_result.exit_code == 0, (
+                                            f"Scan should succeed with available tokens. "
+                                            f"Got exit code: {scan_result.exit_code}\n"
+                                            f"Output: {scan_result.stdout}"
+                                        )
 
-                                    # Verify balance decremented by 1
-                                    creds_after_scan = json.loads(
-                                        mock_creds_path.read_text()
-                                    )
-                                    assert (
-                                        creds_after_scan["token_pool_balance"] == 4
-                                    ), "Scan should consume exactly 1 token"
+                                        # Verify balance decremented by 1
+                                        creds_after_scan = json.loads(
+                                            mock_creds_path.read_text()
+                                        )
+                                        assert (
+                                            creds_after_scan["token_pool_balance"] == 4
+                                        ), "Scan should consume exactly 1 token"

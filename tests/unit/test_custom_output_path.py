@@ -84,9 +84,14 @@ def mock_bigquery_scan():
                                 return_value={},
                             ):
                                 with patch(
-                                    "httpx.AsyncClient", return_value=mock_async_client
+                                    "bqcheck.scanner.metadata_extractor.extract_materialized_view_definitions",
+                                    return_value=[],
                                 ):
-                                    yield
+                                    with patch(
+                                        "httpx.AsyncClient",
+                                        return_value=mock_async_client,
+                                    ):
+                                        yield
 
 
 @pytest.fixture

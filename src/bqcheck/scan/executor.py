@@ -23,7 +23,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import httpx
 import typer
@@ -111,7 +111,7 @@ class ScanError(Exception):
         super().__init__(message)
 
 
-def _sort_queries_for_payload(queries: list[dict]) -> list[dict]:
+def _sort_queries_for_payload(queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Keep the highest-value query patterns first when payload trimming is needed."""
     return sorted(
         queries,
@@ -160,7 +160,9 @@ def _fit_metadata_to_payload_limit(
         queries=sorted_queries[:smallest_limit],
         access_patterns=metadata.access_patterns,
     )
-    reduced_request = CheckRequest(project_id=project_id_hash, metadata=reduced_metadata)
+    reduced_request = CheckRequest(
+        project_id=project_id_hash, metadata=reduced_metadata
+    )
     return reduced_metadata, _check_request_size_mb(reduced_request), smallest_limit
 
 

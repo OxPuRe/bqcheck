@@ -399,9 +399,10 @@ class TestPayloadSizing:
         assert reduced_limit is not None
         assert len(fitted.queries) == reduced_limit
         assert size_mb > 0
-        assert fitted.queries[0]["total_bytes_processed"] >= fitted.queries[-1][
-            "total_bytes_processed"
-        ]
+        assert (
+            fitted.queries[0]["total_bytes_processed"]
+            >= fitted.queries[-1]["total_bytes_processed"]
+        )
 
     def test_single_use_token_tracking(
         self, test_credentials, mock_creds_path, mock_bigquery_and_server
@@ -484,9 +485,7 @@ class TestMultiProjectPermissionValidation:
             )
 
             # Validation should be called with both projects
-            mock_validate.assert_called_once_with(
-                "storage-project", ["query-project"]
-            )
+            mock_validate.assert_called_once_with("storage-project", ["query-project"])
 
     def test_validation_with_single_project(
         self, test_credentials, mock_creds_path, mock_real_scan_mode

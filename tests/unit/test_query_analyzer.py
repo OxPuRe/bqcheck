@@ -312,8 +312,7 @@ class TestAggregateFilteredColumnsAllTables:
         queries = [
             {
                 "query": (
-                    "SELECT * FROM `roam-prod-dt-cur-0.dataset.users` "
-                    "WHERE user_id = 1"
+                    "SELECT * FROM `roam-prod-dt-cur-0.dataset.users` WHERE user_id = 1"
                 )
             }
         ]

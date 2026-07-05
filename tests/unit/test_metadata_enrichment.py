@@ -234,6 +234,9 @@ def test_extract_table_schemas_mock():
     """Test schema extraction with mocked client."""
     mock_client = Mock()
     mock_client.list_datasets.return_value = []
+    mock_query_job = Mock()
+    mock_query_job.result.return_value = []
+    mock_client.query.return_value = mock_query_job
 
     result = extract_table_schemas(mock_client, "test-project")
 
