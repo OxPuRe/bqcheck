@@ -20,6 +20,9 @@ class TableMetadata(BaseModel):
 
     # Temporal metadata
     creation_time: str = Field(..., description="Table creation timestamp (ISO format)")
+    last_modified_time: Optional[str] = Field(
+        None, description="Latest table metadata modification timestamp"
+    )
 
     # Storage metadata
     size_bytes: Optional[int] = Field(None, description="Total storage size in bytes")

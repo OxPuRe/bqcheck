@@ -61,6 +61,7 @@ def test_extract_table_metadata_success(mock_client):
     mock_row_1.table_name = "events"
     mock_row_1.table_type = "TABLE"
     mock_row_1.creation_time = "2024-01-15 10:30:00 UTC"
+    mock_row_1.last_modified_time = "2024-06-15 10:30:00 UTC"
     mock_row_1.size_bytes = 1073741824  # 1 GB
     mock_row_1.row_count = 1000000
     mock_row_1.partition_expiration_days = 90
@@ -75,6 +76,7 @@ def test_extract_table_metadata_success(mock_client):
     mock_row_2.table_name = "users"
     mock_row_2.table_type = "TABLE"
     mock_row_2.creation_time = "2024-01-10 08:00:00 UTC"
+    mock_row_2.last_modified_time = "2024-06-10 08:00:00 UTC"
     mock_row_2.size_bytes = 536870912  # 512 MB
     mock_row_2.row_count = 50000
     mock_row_2.partition_expiration_days = None
@@ -89,6 +91,7 @@ def test_extract_table_metadata_success(mock_client):
     mock_row_3.table_name = "summary_view"
     mock_row_3.table_type = "VIEW"
     mock_row_3.creation_time = "2024-02-01 12:00:00 UTC"
+    mock_row_3.last_modified_time = None
     mock_row_3.size_bytes = None  # Views have no storage
     mock_row_3.row_count = None
     mock_row_3.partition_expiration_days = None
@@ -96,12 +99,22 @@ def test_extract_table_metadata_success(mock_client):
     mock_row_3.time_partitioning_field = None
     mock_row_3.clustering_fields = None
 
-    # Mock query result
+    # Mock last-modified metatable result, then main INFORMATION_SCHEMA result.
+    modified_row_1 = Mock()
+    modified_row_1.table_id = "events"
+    modified_row_1.last_modified_time = "2024-06-15 10:30:00 UTC"
+    modified_row_2 = Mock()
+    modified_row_2.table_id = "users"
+    modified_row_2.last_modified_time = "2024-06-10 08:00:00 UTC"
+
+    mock_modified_query_job = Mock()
+    mock_modified_query_job.result.return_value = [modified_row_1, modified_row_2]
+
     mock_query_job = Mock()
     mock_query_job.result.return_value = [mock_row_1, mock_row_2, mock_row_3]
 
     mock_bq_client = Mock()
-    mock_bq_client.query.return_value = mock_query_job
+    mock_bq_client.query.side_effect = [mock_modified_query_job, mock_query_job]
     _setup_dataset_mocks(mock_bq_client)
 
     # Call function
@@ -117,6 +130,7 @@ def test_extract_table_metadata_success(mock_client):
     assert tables[0].table_schema == "analytics"
     assert tables[0].table_type == "TABLE"
     assert tables[0].creation_time == "2024-01-15 10:30:00 UTC"
+    assert tables[0].last_modified_time == "2024-06-15 10:30:00 UTC"
     assert tables[0].size_bytes == 1073741824
     assert tables[0].row_count == 1000000
     assert tables[0].partition_expiration_days == 90
@@ -392,8 +406,8 @@ def test_extract_table_metadata_query_called(mock_client):
     # Call function
     extract_table_metadata(mock_bq_client, "test-project")
 
-    # Verify query was called once
-    mock_bq_client.query.assert_called_once()
+    # Verify the table metadata query was called after the dataset metatable lookup.
+    assert mock_bq_client.query.call_count == 2
 
     # Verify query contains INFORMATION_SCHEMA
     call_args = mock_bq_client.query.call_args

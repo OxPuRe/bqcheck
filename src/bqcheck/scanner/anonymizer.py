@@ -447,6 +447,7 @@ def anonymize_metadata(
         # Merged/enriched table fields (from merge_table_metadata)
         "table_id",  # Will be anonymized since it contains table_catalog/schema/name
         "last_modified_time",
+        "last_modified_time_source",
         "schema",
         "query_stats",
         "filtered_columns",  # Sub-field of query_stats (column filtering patterns)
@@ -518,7 +519,7 @@ def merge_table_metadata(
     Creates enriched table metadata with:
     - table_id: "dataset.table" format
     - last_access_time: from access_patterns when available
-    - last_modified_time: conservative fallback from table creation metadata
+    - last_modified_time: from BigQuery table metadata when available
     - schema: column definitions
     - query_stats: aggregated query statistics (bytes, count, filtered_columns)
 
@@ -677,8 +678,11 @@ def merge_table_metadata(
         # Add table_id
         table_dict["table_id"] = table_key
 
-        # Preserve a conservative fallback timestamp from table metadata.
-        table_dict["last_modified_time"] = table.creation_time
+        if table.last_modified_time:
+            table_dict["last_modified_time"] = table.last_modified_time
+            table_dict["last_modified_time_source"] = "__TABLES__"
+        else:
+            table_dict.pop("last_modified_time", None)
 
         # Add latest observed storage activity when available.
         if table_key in access_map:

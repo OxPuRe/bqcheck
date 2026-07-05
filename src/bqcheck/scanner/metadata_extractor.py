@@ -33,6 +33,53 @@ def _detect_project_locations(
     return sorted(fallback)
 
 
+def _extract_table_last_modified_times(
+    client: bigquery.Client, project_id: str, datasets: List[Any]
+) -> Dict[str, str]:
+    """Extract dataset-level last modified timestamps from BigQuery metatables."""
+    last_modified_map: Dict[str, str] = {}
+
+    for dataset in datasets:
+        dataset_id = dataset.dataset_id
+
+        try:
+            dataset_ref = client.get_dataset(f"{project_id}.{dataset_id}")
+            location = getattr(dataset_ref, "location", None)
+        except GoogleAPIError as e:
+            logger.debug(
+                "Could not resolve dataset location for %s.%s: %s",
+                project_id,
+                dataset_id,
+                e,
+            )
+            location = None
+
+        query = f"""
+        SELECT
+            table_id,
+            CAST(TIMESTAMP_MILLIS(last_modified_time) AS STRING) AS last_modified_time
+        FROM `{project_id}.{dataset_id}.__TABLES__`
+        WHERE type = 1
+        """
+
+        try:
+            query_job = client.query(query, location=location)
+            for row in query_job.result():
+                table_id = getattr(row, "table_id", None)
+                last_modified_time = getattr(row, "last_modified_time", None)
+                if isinstance(table_id, str) and last_modified_time:
+                    last_modified_map[f"{dataset_id}.{table_id}"] = last_modified_time
+        except (GoogleAPIError, TypeError) as e:
+            logger.debug(
+                "Could not extract last modified times for %s.%s: %s",
+                project_id,
+                dataset_id,
+                e,
+            )
+
+    return last_modified_map
+
+
 def _parse_partitioning_from_ddl(ddl: str) -> Dict[str, Any]:
     """
     Parse partitioning information from DDL statement.
@@ -239,6 +286,10 @@ def extract_table_metadata(
             f"Found {len(datasets)} datasets across {len(locations)} region(s): {locations}"
         )
 
+        last_modified_map = _extract_table_last_modified_times(
+            client, project_id, datasets
+        )
+
         # Collect tables from all regions using project-wide INFORMATION_SCHEMA
         all_tables = []
 
@@ -315,6 +366,9 @@ def extract_table_metadata(
                         "table_name": row.table_name,
                         "table_type": row.table_type,
                         "creation_time": row.creation_time,
+                        "last_modified_time": last_modified_map.get(
+                            f"{row.table_schema}.{row.table_name}"
+                        ),
                         "size_bytes": row.size_bytes,
                         "row_count": row.row_count,
                         "partition_expiration_days": partition_expiration,

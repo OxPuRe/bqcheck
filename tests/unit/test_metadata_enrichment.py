@@ -16,6 +16,7 @@ def test_merge_table_metadata_basic():
             table_name="table1",
             table_type="TABLE",
             creation_time="2024-01-01T00:00:00Z",
+            last_modified_time="2024-05-01T00:00:00Z",
             size_bytes=1000,
             row_count=100,
         )
@@ -48,7 +49,8 @@ def test_merge_table_metadata_basic():
     assert len(result) == 1
     assert result[0]["table_id"] == "dataset.table1"
     assert result[0]["last_access_time"] == "2024-06-01T00:00:00Z"
-    assert result[0]["last_modified_time"] == "2024-01-01T00:00:00Z"
+    assert result[0]["last_modified_time"] == "2024-05-01T00:00:00Z"
+    assert result[0]["last_modified_time_source"] == "__TABLES__"
     assert result[0]["schema"] == [{"name": "col1", "type": "STRING"}]
     assert result[0]["query_stats"]["total_bytes_processed"] == 5000
     assert result[0]["query_stats"]["query_count"] == 1
@@ -172,7 +174,7 @@ def test_merge_table_metadata_no_access_pattern():
     result = merge_table_metadata(tables, [], [], {})
 
     assert len(result) == 1
-    assert result[0]["last_modified_time"] == "2024-01-01T00:00:00Z"
+    assert "last_modified_time" not in result[0]
     assert "last_access_time" not in result[0]
     assert result[0]["schema"] == []
     assert result[0]["query_stats"] == {
