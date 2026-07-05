@@ -136,9 +136,16 @@ def mock_bigquery_and_server(monkeypatch):
         mock.patch("httpx.AsyncClient", return_value=mock_async_client),
     ]
 
-    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[
-        5
-    ], patches[6], patches[7]:
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+    ):
         yield mock_http_response
 
 

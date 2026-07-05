@@ -9,7 +9,7 @@ class TableMetadata(BaseModel):
     """Complete metadata for a BigQuery table.
 
     This model combines data from INFORMATION_SCHEMA.TABLES and TABLE_STORAGE.
-    All fields use Python 3.8 compatible type hints.
+    All fields use Python 3.9+ compatible type hints.
     """
 
     # Core table identification
@@ -50,7 +50,7 @@ class QueryMetadata(BaseModel):
     """Metadata for a BigQuery job/query from INFORMATION_SCHEMA.JOBS.
 
     This model captures query execution metadata for identifying expensive queries
-    and analyzing query patterns. All fields use Python 3.8 compatible type hints.
+    and analyzing query patterns. All fields use Python 3.9+ compatible type hints.
     """
 
     # Job identification
@@ -84,7 +84,7 @@ class AccessPattern(BaseModel):
     """Table access pattern from INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE.
 
     This model captures the latest observable storage activity timestamp for tables.
-    All fields use Python 3.8 compatible type hints.
+    All fields use Python 3.9+ compatible type hints.
     """
 
     # Table identification

@@ -6,7 +6,7 @@ authors = [
     {name = "Oxpure"}
 ]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 keywords = ["bigquery", "gcp", "cost-optimization", "sanity-check"]
 
@@ -44,7 +44,7 @@ packages = ["src/bqcheck"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py38"
+target-version = "py39"
 exclude = [
     ".git",
     "__pycache__",
@@ -106,7 +106,7 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.9"  # Match minimum supported version for backward compatibility
+python_version = "3.9"  # Match minimum supported version
 strict = true
 disallow_untyped_defs = true
 warn_return_any = true

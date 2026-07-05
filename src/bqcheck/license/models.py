@@ -34,7 +34,7 @@ class Credentials(BaseModel):
     def parse_activated_at(cls, v: Union[datetime, str]) -> datetime:
         """Parse activated_at from ISO8601 string or datetime object."""
         if isinstance(v, str):
-            # Replace 'Z' with '+00:00' for Python 3.8-3.10 compatibility
+            # Replace 'Z' with '+00:00' for Python 3.9-3.10 compatibility
             # (fromisoformat only supports 'Z' suffix in Python 3.11+)
             v = v.replace("Z", "+00:00")
             return datetime.fromisoformat(v)

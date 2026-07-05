@@ -874,7 +874,7 @@ def license_status() -> None:
         credentials = CredentialStore.load()
 
         # Format activated timestamp for display
-        # Python 3.8-3.10 don't support 'Z' suffix in fromisoformat
+        # Python 3.9-3.10 don't support 'Z' suffix in fromisoformat
         activated_at_str = credentials["activated_at"].replace("Z", "+00:00")
         activated_at = datetime.fromisoformat(activated_at_str)
 
