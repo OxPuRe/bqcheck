@@ -255,10 +255,10 @@ class TestDetailedRecommendations:
                 Recommendation(
                     type="storage",
                     priority="LOW",
-                    title="Review cold 95GB table",
+                    title="Review low-activity 95GB table",
                     description=(
                         f"Table {long_table} (94.77 GB) is about 204 days old. "
-                        "Storage activity has not been observed for about 204 days. "
+                        "The storage timeline signal is about 204 days old. "
                         "Treat this as a cleanup candidate to verify with owners and "
                         "downstream jobs."
                     ),

@@ -240,8 +240,8 @@ class MarkdownReportGenerator:
         evidence: list[str] = []
 
         if rec_type == "storage":
-            if "storage activity has not been observed" in description.lower():
-                evidence.append("Large table with an old storage activity signal")
+            if "storage timeline signal" in description.lower():
+                evidence.append("Large table with an old storage timeline signal")
             elif "no query activity was observed" in description.lower():
                 evidence.append("Large table absent from the observed workload window")
 
@@ -433,12 +433,12 @@ class MarkdownReportGenerator:
             return None
 
         cold_match = re.search(
-            r"Storage activity has not been observed for about (\d+) days",
+            r"storage timeline signal is about (\d+) days old",
             description,
             re.IGNORECASE,
         )
         query_match = re.search(
-            r"No query activity was observed .* scanned 90-day workload window",
+            r"No query activity was observed .* 90-day window",
             description,
             re.IGNORECASE,
         )
@@ -476,11 +476,12 @@ class MarkdownReportGenerator:
                 if facts.get("cold_days"):
                     return (
                         f"{facts['size']} stored, about {facts['age_days']} days old, "
-                        f"and no storage activity signal for about {facts['cold_days']} days."
+                        f"with an old storage timeline signal ({facts['cold_days']} days)."
                     )
                 return (
                     f"{facts['size']} stored, about {facts['age_days']} days old, "
-                    "and no observed query activity in the scanned 90-day window."
+                    "and absent from observed query workload sources in the scanned "
+                    "90-day window."
                 )
 
         return description

@@ -657,18 +657,21 @@ def extract_access_patterns(
     project_id: str,
 ) -> List[AccessPattern]:
     """
-    Extract table access patterns from INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE.
+    Extract table storage timeline signals from INFORMATION_SCHEMA.
 
     Queries INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE_BY_PROJECT to get:
-    - Latest observable storage activity timestamp per table
-    - A conservative inactivity signal for storage-focused recommendations
+    - Latest observable storage timeline timestamp per table
+    - A conservative storage-side signal for storage-focused recommendations
+
+    This is not a table read/access timestamp. Query workload metadata is used
+    separately to detect observed table reads.
 
     Args:
         client: Authenticated BigQuery client (from authenticate_bigquery)
         project_id: GCP project ID to scan
 
     Returns:
-        List of AccessPattern objects with observed storage activity timestamps
+        List of AccessPattern objects with observed storage timeline timestamps
 
     Raises:
         ValueError: If project_id format is invalid
@@ -727,7 +730,9 @@ def extract_access_patterns(
                 patterns.append(access_pattern)
 
             logger.info(
-                f"Extracted {len(patterns)} access patterns from location {location}"
+                "Extracted %d storage timeline signal(s) from location %s",
+                len(patterns),
+                location,
             )
             all_patterns.extend(patterns)
 
@@ -749,7 +754,7 @@ def extract_access_patterns(
 
     last_error = failures[-1] if failures else "unknown error"
     logger.warning(
-        f"Could not extract access patterns from {project_id}. "
+        f"Could not extract storage timeline signals from {project_id}. "
         f"Tried locations: {locations}. Continuing without inactivity evidence. "
         f"Last error: {last_error}"
     )

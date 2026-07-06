@@ -444,6 +444,7 @@ def anonymize_metadata(
         "state",
         # AccessPattern non-sensitive fields
         "last_access_time",
+        "last_access_time_source",
         # Merged/enriched table fields (from merge_table_metadata)
         "table_id",  # Will be anonymized since it contains table_catalog/schema/name
         "last_modified_time",
@@ -518,14 +519,14 @@ def merge_table_metadata(
 
     Creates enriched table metadata with:
     - table_id: "dataset.table" format
-    - last_access_time: from access_patterns when available
-    - last_modified_time: from BigQuery table metadata when available
+    - last_access_time: storage timeline timestamp from access_patterns when available
+    - last_modified_time: BigQuery table modification timestamp when available
     - schema: column definitions
     - query_stats: aggregated query statistics (bytes, count, filtered_columns)
 
     Args:
         tables: List of TableMetadata
-        access_patterns: List of AccessPattern (for last_access_time)
+        access_patterns: List of AccessPattern (for storage timeline timestamps)
         queries: List of QueryMetadata (for query_stats)
         schemas: Dict mapping "dataset.table" to column list
         query_observation_limited: Whether query extraction hit the max query cap
@@ -684,9 +685,10 @@ def merge_table_metadata(
         else:
             table_dict.pop("last_modified_time", None)
 
-        # Add latest observed storage activity when available.
+        # Add latest observed storage timeline signal when available.
         if table_key in access_map:
             table_dict["last_access_time"] = access_map[table_key]
+            table_dict["last_access_time_source"] = "TABLE_STORAGE_TIMELINE"
 
         # Add schema
         if table_key in schemas:

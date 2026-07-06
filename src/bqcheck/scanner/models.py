@@ -21,7 +21,7 @@ class TableMetadata(BaseModel):
     # Temporal metadata
     creation_time: str = Field(..., description="Table creation timestamp (ISO format)")
     last_modified_time: Optional[str] = Field(
-        None, description="Latest table metadata modification timestamp"
+        None, description="Latest table data or metadata modification timestamp"
     )
 
     # Storage metadata
@@ -84,9 +84,10 @@ class QueryMetadata(BaseModel):
 
 
 class AccessPattern(BaseModel):
-    """Table access pattern from INFORMATION_SCHEMA.TABLE_STORAGE_TIMELINE.
+    """Table storage timeline signal from INFORMATION_SCHEMA.
 
-    This model captures the latest observable storage activity timestamp for tables.
+    This is not a last-read timestamp. BigQuery does not expose table read activity
+    here; query workload metadata is used separately to detect observed reads.
     All fields use Python 3.9+ compatible type hints.
     """
 
@@ -97,7 +98,7 @@ class AccessPattern(BaseModel):
 
     # Activity metadata
     last_access_time: str = Field(
-        ..., description="Latest observed storage activity timestamp (ISO format)"
+        ..., description="Latest observed storage timeline timestamp (ISO format)"
     )
 
     model_config = ConfigDict(
