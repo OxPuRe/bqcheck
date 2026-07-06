@@ -12,7 +12,7 @@ from bqcheck.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 logger = logging.getLogger(__name__)
 
 
-def _optional_int(value: Any) -> int | None:
+def _optional_int(value: Any) -> Optional[int]:
     """Return an int only when BigQuery emitted a concrete integer value."""
     return value if isinstance(value, int) else None
 
@@ -105,7 +105,7 @@ def _extract_dataset_access_signals(
             )
             continue
 
-        signal = {
+        signal: Dict[str, Any] = {
             "dataset_access_entry_count": 0,
             "dataset_identity_access_count": 0,
             "dataset_special_group_count": 0,
