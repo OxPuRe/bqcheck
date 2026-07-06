@@ -249,6 +249,14 @@ class MarkdownReportGenerator:
                 evidence.append(
                     "Observed query history was capped, so ownership verification still matters"
                 )
+            if "dataset access metadata shows" in description.lower():
+                evidence.append(
+                    "Dataset access metadata shows possible non-local consumers to verify"
+                )
+            elif "inherited iam can still allow reads" in description.lower():
+                evidence.append(
+                    "No dataset-level sharing was found, but inherited IAM still needs review"
+                )
 
         elif rec_type == "partitioning":
             match = re.search(

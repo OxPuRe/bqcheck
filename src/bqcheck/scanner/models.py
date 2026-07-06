@@ -26,7 +26,37 @@ class TableMetadata(BaseModel):
 
     # Storage metadata
     size_bytes: Optional[int] = Field(None, description="Total storage size in bytes")
+    active_logical_bytes: Optional[int] = Field(
+        None, description="Logical bytes billed as active storage"
+    )
+    long_term_logical_bytes: Optional[int] = Field(
+        None, description="Logical bytes billed as long-term storage"
+    )
     row_count: Optional[int] = Field(None, description="Total row count")
+
+    # Access exposure metadata. These are aggregate counts only; raw identities
+    # are never sent to the server.
+    dataset_access_entry_count: Optional[int] = Field(
+        None, description="Number of dataset-level access entries"
+    )
+    dataset_identity_access_count: Optional[int] = Field(
+        None, description="Number of dataset access entries granted to identities"
+    )
+    dataset_special_group_count: Optional[int] = Field(
+        None, description="Number of specialGroup dataset access entries"
+    )
+    dataset_authorized_view_count: Optional[int] = Field(
+        None, description="Number of authorized views on the dataset"
+    )
+    dataset_cross_project_authorized_view_count: Optional[int] = Field(
+        None, description="Number of authorized views from another project"
+    )
+    dataset_authorized_dataset_count: Optional[int] = Field(
+        None, description="Number of authorized dataset access entries"
+    )
+    dataset_access_source: Optional[str] = Field(
+        None, description="Source used for dataset access exposure metadata"
+    )
 
     # Partitioning metadata
     partition_expiration_days: Optional[int] = Field(

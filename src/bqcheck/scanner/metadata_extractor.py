@@ -12,6 +12,11 @@ from bqcheck.scanner.models import AccessPattern, QueryMetadata, TableMetadata
 logger = logging.getLogger(__name__)
 
 
+def _optional_int(value: Any) -> int | None:
+    """Return an int only when BigQuery emitted a concrete integer value."""
+    return value if isinstance(value, int) else None
+
+
 def _detect_project_locations(
     client: bigquery.Client, project_id: str, fallback: Optional[List[str]] = None
 ) -> List[str]:
@@ -78,6 +83,64 @@ def _extract_table_last_modified_times(
             )
 
     return last_modified_map
+
+
+def _extract_dataset_access_signals(
+    client: bigquery.Client, project_id: str, datasets: List[Any]
+) -> Dict[str, Dict[str, Any]]:
+    """Extract coarse dataset access exposure signals without raw identities."""
+    access_signals: Dict[str, Dict[str, Any]] = {}
+    identity_types = {"userByEmail", "groupByEmail", "domain", "iamMember"}
+
+    for dataset in datasets:
+        dataset_id = dataset.dataset_id
+        try:
+            dataset_ref = client.get_dataset(f"{project_id}.{dataset_id}")
+        except GoogleAPIError as e:
+            logger.debug(
+                "Could not extract dataset access signals for %s.%s: %s",
+                project_id,
+                dataset_id,
+                e,
+            )
+            continue
+
+        signal = {
+            "dataset_access_entry_count": 0,
+            "dataset_identity_access_count": 0,
+            "dataset_special_group_count": 0,
+            "dataset_authorized_view_count": 0,
+            "dataset_cross_project_authorized_view_count": 0,
+            "dataset_authorized_dataset_count": 0,
+            "dataset_access_source": "dataset_access_entries",
+        }
+
+        access_entries = getattr(dataset_ref, "access_entries", None)
+        if not isinstance(access_entries, (list, tuple)):
+            access_entries = []
+
+        for entry in access_entries:
+            entity_type = getattr(entry, "entity_type", None)
+            entity_id = getattr(entry, "entity_id", None)
+            signal["dataset_access_entry_count"] += 1
+
+            if entity_type in identity_types:
+                signal["dataset_identity_access_count"] += 1
+            elif entity_type == "specialGroup":
+                signal["dataset_special_group_count"] += 1
+            elif entity_type == "view":
+                signal["dataset_authorized_view_count"] += 1
+                if isinstance(entity_id, dict) and entity_id.get("projectId") not in {
+                    None,
+                    project_id,
+                }:
+                    signal["dataset_cross_project_authorized_view_count"] += 1
+            elif entity_type == "dataset":
+                signal["dataset_authorized_dataset_count"] += 1
+
+        access_signals[dataset_id] = signal
+
+    return access_signals
 
 
 def _parse_partitioning_from_ddl(ddl: str) -> Dict[str, Any]:
@@ -289,6 +352,9 @@ def extract_table_metadata(
         last_modified_map = _extract_table_last_modified_times(
             client, project_id, datasets
         )
+        dataset_access_signal_map = _extract_dataset_access_signals(
+            client, project_id, datasets
+        )
 
         # Collect tables from all regions using project-wide INFORMATION_SCHEMA
         all_tables = []
@@ -308,6 +374,8 @@ def extract_table_metadata(
 
                 -- Storage metadata from TABLE_STORAGE (real values!)
                 COALESCE(s.total_logical_bytes, 0) as size_bytes,
+                COALESCE(s.active_logical_bytes, 0) as active_logical_bytes,
+                COALESCE(s.long_term_logical_bytes, 0) as long_term_logical_bytes,
                 COALESCE(s.total_rows, 0) as row_count,
 
                 -- Partitioning metadata from TABLES
@@ -370,12 +438,21 @@ def extract_table_metadata(
                             f"{row.table_schema}.{row.table_name}"
                         ),
                         "size_bytes": row.size_bytes,
+                        "active_logical_bytes": _optional_int(
+                            getattr(row, "active_logical_bytes", None)
+                        ),
+                        "long_term_logical_bytes": _optional_int(
+                            getattr(row, "long_term_logical_bytes", None)
+                        ),
                         "row_count": row.row_count,
                         "partition_expiration_days": partition_expiration,
                         "time_partitioning_type": partitioning_type,
                         "time_partitioning_field": partitioning_field,
                         "clustering_fields": clusters,
                     }
+                    table_dict.update(
+                        dataset_access_signal_map.get(row.table_schema, {})
+                    )
 
                     # Validate and create Pydantic model
                     table_metadata = TableMetadata(**table_dict)

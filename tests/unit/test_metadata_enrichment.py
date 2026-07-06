@@ -18,7 +18,13 @@ def test_merge_table_metadata_basic():
             creation_time="2024-01-01T00:00:00Z",
             last_modified_time="2024-05-01T00:00:00Z",
             size_bytes=1000,
+            active_logical_bytes=600,
+            long_term_logical_bytes=400,
             row_count=100,
+            dataset_access_entry_count=3,
+            dataset_identity_access_count=1,
+            dataset_authorized_view_count=1,
+            dataset_access_source="dataset_access_entries",
         )
     ]
 
@@ -52,6 +58,12 @@ def test_merge_table_metadata_basic():
     assert result[0]["last_access_time_source"] == "TABLE_STORAGE_TIMELINE"
     assert result[0]["last_modified_time"] == "2024-05-01T00:00:00Z"
     assert result[0]["last_modified_time_source"] == "__TABLES__"
+    assert result[0]["active_logical_bytes"] == 600
+    assert result[0]["long_term_logical_bytes"] == 400
+    assert result[0]["dataset_access_entry_count"] == 3
+    assert result[0]["dataset_identity_access_count"] == 1
+    assert result[0]["dataset_authorized_view_count"] == 1
+    assert result[0]["dataset_access_source"] == "dataset_access_entries"
     assert result[0]["schema"] == [{"name": "col1", "type": "STRING"}]
     assert result[0]["query_stats"]["total_bytes_processed"] == 5000
     assert result[0]["query_stats"]["query_count"] == 1
